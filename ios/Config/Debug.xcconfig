@@ -1,0 +1,4 @@
+// Debug builds talk to a local backend. "//" starts a comment in xcconfig, hence the $().
+CROWDED_API_BASE_URL = http:/$()/localhost:8000
+// Sign in with Apple needs the Apple Developer account. Flip to YES once it is set up.
+CROWDED_SIWA_ENABLED = NO
