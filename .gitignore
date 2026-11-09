@@ -40,3 +40,4 @@ ios/**/*.xcworkspace/xcuserdata/
 *.sqlite
 *.db
 sim-output/
+.claude/worktrees/

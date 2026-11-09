@@ -44,7 +44,7 @@ Code: `backend/app/estimation/` (pure functions, contract in `types.py`).
 ## Calibration
 `calibration_factor(points, now)`: completed timers from the last 7 days, each paired with the
 formula estimate stored when the timer started. Recency weighted median of actual / predicted,
-ignoring predicted under 2 min. No points gives 1.0. Clamped to [0.5, 2.0]. Every completed timer
+ignoring predicted under 2 min (half life one day). No points gives 1.0. Clamped to [0.5, 2.0]. Every completed timer
 also writes an `estimate_errors` row (predicted, actual, absolute error) so admins can track MAE.
 
 ## Flags

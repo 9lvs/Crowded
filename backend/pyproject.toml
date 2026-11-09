@@ -38,6 +38,9 @@ ignore = ["B008"]
 "tests/**" = ["S101", "S105", "S106", "S311"]
 "scripts/**" = ["S311"]
 "alembic/**" = ["E501"]
+# Enum values and the literal "bearer" are not secrets.
+"app/estimation/types.py" = ["S105"]
+"app/schemas.py" = ["S105"]
 
 [tool.mypy]
 python_version = "3.12"

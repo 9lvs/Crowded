@@ -216,6 +216,7 @@ class LineSession(Base):
     started_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(TS)
     predicted_wait_min: Mapped[float | None] = mapped_column(Float)
+    formula_wait_min: Mapped[float | None] = mapped_column(Float)  # uncalibrated, for calibration
     actual_wait_min: Mapped[float | None] = mapped_column(Float)
     near_bar: Mapped[bool] = mapped_column(Boolean, default=False)
     distance_bucket: Mapped[DistanceBucket] = mapped_column(
@@ -333,6 +334,7 @@ class EstimateError(Base):
     bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
     predicted_min: Mapped[float] = mapped_column(Float)
+    formula_min: Mapped[float | None] = mapped_column(Float)
     actual_min: Mapped[float] = mapped_column(Float)
     abs_error_min: Mapped[float] = mapped_column(Float)
 

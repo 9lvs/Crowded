@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     default_wait_threshold_min: int = 20
 
     serve_web: bool = True
+    web_dir: str = ""  # defaults to ../web next to backend/
 
     @property
     def is_dev(self) -> bool:

@@ -363,7 +363,7 @@ def calibration_factor(
         age = now - pt.ts
         if age < timedelta(0) or age > cutoff or pt.predicted_min < 2.0:
             continue
-        w = _recency(_age_min(now, pt.ts), p.half_life_min)
+        w = _recency(_age_min(now, pt.ts), p.calibration_half_life_min)
         pairs.append((pt.actual_min / pt.predicted_min, w))
     result = weighted_median(pairs)
     if result is None:

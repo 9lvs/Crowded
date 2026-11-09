@@ -100,6 +100,7 @@ class Params:
     calibration_min: float = 0.5
     calibration_max: float = 2.0
     calibration_window_min: float = 7 * 24 * 60.0
+    calibration_half_life_min: float = 24 * 60.0  # one day
     mismatch_threshold: int = 2  # crowd level steps between staff count and reports
 
 
