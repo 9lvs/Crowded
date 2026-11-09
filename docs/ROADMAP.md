@@ -47,6 +47,6 @@
 ## Phase 3: iOS
 - [x] Confirm iOS 17 minimum and Xcode access with owner
 - [x] SwiftUI app v1 written: generated client, design system, gallery, tests, macOS CI
-- [ ] First green macOS CI build (fix compile errors from the first run)
+- [x] First green macOS CI build (2026-11-09, run 2)
 - [ ] Live Activity for the line timer (lock screen "I'm inside")
 - [ ] Signing, Xcode Cloud, TestFlight internal, then external public link
