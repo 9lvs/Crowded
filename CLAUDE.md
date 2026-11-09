@@ -59,6 +59,17 @@ Lead session (Opus) plans, reviews, merges and runs the security gate. Subagents
 read only), docs-light (Haiku). Parallel work only across different directories, one branch
 per worker, written brief per task. The lead merges.
 
+Model and effort policy for workers (owner direction: not everything needs Opus):
+| Work | Model | Effort |
+|---|---|---|
+| Docs, changelogs, copy edits, renames, repetitive edits | Haiku | low |
+| One module from a clear brief, tests, simulator, seed data, CI fixes | Sonnet | medium |
+| Marketing assets and decks from a clear brief | Sonnet | medium |
+| UI design passes where taste matters, new architecture, tricky concurrency | Opus | medium |
+| Security review at a phase gate | Opus | high |
+Default to the cheapest row that fits. Escalate only when a cheaper worker failed or the task is
+ambiguous. Forks always run on the lead's model, so prefer a typed worker with a written brief.
+
 ## Phase gates
 A phase is done when: tests pass, estimation coverage >= 90 percent, `docs/openapi.json` is
 current, README run steps work, and `docs/security-review-phaseN.md` has no open High or

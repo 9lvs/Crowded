@@ -58,3 +58,8 @@ Newest at the bottom. Format: ID, date, decision, why, revisit when.
   policy and support URL, so those two pages need a free host.
 - **D-025 (2026-11-09) iOS builds and tests run in CI on GitHub macOS runners** (owner has little
   disk). Project generated with XcodeGen, API client by swift-openapi-generator.
+- **D-026 (2026-11-09) Worker model policy** (owner). Haiku for docs, Sonnet for implementation,
+  tests and assets, Opus only for design taste, architecture and security gates. Table in CLAUDE.md.
+- **D-027 (2026-11-09) Pilot may start with one bar.** Nothing in the system assumes more than one.
+- **D-028 (2026-11-09) Legal pages on GitHub Pages.** GitHub Pages needs a public repo on the free
+  plan. If the main repo goes private, the pages live in a small public repo (crowded-legal).
