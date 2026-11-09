@@ -94,7 +94,8 @@ def all_sim_phones() -> list[str]:
 
 
 def get_or_create_user(db: Session, phone: str, role: Role) -> User:
-    assert phone.startswith("+1555"), "fake users only"  # noqa: S101
+    if not phone.startswith("+1555"):
+        raise ValueError("fake users only")
     h = phone_hash(phone)
     user = db.scalar(select(User).where(User.phone_hash == h))
     if user is None:

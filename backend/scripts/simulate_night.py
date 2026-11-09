@@ -230,7 +230,8 @@ class Simulator:
         self.report_rate = report_rate
         self.estimate_every = estimate_every
         self.seed = seed
-        self.rng = random.Random(seed)
+        # Reproducible fake data, not security.
+        self.rng = random.Random(seed)  # nosec B311
         self.bars = fake_bars(db)
         self.users = [
             get_or_create_user(db, user_phone(i), Role.user) for i in range(USER_POOL_SIZE)
@@ -259,7 +260,8 @@ class Simulator:
 
     # ---- one night ------------------------------------------------------------------------
     def run_night(self, plan: NightPlan) -> None:
-        self.rng = random.Random(f"{self.seed}:{plan.label}")  # same seed and night, same data
+        # Same seed and night give the same data. nosec B311: fake data, not security.
+        self.rng = random.Random(f"{self.seed}:{plan.label}")  # nosec B311
         for s in self.states:
             s.queue.clear()
             s.pending.clear()
@@ -439,7 +441,8 @@ class Simulator:
     def complete(self, s: BarState, p: Pending) -> None:
         """Mirror app.services.activity.end_session for outcome 'inside'."""
         session, user = p.person.session, p.person.user
-        assert session is not None and user is not None  # noqa: S101
+        if session is None or user is None:
+            raise RuntimeError("finished timer without a session")
         session.ended_at = p.finish
         self.busy.discard(user.id)
         if not (0.5 <= p.actual <= 240.0):
