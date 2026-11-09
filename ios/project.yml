@@ -1,0 +1,99 @@
+# XcodeGen spec. Generate the Xcode project with:  cd ios && xcodegen generate
+# Crowded.xcodeproj is generated and gitignored. Edit this file, not the project.
+name: Crowded
+options:
+  bundleIdPrefix: app.crowded
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    # Set your Apple Developer team id here (or in Xcode) once the account exists.
+    DEVELOPMENT_TEAM: ""
+packages:
+  swift-openapi-generator:
+    url: https://github.com/apple/swift-openapi-generator
+    from: 1.4.0
+  swift-openapi-runtime:
+    url: https://github.com/apple/swift-openapi-runtime
+    from: 1.5.0
+  swift-openapi-urlsession:
+    url: https://github.com/apple/swift-openapi-urlsession
+    from: 1.0.0
+  swift-http-types:
+    url: https://github.com/apple/swift-http-types
+    from: 1.0.0
+targets:
+  Crowded:
+    type: application
+    platform: iOS
+    sources:
+      - path: Crowded
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.crowded.ios
+        PRODUCT_NAME: Crowded
+        INFOPLIST_FILE: Config/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        SUPPORTS_MACCATALYST: NO
+    dependencies:
+      - package: swift-openapi-runtime
+        product: OpenAPIRuntime
+      - package: swift-openapi-urlsession
+        product: OpenAPIURLSession
+      - package: swift-http-types
+        product: HTTPTypes
+    buildToolPlugins:
+      - plugin: OpenAPIGenerator
+        package: swift-openapi-generator
+  CrowdedTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: CrowdedTests
+    dependencies:
+      - target: Crowded
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  CrowdedUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: CrowdedUITests
+    dependencies:
+      - target: Crowded
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Crowded
+schemes:
+  Crowded:
+    build:
+      targets:
+        Crowded: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      coverageTargets:
+        - Crowded
+      targets:
+        - CrowdedTests
+        - CrowdedUITests
+    archive:
+      config: Release
