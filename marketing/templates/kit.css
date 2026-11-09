@@ -1,0 +1,142 @@
+/* Crowded social kit. Black and white only. Every frame is a fixed pixel size and is
+   screenshotted by marketing/render.js. Edit text in kit.html, tweak look here. */
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("fonts/DMSans-latin.woff2") format("woff2");
+  font-weight: 400 700;
+}
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("fonts/BricolageGrotesque-latin.woff2") format("woff2");
+  font-weight: 500 800;
+}
+
+:root {
+  --black: #000;
+  --white: #fff;
+  --grey: #6b6b6b;
+  --grey-on-black: #a3a3a3;
+  --rule: #e2e2e2;
+  --rule-on-black: #2e2e2e;
+  --body: "DM Sans", system-ui, sans-serif;
+  --num: "Bricolage Grotesque", "DM Sans", system-ui, sans-serif;
+  --pad: 96px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #888; font-family: var(--body); -webkit-font-smoothing: antialiased; }
+
+.frame {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad);
+  margin: 40px;
+}
+.frame.dark { background: var(--black); color: var(--white); }
+.frame.light { background: var(--white); color: var(--black); }
+.sq { width: 1080px; height: 1080px; }
+.post { width: 1080px; height: 1350px; }
+.story { width: 1080px; height: 1920px; padding: 250px var(--pad) 340px; }
+.letter { width: 850px; height: 1100px; padding: 64px 72px; }
+
+/* ---------- type ---------- */
+.mark { font-weight: 700; font-size: 40px; letter-spacing: -0.02em; }
+.h-xl { font-weight: 700; font-size: 132px; line-height: 0.98; letter-spacing: -0.045em; }
+.h-lg { font-weight: 700; font-size: 104px; line-height: 1; letter-spacing: -0.04em; }
+.h-md { font-weight: 700; font-size: 72px; line-height: 1.04; letter-spacing: -0.03em; }
+.lede { font-size: 40px; line-height: 1.3; letter-spacing: -0.01em; }
+.small { font-size: 28px; line-height: 1.35; }
+.tiny { font-size: 22px; letter-spacing: 0.02em; }
+.muted { color: var(--grey); }
+.dark .muted { color: var(--grey-on-black); }
+.caps { text-transform: uppercase; letter-spacing: 0.14em; font-size: 24px; font-weight: 700; }
+.num { font-family: var(--num); font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+
+/* ---------- layout helpers ---------- */
+.top { display: flex; justify-content: space-between; align-items: baseline; }
+.grow { flex: 1; }
+.stack { display: flex; flex-direction: column; }
+.gap-16 { gap: 16px; } .gap-24 { gap: 24px; } .gap-40 { gap: 40px; } .gap-64 { gap: 64px; }
+.end { justify-content: flex-end; }
+.center { align-items: center; justify-content: center; text-align: center; }
+.rule { height: 2px; background: var(--rule); width: 100%; }
+.dark .rule { background: var(--rule-on-black); }
+
+/* ---------- brand device: the 3 segment crowd meter ---------- */
+.meter { display: flex; gap: 10px; }
+.meter i { display: block; width: 56px; height: 12px; background: currentColor; }
+.meter i.off { opacity: 0.22; }
+.meter.sm i { width: 30px; height: 7px; gap: 6px; }
+
+/* ---------- steps ---------- */
+.steps { display: flex; flex-direction: column; }
+.step { display: grid; grid-template-columns: 96px 1fr; padding: 40px 0; border-top: 2px solid var(--rule); }
+.dark .step { border-color: var(--rule-on-black); }
+.step:last-child { border-bottom: 2px solid var(--rule); }
+.dark .step:last-child { border-color: var(--rule-on-black); }
+.step .n { font-family: var(--num); font-weight: 800; font-size: 56px; line-height: 1; }
+.step h3 { font-size: 48px; line-height: 1.08; letter-spacing: -0.02em; font-weight: 700; }
+.step p { font-size: 30px; line-height: 1.35; margin-top: 12px; }
+
+/* ---------- example estimate block ---------- */
+.est { border-top: 2px solid var(--rule-on-black); padding-top: 40px; }
+.est .big { font-size: 200px; line-height: 0.9; }
+.est .unit { font-size: 64px; font-family: var(--body); font-weight: 700; letter-spacing: -0.02em; margin-left: 12px; }
+
+/* ---------- segmented choices ---------- */
+.seg { display: flex; border: 2px solid var(--black); border-radius: 14px; overflow: hidden; }
+.seg span { flex: 1; text-align: center; font-size: 30px; font-weight: 600; padding: 26px 0; border-left: 2px solid var(--black); }
+.seg span:first-child { border-left: 0; }
+.seg span.on { background: var(--black); color: var(--white); }
+.dark .seg { border-color: var(--white); }
+.dark .seg span { border-color: var(--white); }
+.dark .seg span.on { background: var(--white); color: var(--black); }
+.tap { font-size: 24px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* ---------- buttons ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; height: 128px; border-radius: 16px; font-size: 44px; font-weight: 700; letter-spacing: -0.01em; }
+.btn.solid { background: var(--black); color: var(--white); }
+.dark .btn.solid { background: var(--white); color: var(--black); }
+.btn.ghost { border: 3px solid currentColor; }
+
+/* ---------- timer ring ---------- */
+.ring { position: relative; width: 620px; height: 620px; margin: 0 auto; }
+.ring svg { position: absolute; inset: 0; }
+.ring .t { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring .t .num { font-size: 168px; line-height: 1; letter-spacing: -0.01em; }
+
+/* ---------- phone illustration ---------- */
+.phone { width: 640px; border-radius: 72px; border: 14px solid #1d1d1d; background: var(--white); color: var(--black); padding: 56px 40px 0; overflow: hidden; }
+.dark .phone { border-color: #2a2a2a; }
+.phone .ttl { font-size: 58px; font-weight: 700; letter-spacing: -0.03em; }
+.phone .date { font-size: 22px; color: var(--grey); margin-top: 6px; }
+.row { display: grid; grid-template-columns: 1fr auto; padding: 26px 0; border-top: 2px solid var(--rule); align-items: start; }
+.row .name { font-size: 27px; font-weight: 700; letter-spacing: -0.01em; }
+.row .crowd { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 22px; }
+.row .basis { font-size: 17px; color: var(--grey); margin-top: 10px; }
+.row .w { text-align: right; }
+.row .w .num { font-size: 60px; line-height: 0.9; }
+.row .w .u { font-size: 20px; color: var(--grey); display: block; }
+.row .w .none { font-size: 20px; color: var(--grey); }
+.illus { position: absolute; font-size: 20px; letter-spacing: 0.04em; }
+
+/* ---------- highlights ---------- */
+.hl { width: 1080px; height: 1920px; background: var(--black); color: var(--white); display: flex; align-items: center; justify-content: center; margin: 40px; }
+.hl svg { width: 420px; height: 420px; }
+
+/* ---------- profile ---------- */
+.profile { width: 1080px; height: 1080px; background: var(--black); color: var(--white); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 56px; margin: 40px; }
+.profile .c { font-weight: 700; font-size: 560px; line-height: 0.8; letter-spacing: 0; margin-top: -40px; transform: translateX(-17px); }
+.profile .meter i { width: 120px; height: 26px; }
+.profile .meter { gap: 22px; }
+
+/* ---------- one pager ---------- */
+.letter .h-op { font-weight: 700; font-size: 58px; line-height: 1.02; letter-spacing: -0.035em; }
+.letter .lede-op { font-size: 19px; line-height: 1.45; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+.letter h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; margin-bottom: 14px; }
+.letter li { list-style: none; font-size: 16px; line-height: 1.45; padding: 12px 0; border-top: 1.5px solid var(--rule); }
+.letter li b { display: block; font-size: 17px; }
