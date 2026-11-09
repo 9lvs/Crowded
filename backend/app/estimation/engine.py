@@ -215,6 +215,7 @@ def estimate(inp: EstimateInput) -> Estimate:
     capacity_mode = ratio is not None and ratio >= p.capacity_mode_ratio
     entry_rate: float | None = None
     rate_known = bool(doors_all)
+    moved = 0
     if rate_known:
         direction = "out" if capacity_mode else "in"
         moved = sum(e.count for e in doors_rate if e.direction == direction)
@@ -238,6 +239,12 @@ def estimate(inp: EstimateInput) -> Estimate:
     if active:
         people = max(people or 0.0, float(len(active)))
     people_in_line = int(people) if people is not None else None
+    # Staff count the door but nobody got in lately while a line is reported. Either the door
+    # stopped (last call) or the line status is stale. The floor rate would give a long, made up
+    # wait, so say so and drop confidence to low.
+    line_not_moving = bool(rate_known and moved == 0 and people_in_line)
+    if line_not_moving:
+        flags.append("line_not_moving")
 
     # Waits.
     formula_wait: float | None = None
@@ -287,6 +294,8 @@ def estimate(inp: EstimateInput) -> Estimate:
         conf = Confidence.low
     if flags:
         conf = _CONF_DOWN[conf]
+    if line_not_moving:
+        conf = Confidence.low
 
     low = high = None
     if wait is not None:

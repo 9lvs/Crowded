@@ -50,6 +50,9 @@ also writes an `estimate_errors` row (predicted, actual, absolute error) so admi
 ## Flags
 `staff_report_mismatch`: door based crowd level and the report vote differ by 2 steps
 (easy vs packed). Shown to admins and used to lower confidence by one step.
+`line_not_moving`: staff are counting the door, nobody entered in the last 15 min, yet a line is
+reported. Either the door stopped (last call) or the line status is stale. Confidence drops to
+low so the UI does not present a made up wait as solid. Found by the night simulator.
 
 ## Verdict
 - No data: `no_data`, text "No recent data. No call yet."

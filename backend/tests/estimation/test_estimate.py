@@ -564,3 +564,21 @@ def test_basis_text_pluralization_and_joining() -> None:
     assert est.basis.text == "Based on 1 report and 1 timer in the last 30 min"
     est2 = run(reports=[report(crowd="busy")], doors=[door("in", 5, 3)])
     assert est2.basis.text == "Based on 1 report and staff counts in the last 30 min"
+
+
+def test_line_not_moving_flag_lowers_confidence() -> None:
+    from datetime import timedelta
+
+    from app.estimation import Confidence, DoorEventIn, EstimateInput, LineStatusIn, estimate
+    from tests.estimation.helpers import NOW
+
+    old = NOW - timedelta(minutes=40)
+    inp = EstimateInput(
+        now=NOW,
+        capacity=100,
+        door_events=[DoorEventIn(ts=old, direction="in", count=10)],
+        line_statuses=[LineStatusIn(ts=NOW - timedelta(minutes=5), line_size="long")],
+    )
+    est = estimate(inp)
+    assert "line_not_moving" in est.flags
+    assert est.confidence == Confidence.low
