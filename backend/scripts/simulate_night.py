@@ -52,7 +52,7 @@ from app.models import (
     SessionStatus,
     User,
 )
-from app.services import live
+from app.services import activity, live
 from app.services.auth import phone_hash
 from scripts._common import (
     FAKE_BARS,
@@ -77,6 +77,7 @@ TIMER_SHARE = 0.07  # share of arrivals who run a timer
 FAR_TIMER_SHARE = 0.10
 GIVE_UP_SHARE = 0.07  # of timer users
 BALK_QUEUE = 45.0  # arrivals are scaled by 1 / (1 + queue / BALK_QUEUE)
+BIASED_SLUG = "fake-copper-fox"  # the bar whose staff member is biased
 TZ = ZoneInfo("America/New_York")
 
 # (minutes after 8pm, relative arrival intensity)
@@ -178,7 +179,15 @@ class BarStats:
     timers_abandoned: int = 0
     reports: int = 0
     snapshots: int = 0
+    fresh_intervals: int = 0
+    peak_intervals: int = 0
+    disagree_samples: int = 0
+    staff_reliability: float | None = None
     errors: list[float] = field(default_factory=list)  # predicted - actual
+
+    @property
+    def freshness(self) -> float | None:
+        return self.fresh_intervals / self.peak_intervals if self.peak_intervals else None
 
     @property
     def mae(self) -> float | None:
@@ -199,6 +208,7 @@ class BarState:
     pending: list[Pending] = field(default_factory=list)
     inside: int = 0
     last_staff: tuple[datetime, LineSize] | None = None
+    lazy_done: bool = False
 
 
 def shift(order: list[LineSize] | list[CrowdLevel], value: LineSize | CrowdLevel, by: int) -> int:
@@ -207,8 +217,18 @@ def shift(order: list[LineSize] | list[CrowdLevel], value: LineSize | CrowdLevel
 
 
 class Simulator:
-    def __init__(self, db: Session, seed: int) -> None:
+    def __init__(
+        self,
+        db: Session,
+        seed: int,
+        staff_bias: str = "none",
+        report_rate: float = 1.0,
+        estimate_every: int = ESTIMATE_EVERY,
+    ) -> None:
         self.db = db
+        self.staff_bias = staff_bias
+        self.report_rate = report_rate
+        self.estimate_every = estimate_every
         self.seed = seed
         self.rng = random.Random(seed)
         self.bars = fake_bars(db)
@@ -245,16 +265,23 @@ class Simulator:
             s.pending.clear()
             s.inside = 0
             s.last_staff = None
+            s.lazy_done = False
         for m in range(plan.first_minute, plan.end_minute):
             t = plan.start + m * MINUTE
             for s in self.states:
                 self.step_bar(s, plan, m, t)
             self.db.commit()
-            if (m - plan.first_minute) % ESTIMATE_EVERY == ESTIMATE_EVERY - 1:
+            if (m - plan.first_minute) % self.estimate_every == self.estimate_every - 1:
                 for s in self.states:
                     result = self.compute(s.bar, t + MINUTE)
                     s.stats.snapshots += 1
                     wait = result.estimate.wait_min
+                    if "sources_disagree" in result.estimate.flags:
+                        s.stats.disagree_samples += 1
+                    mm = m + 1
+                    if 120 < mm <= 300 and mm % 15 == 0:  # 10pm to 1am, 15 minute intervals
+                        s.stats.peak_intervals += 1
+                        s.stats.fresh_intervals += int(result.estimate.has_recent_data)
                     if wait is not None:
                         s.stats.peak_est_wait = max(s.stats.peak_est_wait, wait)
         end = plan.start + plan.end_minute * MINUTE
@@ -336,8 +363,13 @@ class Simulator:
         # Staff tap the door counter in small groups.
         self.door_events(s, DoorDirection.in_, len(admitted), t)
         self.door_events(s, DoorDirection.out, exits, t)
-        if m % STAFF_LINE_EVERY == 0:
+        biased = self.staff_bias != "none" and s.spec.slug == BIASED_SLUG
+        lazy_skip = biased and self.staff_bias == "lazy" and s.lazy_done
+        if m % STAFF_LINE_EVERY == 0 and not lazy_skip:
             size = line_bucket(len(s.queue) * rng.gauss(1.0, 0.12))
+            if biased and self.staff_bias == "inflate":  # hyping the line to sell passes
+                size = LINE_ORDER[min(4, LINE_ORDER.index(size) + 2)]
+            s.lazy_done = True
             ts = t + timedelta(seconds=55)
             db.add(
                 OutsideLineStatus(bar_id=s.bar.id, staff_user_id=s.staff.id, ts=ts, line_size=size)
@@ -345,7 +377,7 @@ class Simulator:
             s.last_staff = (ts, size)
 
         # Crowd reports.
-        for _ in range(poisson(rng, 0.04 + 0.2 * level)):
+        for _ in range(poisson(rng, (0.04 + 0.2 * level) * self.report_rate)):
             self.report(s, t + timedelta(seconds=rng.random() * 60))
 
         # Users who tapped "inside" by the end of this minute.
@@ -382,6 +414,7 @@ class Simulator:
             status=SessionStatus.active,
             started_at=at,
             predicted_wait_min=current.estimate.wait_min,
+            entry_rate_at_start=current.estimate.entry_rate_per_min,
             formula_wait_min=live.raw_formula_wait(current.estimate),
             near_bar=not far,
             distance_bucket=bucket,
@@ -417,8 +450,16 @@ class Simulator:
         s.stats.timers_done += 1
         s.stats.peak_actual_wait = max(s.stats.peak_actual_wait, p.actual)
         predicted = session.predicted_wait_min
-        if predicted is None:
-            return
+        if predicted is not None:
+            self.record_error(s, session, user, predicted, p)
+        if session.near_bar:
+            # Same call production makes: the timer referees the staff and student line claims.
+            self.db.flush()
+            activity._score_line_sources(self.db, session, p.actual)
+
+    def record_error(
+        self, s: BarState, session: LineSession, user: User, predicted: float, p: Pending
+    ) -> None:
         self.db.add(
             EstimateError(
                 bar_id=s.bar.id,
@@ -571,33 +612,45 @@ def simulate(
     nights: list[str] | None = None,
     weeks_ago: list[int] | None = None,
     seed: int = 42,
+    staff_bias: str = "none",
+    report_rate: float = 1.0,
+    estimate_every: int = ESTIMATE_EVERY,
 ) -> list[BarStats]:
-    sim = Simulator(db, seed)
+    sim = Simulator(db, seed, staff_bias, report_rate, estimate_every)
     now = datetime.now(UTC)
     if plans is None:
         plans = backdated_plans(nights or ["thu", "fri", "sat"], weeks_ago or [0], now)
     for plan in plans:
         sim.run_night(plan)
-    return [s.stats for s in sim.states]
+    for st in sim.states:
+        st.stats.staff_reliability = st.staff.reliability
+    return [st.stats for st in sim.states]
 
 
-def fmt(x: float | None) -> str:
-    return "n/a" if x is None else f"{x:.1f}"
+def fmt(x: float | None, digits: int = 1) -> str:
+    return "n/a" if x is None else f"{x:.{digits}f}"
+
+
+def fmt_pct(x: float | None) -> str:
+    return "n/a" if x is None else f"{100 * x:.0f}%"
 
 
 def print_summary(stats: list[BarStats]) -> None:
     print("FAKE simulation summary (waits in minutes)")
     print(
         f"  {'bar':22} {'peak in':>7} {'peak est':>8} {'peak act':>8} "
-        f"{'timers':>6} {'giveups':>7} {'reports':>7} {'MAE':>5} {'bias':>5}"
+        f"{'timers':>6} {'giveups':>7} {'reports':>7} {'MAE':>5} {'bias':>5} "
+        f"{'fresh':>6} {'staff rel':>9}"
     )
     for st in stats:
         print(
             f"  {st.name:22} {st.peak_headcount:7} {st.peak_est_wait:8.1f} "
             f"{st.peak_actual_wait:8.1f} {st.timers_done:6} {st.timers_abandoned:7} "
-            f"{st.reports:7} {fmt(st.mae):>5} {fmt(st.bias):>5}"
+            f"{st.reports:7} {fmt(st.mae):>5} {fmt(st.bias):>5} {fmt_pct(st.freshness):>6} "
+            f"{fmt(st.staff_reliability, 2):>9}"
         )
     print("  bias = mean(predicted - actual). Positive means the estimate ran long.")
+    print("  fresh = share of 15 min intervals from 10pm to 1am with recent data.")
 
 
 def main() -> None:
@@ -612,6 +665,15 @@ def main() -> None:
     )
     p.add_argument("--live", action="store_true", help="simulate the current night up to now")
     p.add_argument("--reset", action="store_true", help="delete earlier simulated data first")
+    p.add_argument(
+        "--staff-bias",
+        choices=["none", "inflate", "lazy"],
+        default="none",
+        help="Copper Fox staff: inflate (line 2 steps too long) or lazy (set once, never update)",
+    )
+    p.add_argument(
+        "--report-rate", type=float, default=1.0, help="multiplier on student report volume"
+    )
     args = p.parse_args()
     require_dev_env()
     nights = [n.strip() for n in args.nights.split(",") if n.strip()]
@@ -629,7 +691,15 @@ def main() -> None:
             plans = backdated_plans(nights, sorted(set(args.weeks_ago or [0])), now)
         for plan in plans:
             print(f"Night: {plan.label}")
-        print_summary(simulate(db, plans, seed=args.seed))
+        print_summary(
+            simulate(
+                db,
+                plans,
+                seed=args.seed,
+                staff_bias=args.staff_bias,
+                report_rate=args.report_rate,
+            )
+        )
 
 
 if __name__ == "__main__":
