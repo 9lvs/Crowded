@@ -29,7 +29,7 @@
 - [x] App Review demo login, App Store checklist and listing copy (docs/APP_STORE.md)
 - [x] Ideas backlog: bar chat, map heatmap, location usage (docs/IDEAS.md)
 - [ ] Web v2: monochrome, crowd first, separate staff experience, e2e suite
-- [ ] Launch site with privacy, terms and support drafts (site/)
+- [x] Launch site with privacy, terms and support drafts (site/)
 - [ ] Owner decisions: Mac or Expo, Apple Developer enrollment, domain, host, SMS provider
 
 ## Phase 2: hardening and deploy readiness
