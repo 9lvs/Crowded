@@ -217,6 +217,9 @@ class LineSession(Base):
     ended_at: Mapped[datetime | None] = mapped_column(TS)
     predicted_wait_min: Mapped[float | None] = mapped_column(Float)
     formula_wait_min: Mapped[float | None] = mapped_column(Float)  # uncalibrated, for calibration
+    # Entry rate when the timer started. actual wait x rate = how many people were really in
+    # line, which scores staff and student line reports (docs/SOURCING.md).
+    entry_rate_at_start: Mapped[float | None] = mapped_column(Float)
     actual_wait_min: Mapped[float | None] = mapped_column(Float)
     near_bar: Mapped[bool] = mapped_column(Boolean, default=False)
     distance_bucket: Mapped[DistanceBucket] = mapped_column(

@@ -100,9 +100,9 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
         )
     ).all()
     lines = db.execute(
-        select(OutsideLineStatus.ts, OutsideLineStatus.line_size).where(
-            OutsideLineStatus.bar_id == bar.id, OutsideLineStatus.ts >= window
-        )
+        select(
+            OutsideLineStatus.ts, OutsideLineStatus.line_size, OutsideLineStatus.staff_user_id
+        ).where(OutsideLineStatus.bar_id == bar.id, OutsideLineStatus.ts >= window)
     ).all()
     sessions = db.execute(
         select(
@@ -127,7 +127,11 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
         ).where(CrowdReport.bar_id == bar.id, CrowdReport.created_at >= window)
     ).all()
 
-    user_ids = {r.user_id for r in sessions} | {r.user_id for r in reports}
+    user_ids = (
+        {r.user_id for r in sessions}
+        | {r.user_id for r in reports}
+        | {ln.staff_user_id for ln in lines if ln.staff_user_id is not None}
+    )
     reliability: dict[str, float] = {}
     if user_ids:
         for uid, rel in db.execute(select(User.id, User.reliability).where(User.id.in_(user_ids))):
@@ -148,7 +152,14 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
         door_events=[
             est.DoorEventIn(ts=ts, direction=direction.value, count=n) for ts, direction, n in doors
         ],
-        line_statuses=[est.LineStatusIn(ts=ln.ts, line_size=ln.line_size.value) for ln in lines],
+        line_statuses=[
+            est.LineStatusIn(
+                ts=ln.ts,
+                line_size=ln.line_size.value,
+                reporter_id=str(ln.staff_user_id) if ln.staff_user_id else None,
+            )
+            for ln in lines
+        ],
         timers=timers,
         reports=[
             est.ReportIn(

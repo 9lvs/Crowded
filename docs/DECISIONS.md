@@ -17,7 +17,7 @@ Newest at the bottom. Format: ID, date, decision, why, revisit when.
 - **D-007 (2026-11-09) Raw retention proposal: 30 days** (owner asked for a number). Thirty days
   covers four weekends, enough to calibrate and debug. Bar level aggregates (snapshots, estimate
   errors) carry no user ids and are kept 365 days. Configurable via `CROWDED_RAW_RETENTION_DAYS`.
-  **Needs owner sign off.**
+  Owner signed off 2026-11-09.
 - **D-008 (2026-11-09) In-process rate limiter for v1.** Single instance pilot. Must move to Redis
   before running more than one replica.
 - **D-009 (2026-11-09) Web client is no-build vanilla JS with CSS tokens, served by the backend.**
@@ -48,3 +48,13 @@ Newest at the bottom. Format: ID, date, decision, why, revisit when.
   otherwise log out users with two tabs. A thief racing within 10 s of a rotation is accepted.
 - **D-021 (2026-11-09) Client IP comes only from uvicorn's proxy handling**
   (`FORWARDED_ALLOW_IPS`). The app never reads X-Forwarded-For.
+- **D-022 (2026-11-09) iOS 17 minimum** (owner signed off).
+- **D-023 (2026-11-09) Staff and student line readings are fused, not ranked.** One weighted median
+  where staff start at 3x weight, and every source's weight is scaled by a reliability learned from
+  completed timers (actual wait x entry rate = people really in line). Big gaps are flagged and
+  shown as "Staff and reports differ". See docs/SOURCING.md.
+- **D-024 (2026-11-09) Launch through social with a direct download link** (TestFlight public link,
+  later App Store) instead of hosting a marketing site. Apple still requires a hosted privacy
+  policy and support URL, so those two pages need a free host.
+- **D-025 (2026-11-09) iOS builds and tests run in CI on GitHub macOS runners** (owner has little
+  disk). Project generated with XcodeGen, API client by swift-openapi-generator.

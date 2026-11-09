@@ -14,8 +14,9 @@ Code: `backend/app/estimation/` (pure functions, contract in `types.py`).
 1. **Headcount** = tonight's ins minus outs (never below 0). Ratio = headcount / capacity.
 2. **Crowd level** from ratio: under 0.60 easy, under 0.90 busy, otherwise packed. Without door
    data, use the reliability and recency weighted vote of recent reports.
-3. **People in line**: the latest staff line status inside the window wins. Otherwise the
-   weighted median of reported line sizes. Bucket to people: none 0, short 6, medium 18,
+3. **People in line**: one weighted median over staff line readings (weight 3.0 x staff
+   reliability x recency) and student line reports (reliability x recency, x 0.3 if far).
+   See docs/SOURCING.md. Bucket to people: none 0, short 6, medium 18,
    long 38, very long 65. Active timers set a floor (at least that many people are in line).
 4. **Entry rate** (people per minute) = ins over the last 15 minutes / 15.
    **Capacity mode**: when the ratio is 0.95 or more, the bar only lets people in as others leave,
@@ -48,6 +49,13 @@ ignoring predicted under 2 min (half life one day). No points gives 1.0. Clamped
 also writes an `estimate_errors` row (predicted, actual, absolute error) so admins can track MAE.
 
 ## Flags
+`sources_disagree`: staff and student line estimates differ by 10+ people and 40 percent.
+Confidence drops a step and the basis text ends with "Staff and reports differ".
+
+Completed near-bar timers score earlier line claims: people really in line = actual wait x
+entry rate at start (stored on the session). Reliability of each staff member and student who
+made a claim in the 10 minutes before moves toward their accuracy.
+
 `staff_report_mismatch`: door based crowd level and the report vote differ by 2 steps
 (easy vs packed). Shown to admins and used to lower confidence by one step.
 `line_not_moving`: staff are counting the door, nobody entered in the last 15 min, yet a line is

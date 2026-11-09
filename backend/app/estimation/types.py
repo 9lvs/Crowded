@@ -57,6 +57,7 @@ class LineStatusIn:
 
     ts: datetime
     line_size: str  # key of LINE_SIZE_PEOPLE
+    reporter_id: str | None = None  # staff user id, for per staff reliability
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,13 @@ class Params:
     calibration_window_min: float = 7 * 24 * 60.0
     calibration_half_life_min: float = 24 * 60.0  # one day
     mismatch_threshold: int = 2  # crowd level steps between staff count and reports
+    # One staff line reading weighs as much as this many perfectly reliable user reports, before
+    # the staff member's own reliability (learned from timers) is applied. See docs/SOURCING.md.
+    staff_line_weight: float = 3.0
+    # Staff and user line estimates "disagree" when they differ by at least this many people
+    # and by at least this fraction of the larger one.
+    disagree_min_people: float = 10.0
+    disagree_ratio: float = 0.4
 
 
 @dataclass(frozen=True)

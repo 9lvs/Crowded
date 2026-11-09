@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 from app.estimation.stats import mad, median, weighted_median
@@ -15,6 +16,7 @@ from app.estimation.types import (
     Crowd,
     Estimate,
     EstimateInput,
+    LineStatusIn,
     Params,
     Recommendation,
     ReportIn,
@@ -85,6 +87,16 @@ def _report_weight(r: ReportIn, inp: EstimateInput) -> float:
     w *= inp.reliability.get(r.user_id, p.default_reliability)
     if not r.near_bar:
         w *= p.far_report_weight
+    return w
+
+
+def _staff_weight(s: LineStatusIn, inp: EstimateInput) -> float:
+    p = inp.params
+    w = p.staff_line_weight * _recency(_age_min(inp.now, s.ts), p.half_life_min)
+    if s.reporter_id is not None:
+        w *= inp.reliability.get(s.reporter_id, p.default_reliability)
+    else:
+        w *= p.default_reliability
     return w
 
 
@@ -221,21 +233,29 @@ def estimate(inp: EstimateInput) -> Estimate:
         moved = sum(e.count for e in doors_rate if e.direction == direction)
         entry_rate = max(p.min_rate_per_min, moved / p.rate_window_min)
 
-    # People in line. A staff status wins, then reports. Active timers set a floor.
-    people: float | None = None
-    people_from_staff = False
-    if lines:
-        latest = max(lines, key=lambda s: s.ts)
-        if latest.line_size in LINE_SIZE_PEOPLE:
-            people = float(LINE_SIZE_PEOPLE[latest.line_size])
-            people_from_staff = True
-    if people is None:
-        sized = [
-            (float(LINE_SIZE_PEOPLE[r.line_size]), _report_weight(r, inp))
-            for r in reports
-            if r.line_size is not None and r.line_size in LINE_SIZE_PEOPLE
-        ]
-        people = weighted_median(sized)
+    # People in line. Staff readings and user reports are fused with one weighted median.
+    # Staff start with more weight, but every source's weight is scaled by a reliability that
+    # is learned from completed line timers (the ground truth). Active timers set a floor.
+    staff_obs = [
+        (float(LINE_SIZE_PEOPLE[s.line_size]), _staff_weight(s, inp))
+        for s in lines
+        if s.line_size in LINE_SIZE_PEOPLE
+    ]
+    user_obs = [
+        (float(LINE_SIZE_PEOPLE[r.line_size]), _report_weight(r, inp))
+        for r in reports
+        if r.line_size is not None and r.line_size in LINE_SIZE_PEOPLE
+    ]
+    people_from_staff = bool(staff_obs)
+    people = weighted_median(staff_obs + user_obs)
+    staff_people = weighted_median(staff_obs)
+    user_people = weighted_median(user_obs)
+    if staff_people is not None and user_people is not None:
+        line_gap = abs(staff_people - user_people)
+        if line_gap >= p.disagree_min_people and line_gap >= p.disagree_ratio * max(
+            staff_people, user_people
+        ):
+            flags.append("sources_disagree")
     if active:
         people = max(people or 0.0, float(len(active)))
     people_in_line = int(people) if people is not None else None
@@ -317,7 +337,11 @@ def estimate(inp: EstimateInput) -> Estimate:
         entry_rate_per_min=entry_rate,
         confidence=conf,
         method=method,
-        basis=basis,
+        basis=(
+            replace(basis, text=basis.text + ". Staff and reports differ")
+            if "sources_disagree" in flags
+            else basis
+        ),
         flags=tuple(flags),
     )
 

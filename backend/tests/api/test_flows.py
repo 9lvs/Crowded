@@ -179,3 +179,39 @@ def test_bad_timezone_rejected(client: TestClient, admin: Auth) -> None:
         "timezone": "Mars/Olympus",
     }
     assert client.post("/v1/admin/bars", json=body, headers=admin.h).status_code == 422
+
+
+def test_timer_referees_staff_line_claims(
+    client: TestClient, db: Session, admin: Auth, user: Auth, bar: Bar
+) -> None:
+    """Staff says very long line, a real timer says it was short: staff reliability drops."""
+    import uuid as _uuid
+
+    from app.models import User
+
+    staff = make_staff(client, admin, str(bar.id))
+    for _ in range(6):  # entry rate ~2 per min over the 15 min window
+        client.post(
+            f"/v1/staff/bars/{bar.id}/door", json={"direction": "in", "count": 5}, headers=staff.h
+        )
+    client.post(f"/v1/staff/bars/{bar.id}/line", json={"line_size": "very_long"}, headers=staff.h)
+    staff_user = db.get(User, _uuid.UUID(staff.user_id))
+    assert staff_user is not None
+    before = staff_user.reliability
+
+    loc = {"latitude": bar.latitude, "longitude": bar.longitude}
+    s = client.post(
+        "/v1/line-sessions", json={"bar_id": str(bar.id), "location": loc}, headers=user.h
+    ).json()
+    row = db.get(LineSession, _uuid.UUID(s["id"]))
+    assert row is not None and row.entry_rate_at_start
+    row.started_at = row.started_at - timedelta(minutes=3)  # waited 3 min: about 6 people
+    from app.models import OutsideLineStatus
+
+    for ls in db.query(OutsideLineStatus).all():  # the staff claim came before the timer
+        ls.ts = ls.ts - timedelta(minutes=4)
+    db.commit()
+    client.post(f"/v1/line-sessions/{s['id']}/end", json={"outcome": "inside"}, headers=user.h)
+    db.expire_all()
+    staff_user = db.get(User, _uuid.UUID(staff.user_id))
+    assert staff_user is not None and staff_user.reliability < before

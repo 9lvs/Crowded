@@ -88,6 +88,7 @@ def start_session(db: Session, user: User, bar: Bar, loc: LocationIn | None) -> 
         started_at=now,
         predicted_wait_min=current.estimate.wait_min,
         formula_wait_min=live.raw_formula_wait(current.estimate),
+        entry_rate_at_start=current.estimate.entry_rate_per_min,
         near_bar=near,
         distance_bucket=bucket,
     )
@@ -127,12 +128,56 @@ def end_session(db: Session, user: User, session_id: uuid.UUID, outcome: str) ->
                 )
         if s.near_bar:
             points = POINTS_TIMER
+            _score_line_sources(db, s, actual)
     else:
         s.status = SessionStatus.abandoned
     if points:
         db.add(RewardLedger(user_id=user.id, points=points, reason="timer", ref_id=s.id))
     db.commit()
     return session_out(s, points)
+
+
+LINE_SCORE_LOOKBACK = timedelta(minutes=10)
+
+
+def _score_line_sources(db: Session, s: LineSession, actual_min: float) -> None:
+    """Use a finished timer as ground truth for the line reports made when it started.
+
+    people really in line ~= actual wait x entry rate at the start. Every staff line reading and
+    student line report made just before the timer started is scored against that, and the
+    reporter's reliability moves toward how close they were. One honest timer referees both.
+    """
+    if not s.entry_rate_at_start:
+        return
+    implied = actual_min * s.entry_rate_at_start
+    since = s.started_at - LINE_SCORE_LOOKBACK
+    people = est.types.LINE_SIZE_PEOPLE
+    staff_rows = db.execute(
+        select(OutsideLineStatus.staff_user_id, OutsideLineStatus.line_size).where(
+            OutsideLineStatus.bar_id == s.bar_id,
+            OutsideLineStatus.ts >= since,
+            OutsideLineStatus.ts <= s.started_at,
+            OutsideLineStatus.staff_user_id.is_not(None),
+        )
+    ).all()
+    report_rows = db.execute(
+        select(CrowdReport.user_id, CrowdReport.line_size).where(
+            CrowdReport.bar_id == s.bar_id,
+            CrowdReport.created_at >= since,
+            CrowdReport.created_at <= s.started_at,
+            CrowdReport.line_size.is_not(None),
+            CrowdReport.near_bar.is_(True),
+            CrowdReport.user_id != s.user_id,
+        )
+    ).all()
+    claims: dict[uuid.UUID, float] = {}
+    for uid, size in [*staff_rows, *report_rows]:
+        if uid is not None and size is not None:
+            claims[uid] = float(people[size.value])  # latest claim per person is enough
+    for uid, claimed in claims.items():
+        reporter = db.get(User, uid)
+        if reporter is not None:
+            reporter.reliability = est.update_reliability(reporter.reliability, claimed, implied)
 
 
 def submit_report(db: Session, user: User, bar: Bar, body: ReportCreate) -> ReportOut:
