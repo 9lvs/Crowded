@@ -1,0 +1,13 @@
+{
+  "name": "crowded-e2e",
+  "private": true,
+  "description": "End to end tests for the Crowded web client and API. All data is FAKE.",
+  "scripts": {
+    "test": "playwright test --trace off",
+    "test:mock": "playwright test --trace off tests/mock.spec.ts tests/a11y.spec.ts",
+    "report": "playwright show-report playwright-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

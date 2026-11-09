@@ -1,12 +1,20 @@
 /* API layer. Talks to the real backend (same origin) or to the in-memory mock.
-   Tokens: access token in memory only. Refresh token in localStorage "crowded.rt". */
+   Tokens: access token in memory only. Refresh token in localStorage "crowded.rt".
+   Mock mode is only allowed when a bundle sets window.CROWDED_MOCK = true, or when ?mock=1 is
+   used on localhost or a file: page. It never touches the real refresh token. */
 (function () {
   "use strict";
   var C = (window.Crowded = window.Crowded || {});
   var ui = C.ui;
 
-  var RT_KEY = "crowded.rt";
-  var isMock = window.CROWDED_MOCK === true || /[?&]mock=1\b/.test(window.location.search);
+  function mockAllowed() {
+    if (window.CROWDED_MOCK === true) return true;
+    if (!/[?&]mock=1\b/.test(window.location.search)) return false;
+    var host = window.location.hostname;
+    return window.location.protocol === "file:" || host === "localhost" || host === "127.0.0.1";
+  }
+  var isMock = mockAllowed();
+  var RT_KEY = isMock ? "crowded.mock.rt" : "crowded.rt";
 
   var access = null;
   var refreshing = null;

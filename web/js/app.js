@@ -128,7 +128,7 @@
         h(
           "button",
           {
-            class: "btn btn--accent",
+            class: "btn btn--inverse",
             type: "button",
             onclick: function () {
               go("/timer");
@@ -149,7 +149,13 @@
     var box = h("div", null);
     root.appendChild(box);
     C.auth.mount(box, {
-      kicker: api.isMock ? "Demo" : null,
+      demo: api.isMock,
+      footer: h(
+        "p",
+        { class: "welcome__alt" },
+        "Work at a bar? ",
+        h("a", { class: "link-btn", href: "staff.html" + (api.isMock ? "?mock=1" : ""), text: "Staff sign in" })
+      ),
       onDone: function () {
         loadSession()
           .catch(function () {})
@@ -162,45 +168,152 @@
   }
 
   // ---------- Tonight ----------
-  function barRow(b) {
+  function waitLabel(lv) {
+    if (lv.has_recent_data && lv.wait_min !== null) return lv.wait_min === 0 ? "No line" : "About " + lv.wait_min + " min wait";
+    return lv.has_recent_data ? "No line data" : "No recent data";
+  }
+
+  function barRow(b, refresh) {
     var lv = b.live;
-    var wait = lv.has_recent_data && lv.wait_min !== null
-      ? h("span", { class: "wait-num wait-num--row" }, String(lv.wait_min), h("span", { class: "unit", text: "min" }))
-      : h("span", { class: "wait-none", text: lv.has_recent_data ? "No line data" : "No recent data" });
-    var label = b.name + ". " + (lv.wait_min !== null && lv.has_recent_data ? "About " + lv.wait_min + " minute wait. " : "No recent data. ") +
-      (lv.crowd_level ? "Crowd " + ui.CROWD_LABEL[lv.crowd_level] + ". " : "") + b.verdict.text;
+    var hasWait = lv.has_recent_data && lv.wait_min !== null;
+    var crowdLabel = lv.crowd_level ? ui.CROWD_LABEL[lv.crowd_level] : "Crowd unknown";
+    var label = b.name + ". " + (lv.crowd_level ? "Crowd " + crowdLabel + ". " : "Crowd unknown. ") +
+      waitLabel(lv) + ". " + (lv.has_recent_data ? lv.basis.text + ". " : "") + ui.verdictShort(b.verdict) + ".";
+    var right = hasWait
+      ? h("span", { class: "row-wait" }, h("span", { class: "num row-wait__num", text: String(lv.wait_min) }), h("span", { class: "row-wait__unit", text: "min" }))
+      : h("span", { class: "row-wait row-wait--none", text: lv.has_recent_data ? "No line data" : "No data" });
     return h(
       "li",
-      null,
+      { class: "bar-row" },
       h(
         "button",
         {
-          class: "bar-row",
+          class: "bar-row__main",
           type: "button",
           "aria-label": label,
           onclick: function () {
             go("/bar/" + b.id);
           }
         },
-        h("p", { class: "bar-row__name", text: b.name }),
-        h("div", { class: "bar-row__wait" }, wait),
-        h("div", null, lv.crowd_level ? ui.crowd(lv.crowd_level) : h("span", { class: "small faint", text: "Crowd unknown" })),
-        h("div", { class: "bar-row__wait" }, ui.verdictChip(b.verdict)),
-        h("p", { class: "basis bar-row__basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min" })
+        h(
+          "span",
+          { class: "bar-row__text" },
+          h("span", { class: "bar-row__name", text: b.name }),
+          h("span", { class: "bar-row__crowd" }, lv.crowd_level ? ui.crowd(lv.crowd_level) : h("span", { class: "faint", text: "Crowd unknown" })),
+          h("span", { class: "bar-row__basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min" })
+        ),
+        right
+      ),
+      h(
+        "div",
+        { class: "bar-row__foot" },
+        ui.verdictLine(b.verdict),
+        h(
+          "button",
+          {
+            class: "chip-btn",
+            type: "button",
+            "aria-label": "Report crowd at " + b.name,
+            onclick: function () {
+              openReport(b, refresh);
+            }
+          },
+          "Report"
+        )
       )
     );
+  }
+
+  // Shown on Tonight when the signed in account is door staff.
+  function staffBanner() {
+    var me = api.me;
+    if (!me || me.role !== "staff" || !me.staff_bar_id) return null;
+    var b = state.barsById[me.staff_bar_id];
+    return h(
+      "a",
+      { class: "banner", href: "staff.html" + (api.isMock ? "?mock=1" : "") },
+      h(
+        "span",
+        { class: "banner__text" },
+        h("strong", { text: "You're signed in as door staff" }),
+        h("span", { text: b ? "at " + b.name + ". Open the door counter." : "Open the door counter." })
+      ),
+      ui.icon("arrow")
+    );
+  }
+
+  // Report sheet. Used from Tonight rows and Bar detail. onSent runs after a successful send.
+  function openReport(b, onSent) {
+    var crowdSeg = ui.segmented({
+      label: "Crowd inside",
+      toggle: true,
+      options: [
+        { value: "easy", label: "Easy" },
+        { value: "busy", label: "Busy" },
+        { value: "packed", label: "Packed" }
+      ],
+      onChange: sync
+    });
+    var lineSeg = ui.segmented({ label: "Line outside", toggle: true, options: ui.LINE_SIZES, onChange: sync });
+    var send = h("button", { class: "btn btn--primary btn--block btn--lg", type: "button", disabled: true }, "Send report");
+    function sync() {
+      send.disabled = !(crowdSeg.get() || lineSeg.get());
+    }
+    var content = h(
+      "div",
+      null,
+      h("p", { class: "sheet__label", text: "Crowd inside" }),
+      crowdSeg.el,
+      h("p", { class: "sheet__label", text: "Line outside" }),
+      lineSeg.el,
+      h("div", { class: "btn-stack" }, send),
+      h("p", { class: "xs muted", text: "We check once if you're near the bar, then forget your location." })
+    );
+    var sh = ui.sheet({ title: "How is " + b.name + " right now?", content: content });
+    send.addEventListener("click", function () {
+      send.disabled = true;
+      send.textContent = "Sending";
+      ui.locationOnce()
+        .then(function (loc) {
+          return api.report(b.id, crowdSeg.get(), lineSeg.get(), loc);
+        })
+        .then(function (r) {
+          ui.clear(content);
+          ui.append(content, [
+            h(
+              "div",
+              { class: "thanks", role: "status" },
+              h("span", { class: "thanks__icon", "aria-hidden": "true" }, ui.icon("check")),
+              h("p", { class: "thanks__title", text: "Report sent" }),
+              h(
+                "p",
+                { class: "small muted", text: r.points_awarded ? "+" + r.points_awarded + (r.points_awarded === 1 ? " point" : " points") + ". Thanks for keeping it accurate." : "Thanks. Reports from near the bar earn points." }
+              )
+            )
+          ]);
+          setTimeout(sh.close, 1600);
+          if (onSent) onSent();
+        })
+        .catch(function (err) {
+          send.textContent = "Send report";
+          sync();
+          if (err.status === 429) ui.toast("You just reported. Try again in a few minutes.");
+          else ui.toast(err.detail || "Could not send");
+        });
+    });
   }
 
   function Tonight() {
     var cleanups = [];
     var list = h("ul", { class: "bar-list", "aria-label": "Bars tonight" });
     for (var i = 0; i < 3; i++) list.appendChild(h("li", { class: "skeleton", "aria-hidden": "true" }));
-    var me = api.me;
-    var sub = h("p", { class: "head__sub", text: ui.fmtDate(new Date()) + " · Pass when over " + me.wait_threshold_min + " min" });
+    var sub = h("p", { class: "head__sub", text: ui.fmtDate(new Date()) });
+    var bannerSlot = h("div", null);
     var screen = h(
       "main",
       { class: "screen" },
       h("header", { class: "head" }, h("h1", { class: "head__title", text: "Tonight" }), sub),
+      bannerSlot,
       list,
       h("div", { class: "head" }, mockBanner())
     );
@@ -220,8 +333,12 @@
       if (sb) chrome.appendChild(sb);
     }
 
+    var meFresh = false;
     function refresh() {
-      return Promise.all([api.bars(), loadSession().catch(function () { return state.session; })])
+      // Re-read the account once per visit so a new staff role shows up without a reload.
+      var meP = meFresh ? Promise.resolve(api.me) : api.getMe().catch(function () { return api.me; });
+      meFresh = true;
+      return Promise.all([api.bars(), loadSession().catch(function () { return state.session; }), meP])
         .then(function (res) {
           var bars = res[0];
           ui.clear(list);
@@ -232,8 +349,10 @@
             list.appendChild(h("li", { class: "empty", text: "No bars yet. Check back soon." }));
           }
           bars.forEach(function (b) {
-            list.appendChild(barRow(b));
+            list.appendChild(barRow(b, refresh));
           });
+          ui.clear(bannerSlot);
+          ui.append(bannerSlot, staffBanner());
           drawChrome();
         })
         .catch(function (e) {
@@ -364,76 +483,64 @@
       var me = api.me;
       ui.clear(body);
 
-      // hero
-      heroNum = h("div", { class: "wait-num hero__num", "aria-live": "polite" });
-      var hero;
-      if (hasWait) {
-        ui.append(heroNum, [String(lv.wait_min), h("span", { class: "unit", text: "min" })]);
-        hero = h(
-          "section",
-          { class: "hero", "aria-label": "Estimated wait" },
-          h("p", { class: "hero__label", text: "Estimated wait" }),
-          heroNum,
-          h("p", { class: "hero__range", text: lv.wait_low_min + " to " + lv.wait_high_min + " min" }),
-          h("p", { class: "basis", text: lv.basis.text })
-        );
-      } else {
-        hero = h(
-          "section",
-          { class: "hero", "aria-label": "Estimated wait" },
-          h("p", { class: "hero__label", text: "Estimated wait" }),
-          h("p", { class: "hero__none", "aria-live": "polite", text: lv.has_recent_data ? "Not enough line data" : "No recent data" }),
-          h("p", { class: "basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min. Be the first." })
-        );
-      }
-
-      // verdict
-      var v = b.verdict;
-      var kicker = "The call";
-      var verdictCard = h(
+      // Crowd and line first. These are the numbers people source and come for.
+      var ratio = lv.capacity_ratio;
+      var crowdSub = lv.headcount !== null && ratio !== null
+        ? lv.headcount + " of " + b.capacity + " inside"
+        : lv.crowd_level ? "From student reports" : "No reports yet";
+      var crowdCol = h(
+        "div",
+        { class: "kpi" },
+        h("p", { class: "kpi__label", text: "Crowd" }),
+        h("p", { class: "kpi__value", "aria-live": "polite" }, lv.crowd_level ? ui.CROWD_LABEL[lv.crowd_level] : h("span", { class: "faint", text: "Unknown" })),
+        lv.crowd_level ? ui.crowd(lv.crowd_level, { meterOnly: true }) : null,
+        h("p", { class: "kpi__sub", text: crowdSub })
+      );
+      heroNum = h("p", { class: "kpi__value num", "aria-live": "polite" });
+      if (hasWait) ui.append(heroNum, [String(lv.wait_min), h("span", { class: "kpi__unit", text: " min" })]);
+      else heroNum.appendChild(h("span", { class: "faint", text: "No data" }));
+      var lineCol = h(
+        "div",
+        { class: "kpi" },
+        h("p", { class: "kpi__label", text: "Line" }),
+        heroNum,
+        h("p", { class: "kpi__sub", text: hasWait ? (lv.wait_min === 0 ? "Walk right in" : lv.wait_low_min + " to " + lv.wait_high_min + " min") : "No recent timers" })
+      );
+      var hero = h(
         "section",
-        { class: "verdict-card" + (v.recommendation === "buy_pass" ? " verdict-card--pass" : ""), "aria-label": "Verdict" },
-        h("p", { class: "verdict-card__kicker" }, h("span", { class: "verdict-card__dot", "aria-hidden": "true" }), kicker),
-        h("p", { class: "verdict-card__text", text: v.text }),
+        { class: "kpis", "aria-label": "Right now" },
+        crowdCol,
+        lineCol
+      );
+      var basis = h(
+        "p",
+        { class: "basis detail__basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min. Be the first." }
+      );
+
+      // Pass: secondary. One quiet row plus the reasoning.
+      var v = b.verdict;
+      var price = ui.fmtPrice(b.pass_price_cents);
+      var pass = h(
+        "section",
+        { class: "pass", "aria-label": "Line skip pass" },
+        h(
+          "div",
+          { class: "pass__row" },
+          h("span", { class: "pass__label", text: "Price tonight" }),
+          h("span", { class: "pass__value", text: price || "Not sold here" })
+        ),
+        h("p", { class: "pass__text", text: v.text }),
         h(
           "p",
-          { class: "verdict-card__foot" },
+          { class: "pass__foot" },
           "Your limit is " + me.wait_threshold_min + " min. ",
           h("a", { href: "#/settings", class: "link-btn", text: "Change" })
         )
       );
 
-      // crowd
-      var ratio = lv.capacity_ratio;
-      var crowdStat;
-      if (lv.headcount !== null && ratio !== null) {
-        var fill = h("div", { class: "cap__fill", "data-level": lv.crowd_level || "" });
-        fill.style.setProperty("width", Math.min(100, Math.round(ratio * 100)) + "%");
-        crowdStat = h(
-          "li",
-          { class: "stat stat--stack" },
-          h(
-            "div",
-            { class: "stat__row" },
-            ui.crowd(lv.crowd_level),
-            h("span", { class: "stat__value", text: lv.headcount + " / " + b.capacity + " · " + Math.round(ratio * 100) + "%" })
-          ),
-          h("div", { class: "cap", role: "img", "aria-label": lv.headcount + " of " + b.capacity + " capacity" }, fill)
-        );
-      } else {
-        crowdStat = h(
-          "li",
-          { class: "stat" },
-          h("span", { class: "stat__label", text: "Crowd level" }),
-          lv.crowd_level ? ui.crowd(lv.crowd_level) : h("span", { class: "stat__value faint", text: "Unknown" })
-        );
-      }
-
-      var price = ui.fmtPrice(b.pass_price_cents);
       var stats = h(
         "ul",
         { class: "stats" },
-        crowdStat,
         h(
           "li",
           { class: "stat" },
@@ -443,33 +550,36 @@
         h(
           "li",
           { class: "stat" },
-          h("span", { class: "stat__label", text: "Line skip pass" }),
-          h("span", { class: "stat__value", text: price || "Not sold here" })
-        ),
-        h(
-          "li",
-          { class: "stat" },
           h("span", { class: "stat__label", text: "Capacity" }),
           h("span", { class: "stat__value", text: b.capacity + " people" })
-        )
+        ),
+        lv.headcount !== null && ratio !== null
+          ? h(
+              "li",
+              { class: "stat" },
+              h("span", { class: "stat__label", text: "Full" }),
+              h("span", { class: "stat__value", text: Math.round(ratio * 100) + "%" })
+            )
+          : null
       );
 
       ui.append(body, [
         h("h1", { class: "detail__name", text: b.name }),
-        h("p", { class: "small muted", text: b.address }),
+        h("p", { class: "detail__addr", text: b.address }),
         hero,
-        verdictCard,
-        h("h2", { class: "section-title", text: "Crowd" }),
-        stats,
+        basis,
         h("h2", { class: "section-title", text: "Wait by hour" }),
         chart(b.wait_by_hour || []),
         h(
           "p",
           { class: "legend" },
           h("span", null, h("i", { class: "sw-typ" }), "Typical"),
-          h("span", null, h("i", { class: "sw-now" }), "Tonight"),
-          h("span", null, h("i", { class: "sw-cur" }), "Now")
+          h("span", null, h("i", { class: "sw-now" }), "Tonight")
         ),
+        h("h2", { class: "section-title", text: "Line skip pass" }),
+        pass,
+        h("h2", { class: "section-title", text: "About" }),
+        stats,
         mockBanner()
       ]);
       drawCta();
@@ -483,7 +593,17 @@
       cleanups = [];
       var inner = h("div", { class: "sticky-cta__inner" });
       var s = state.session;
-      var report = h("button", { class: "btn btn--secondary btn--lg", type: "button", onclick: openReport }, "Report");
+      var report = h(
+        "button",
+        {
+          class: "btn btn--primary btn--lg",
+          type: "button",
+          onclick: function () {
+            if (bar) openReport(bar, refresh);
+          }
+        },
+        "Report crowd"
+      );
       var primary;
       if (s) {
         var t = h("span", { text: "" });
@@ -495,17 +615,17 @@
         primary = h(
           "button",
           {
-            class: "btn btn--accent btn--lg",
+            class: "btn btn--outline btn--lg",
             type: "button",
             onclick: function () {
               go("/timer");
             }
           },
-          s.bar_id === id ? "In line · " : "In line elsewhere · ",
+          s.bar_id === id ? "In line " : "In line elsewhere ",
           t
         );
       } else {
-        primary = h("button", { class: "btn btn--primary btn--lg", type: "button", onclick: startLine }, "I'm in line");
+        primary = h("button", { class: "btn btn--outline btn--lg", type: "button", onclick: startLine }, "I'm in line");
       }
       ui.append(inner, [report, primary]);
       cta.appendChild(inner);
@@ -533,53 +653,6 @@
             ui.toast(err.detail || "Could not start the timer");
           }
         });
-    }
-
-    function openReport() {
-      var crowdSeg = ui.segmented({
-        label: "Crowd inside",
-        toggle: true,
-        options: [
-          { value: "easy", label: "Easy" },
-          { value: "busy", label: "Busy" },
-          { value: "packed", label: "Packed" }
-        ],
-        onChange: sync
-      });
-      var lineSeg = ui.segmented({ label: "Line outside", toggle: true, options: ui.LINE_SIZES, onChange: sync });
-      var send = h("button", { class: "btn btn--primary btn--block btn--lg", type: "button", disabled: true }, "Send report");
-      function sync() {
-        send.disabled = !(crowdSeg.get() || lineSeg.get());
-      }
-      var content = h(
-        "div",
-        null,
-        h("p", { class: "sheet__label", text: "Crowd inside" }),
-        crowdSeg.el,
-        h("p", { class: "sheet__label", text: "Line outside" }),
-        lineSeg.el,
-        h("div", { class: "btn-stack" }, send),
-        h("p", { class: "xs muted", text: "We check once if you're near the bar, then forget your location." })
-      );
-      var sh = ui.sheet({ title: "How is it at " + (bar ? bar.name : "the bar") + "?", content: content });
-      send.addEventListener("click", function () {
-        send.disabled = true;
-        send.textContent = "Sending";
-        ui.locationOnce()
-          .then(function (loc) {
-            return api.report(id, crowdSeg.get(), lineSeg.get(), loc);
-          })
-          .then(function (r) {
-            sh.close();
-            ui.toast("Thanks. +" + r.points_awarded + " point" + (r.points_awarded === 1 ? "" : "s"));
-            refresh();
-          })
-          .catch(function (err) {
-            send.textContent = "Send report";
-            sync();
-            if (err.status !== 429) ui.toast(err.detail || "Could not send");
-          });
-      });
     }
 
     function refresh() {
@@ -651,7 +724,7 @@
           h("h1", { class: "head__title", text: title }),
           h("p", { class: "muted", text: inside ? "You waited" : "You were in line for" }),
           h("p", { class: "wait-num result__num" }, String(mins), h("span", { class: "unit", text: mins === 1 ? " min" : " min" })),
-          s.points_awarded ? h("p", { class: "points" }, ui.icon("bolt"), "+" + s.points_awarded + " points") : h("p", { class: "small muted", text: "Thanks. This still helps." }),
+          s.points_awarded ? h("p", { class: "points", text: "+" + s.points_awarded + " points" }) : h("p", { class: "small muted", text: "Thanks. This still helps." }),
           h(
             "p",
             { class: "small muted", text: note }
@@ -777,7 +850,7 @@
     function paint() {
       var v = Number(range.value);
       val.textContent = v + " min";
-      help.textContent = "Recommend the pass when the wait is over " + v + " min.";
+      help.textContent = "We suggest a line skip pass when the wait is over " + v + " min.";
       range.setAttribute("aria-valuetext", v + " minutes");
       range.style.setProperty("--fill", ((v - 5) / 115) * 100 + "%");
     }
@@ -849,7 +922,7 @@
       h(
         "section",
         { class: "setting" },
-        h("div", { class: "setting__row" }, h("label", { class: "setting__title", for: "threshold", text: "Wait limit" }), val),
+        h("div", { class: "setting__row" }, h("label", { class: "setting__title", for: "threshold", text: "Pass suggestion limit" }), val),
         help,
         range,
         h("div", { class: "range-scale", "aria-hidden": "true" }, h("span", { text: "5 min" }), h("span", { text: "120 min" }))
@@ -863,7 +936,6 @@
       h(
         "div",
         { class: "privacy" },
-        ui.icon("shield"),
         h("span", { text: "We never store your location. Only whether you were near the bar when you reported." })
       ),
       h(
@@ -888,8 +960,8 @@
       h(
         "p",
         { class: "welcome__fine" },
-        "Door staff? ",
-        h("a", { href: "staff.html" + (api.isMock ? "?mock=1" : ""), class: "link-btn", text: "Open the counter" })
+        "Work at a bar? ",
+        h("a", { href: "staff.html" + (api.isMock ? "?mock=1" : ""), class: "link-btn", text: "Open the staff app" })
       ),
       h("p", { class: "welcome__fine", text: "Crowded v1" + (api.isMock ? " · Demo mode, fake data" : "") })
     );

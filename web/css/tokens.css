@@ -1,14 +1,18 @@
 /* =====================================================================
-   Crowded design tokens
+   Crowded design tokens (v2, monochrome)
    ---------------------------------------------------------------------
-   Every color, font, size, radius, shadow and timing used by the web
-   client lives here. Change a value here and the whole app follows.
+   Every color, font, size, radius and timing used by the web client
+   lives here. Change a value here and the whole app follows.
 
-   Quick tweaks (see web/README.md for more):
-   - Accent color ........ --accent and --accent-ink (both themes)
-   - Fonts ............... --font-display and --font-body
-   - Corner roundness .... --radius-scale (1 = default, 0 = square, 1.5 = rounder)
-   - Density ............. --density (1 = default, 0.85 = tighter, 1.15 = airier)
+   v2 is black and white on purpose. Meaning never depends on color:
+   crowd level is a word plus a 3 segment meter, the pass call is text.
+
+   Quick tweaks (web/README.md has more):
+   - Bring color back ..... set --accent and --accent-ink (both themes).
+                            Today they equal the text color.
+   - Fonts ................ --font-display, --font-body, --font-num
+   - Corner roundness ..... --radius-scale (1 = default, 0 = square)
+   - Density .............. --density (1 = default, 0.9 = tighter)
    ===================================================================== */
 
 :root {
@@ -17,32 +21,32 @@
   --density: 1;
 
   /* ---------- Fonts ---------- */
-  /* Headings and big numbers */
-  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, sans-serif;
-  /* Body text, labels, buttons */
-  --font-body: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, sans-serif;
+  /* Headings, labels, buttons, body: one neutral grotesk keeps it calm. */
+  --font-display: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Big numbers only (waits, headcount, timer). */
+  --font-num: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
   /* ---------- Type scale (rem, base 16px) ---------- */
-  --text-xs: 0.75rem;    /* 12 basis lines, captions */
-  --text-sm: 0.875rem;   /* 14 secondary text */
+  --text-xs: 0.75rem;    /* 12 fine print */
+  --text-sm: 0.875rem;   /* 14 secondary */
   --text-md: 1rem;       /* 16 body */
-  --text-lg: 1.125rem;   /* 18 row titles */
-  --text-xl: 1.5rem;     /* 24 section titles */
-  --text-2xl: 2rem;      /* 32 screen titles */
-  --text-3xl: 2.75rem;   /* 44 hero numbers */
-  --text-hero: 4.5rem;   /* 72 timer, staff headcount */
+  --text-lg: 1.0625rem;  /* 17 row titles */
+  --text-xl: 1.375rem;   /* 22 section titles */
+  --text-2xl: 2.125rem;  /* 34 screen titles */
+  --text-3xl: 3rem;      /* 48 detail numbers */
+  --text-hero: 5rem;     /* 80 timer, staff headcount */
 
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-bold: 700;
-  --weight-heavy: 800;
 
   --leading-tight: 1.05;
   --leading-snug: 1.25;
   --leading-body: 1.45;
-  --tracking-display: -0.02em;
+  --tracking-display: -0.025em;
+  --tracking-num: -0.04em;
+  --tracking-label: 0.02em;
 
   /* ---------- Spacing (multiplied by --density) ---------- */
   --space-1: calc(4px * var(--density));
@@ -57,95 +61,95 @@
 
   --gutter: 20px;          /* page side padding */
   --max-width: 560px;      /* content column on wide screens */
-  --touch: 48px;           /* minimum touch target (spec says 44 minimum) */
-  --tabbar-h: 64px;
+  --touch: 48px;           /* minimum touch target (spec minimum is 44) */
+  --tabbar-h: 60px;
 
   /* ---------- Radii (multiplied by --radius-scale) ---------- */
-  --radius-sm: calc(8px * var(--radius-scale));
-  --radius-md: calc(12px * var(--radius-scale));
-  --radius-lg: calc(16px * var(--radius-scale));
-  --radius-xl: calc(24px * var(--radius-scale));
-  --radius-pill: 999px;
+  /* One small radius for almost everything. No pills. */
+  --radius-sm: calc(6px * var(--radius-scale));
+  --radius-md: calc(8px * var(--radius-scale));
+  --radius-lg: calc(12px * var(--radius-scale));
 
   /* ---------- Motion ---------- */
   --dur-fast: 120ms;
   --dur-base: 200ms;
-  --dur-slow: 320ms;
+  --dur-slow: 300ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);
 
-  /* ---------- Light theme (default, Uber style monochrome) ---------- */
+  /* ---------- Light theme (default) ---------- */
   --bg: #ffffff;
-  --surface: #f3f3f3;         /* chips, inputs, segmented controls */
-  --elevated: #ffffff;        /* sheets, cards above bg */
-  --border: #e2e2e2;          /* dividers */
+  --surface: #f5f5f5;       /* inputs, segmented controls, secondary buttons */
+  --elevated: #ffffff;      /* sheets */
+  --border: #e6e6e6;        /* hairlines */
+  --border-strong: #000000; /* outlined buttons, focus of selection */
   --text: #000000;
-  --text-2: #6b6b6b;          /* secondary text */
-  --text-3: #a6a6a6;          /* muted, "no recent data" */
-  --primary: #000000;         /* primary button fill */
-  --primary-ink: #ffffff;     /* text on primary */
-  --accent: #ffb84d;          /* amber: verdict "get the pass", active timer */
-  --accent-ink: #1a1200;      /* text on accent */
-  --accent-soft: #fff1db;     /* tinted accent background */
-  --good: #128a52;            /* easy crowd */
-  --warn: #c77a00;            /* busy crowd */
-  --alert: #d6443a;           /* packed crowd, destructive */
-  --meter-off: #e2e2e2;       /* empty meter segment */
-  --scrim: rgba(0, 0, 0, 0.4);
-  --focus: #276ef1;
-  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.12);
-  --shadow-bar: 0 -1px 0 var(--border);
+  --text-2: #545454;        /* secondary text, 7.4:1 on white */
+  --text-3: #767676;        /* muted, "no recent data", 4.5:1 on white */
+  --primary: #000000;       /* primary button fill */
+  --primary-ink: #ffffff;   /* text on primary */
+  --accent: #000000;        /* color hook, monochrome for now */
+  --accent-ink: #ffffff;
+  --meter-on: #000000;      /* filled meter segment */
+  --meter-off: #e0e0e0;     /* empty meter segment */
+  --chart-typ: #d6d6d6;     /* typical bars */
+  --chart-now: #000000;     /* tonight bars */
+  --danger: #000000;        /* destructive actions are bold, not red */
+  --scrim: rgba(0, 0, 0, 0.45);
+  --focus: #000000;
+  --shadow-sheet: 0 -1px 0 var(--border), 0 -12px 40px rgba(0, 0, 0, 0.12);
   color-scheme: light;
 }
 
-/* ---------- Dark theme (spec palette) ---------- */
+/* ---------- Dark theme ---------- */
 /* Applied when the OS is dark and the user did not force light. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0d1017;
-    --surface: #161b25;
-    --elevated: #1f2633;
-    --border: #2a3242;
-    --text: #f2f4f8;
-    --text-2: #9aa4b5;
-    --text-3: #5f6a7d;
-    --primary: #f2f4f8;
-    --primary-ink: #0d1017;
-    --accent: #ffb84d;
-    --accent-ink: #1a1200;
-    --accent-soft: #2e2516;
-    --good: #5be0a3;
-    --warn: #f2d16b;
-    --alert: #ff7a6b;
-    --meter-off: #2a3242;
-    --scrim: rgba(0, 0, 0, 0.6);
-    --focus: #7aa7ff;
-    --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    --bg: #000000;
+    --surface: #161616;
+    --elevated: #121212;
+    --border: #262626;
+    --border-strong: #ffffff;
+    --text: #ffffff;
+    --text-2: #b3b3b3;
+    --text-3: #8a8a8a;
+    --primary: #ffffff;
+    --primary-ink: #000000;
+    --accent: #ffffff;
+    --accent-ink: #000000;
+    --meter-on: #ffffff;
+    --meter-off: #333333;
+    --chart-typ: #3a3a3a;
+    --chart-now: #ffffff;
+    --danger: #ffffff;
+    --scrim: rgba(0, 0, 0, 0.7);
+    --focus: #ffffff;
+    --shadow-sheet: 0 -1px 0 var(--border);
     color-scheme: dark;
   }
 }
 
 /* Same values, forced from Settings. Keep in sync with the block above. */
 :root[data-theme="dark"] {
-  --bg: #0d1017;
-  --surface: #161b25;
-  --elevated: #1f2633;
-  --border: #2a3242;
-  --text: #f2f4f8;
-  --text-2: #9aa4b5;
-  --text-3: #5f6a7d;
-  --primary: #f2f4f8;
-  --primary-ink: #0d1017;
-  --accent: #ffb84d;
-  --accent-ink: #1a1200;
-  --accent-soft: #2e2516;
-  --good: #5be0a3;
-  --warn: #f2d16b;
-  --alert: #ff7a6b;
-  --meter-off: #2a3242;
-  --scrim: rgba(0, 0, 0, 0.6);
-  --focus: #7aa7ff;
-  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.5);
+  --bg: #000000;
+  --surface: #161616;
+  --elevated: #121212;
+  --border: #262626;
+  --border-strong: #ffffff;
+  --text: #ffffff;
+  --text-2: #b3b3b3;
+  --text-3: #8a8a8a;
+  --primary: #ffffff;
+  --primary-ink: #000000;
+  --accent: #ffffff;
+  --accent-ink: #000000;
+  --meter-on: #ffffff;
+  --meter-off: #333333;
+  --chart-typ: #3a3a3a;
+  --chart-now: #ffffff;
+  --danger: #ffffff;
+  --scrim: rgba(0, 0, 0, 0.7);
+  --focus: #ffffff;
+  --shadow-sheet: 0 -1px 0 var(--border);
   color-scheme: dark;
 }
 

@@ -51,9 +51,16 @@
     var box = h("div", null);
     root.appendChild(box);
     C.auth.mount(box, {
-      kicker: "Door staff",
+      brandSuffix: "for staff",
       title: "Door counter",
-      pitch: "Count people in and out. Set the line size. That's it.",
+      pitch: "Count people in and out and set the outside line size. Students see a live estimate within seconds.",
+      demo: api.isMock,
+      footer: h(
+        "p",
+        { class: "welcome__alt" },
+        "Not staff? ",
+        h("a", { class: "link-btn", href: "index.html" + (api.isMock ? "?mock=1" : ""), text: "Open the app" })
+      ),
       onDone: route
     });
   }
@@ -78,8 +85,7 @@
       placeholder: "Invite code"
     });
     var btn = h("button", { class: "btn btn--primary btn--block btn--lg", type: "submit" }, "Join bar");
-    var err = h("p", { class: "small", role: "alert" });
-    err.style.setProperty("color", "var(--alert)");
+    var err = h("p", { class: "small form-error", role: "alert" });
     var form = h(
       "form",
       {
@@ -111,14 +117,20 @@
       h(
         "div",
         { class: "welcome" },
-        h("div", { class: "staff__top" }, h("div", { class: "brand" }, h("span", { class: "brand__mark" }, ui.icon("mark")), "Crowded"), signOutBtn()),
+        h("div", { class: "staff__top" }, ui.wordmark("for staff"), signOutBtn()),
         h(
           "div",
           { class: "welcome__hero" },
           h("h1", { class: "welcome__title", text: "Join your bar" }),
-          h("p", { class: "welcome__pitch", text: "Ask your manager for the invite code. It links this phone to one bar." })
+          h("p", { class: "welcome__pitch", text: "Ask your manager for the invite code. It links this account to one bar." })
         ),
         form,
+        h(
+          "p",
+          { class: "welcome__alt" },
+          "Not staff? ",
+          h("a", { class: "link-btn", href: "index.html" + (api.isMock ? "?mock=1" : ""), text: "Open the app" })
+        ),
         api.isMock ? h("p", { class: "welcome__fine", text: "Demo mode: any 8 characters work." }) : null
       )
     );
@@ -140,7 +152,10 @@
     var fill = h("div", { class: "cap__fill" });
     var capBar = h("div", { class: "cap", role: "img", "aria-label": "Capacity" }, fill);
     var updated = h("p", { class: "updated", text: "" });
-    var waitNum = h("span", { class: "live-line__num", "aria-live": "polite", text: "--" });
+    var waitNum = h("span", { class: "stat__value num", "aria-live": "polite", text: "--" });
+    var crowdVal = h("span", { class: "stat__value", text: "--" });
+    var reportsVal = h("span", { class: "stat__value num", text: "--" });
+    var timersVal = h("span", { class: "stat__value num", text: "--" });
     var waitBasis = h("p", { class: "basis", text: "" });
     var tally = h("p", { class: "xs muted", text: "" });
 
@@ -176,6 +191,9 @@
         updated.textContent = "Line updated " + ui.fmtAgo(server.line_updated_at);
         var lv = server.live;
         waitNum.textContent = lv.has_recent_data && lv.wait_min !== null ? lv.wait_min + " min" : "No data";
+        crowdVal.textContent = lv.crowd_level ? ui.CROWD_LABEL[lv.crowd_level] : "Unknown";
+        reportsVal.textContent = String(lv.basis.reports);
+        timersVal.textContent = String(lv.basis.timers);
         waitBasis.textContent = lv.basis.text;
         tally.textContent = server.entries_tonight + " in · " + server.exits_tonight + " out tonight";
       }
@@ -247,7 +265,7 @@
         h(
           "div",
           { class: "staff__top" },
-          h("div", null, h("p", { class: "staff__role", text: "Door staff" + (api.isMock ? " · Demo" : "") }), barName),
+          h("div", null, h("p", { class: "staff__role", text: "Door counter" + (api.isMock ? " · Demo" : "") }), barName),
           signOutBtn()
         ),
         h("section", { class: "count", "aria-label": "Headcount" }, h("p", { class: "count__label", text: "Inside now" }), num, capText, capBar),
@@ -261,8 +279,16 @@
         h("section", { class: "staff__section" }, h("h2", { class: "section-title", text: "Outside line" }), lineSeg.el, updated),
         h(
           "section",
-          { class: "staff__section" },
-          h("div", { class: "live-line" }, h("span", { class: "muted", text: "Live wait estimate" }), waitNum),
+          { class: "staff__section", "aria-label": "What students see" },
+          h("h2", { class: "section-title", text: "What students see" }),
+          h(
+            "ul",
+            { class: "stats" },
+            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Line wait estimate" }), waitNum),
+            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Crowd level" }), crowdVal),
+            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Student reports, last 30 min" }), reportsVal),
+            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Line timers, last 30 min" }), timersVal)
+          ),
           waitBasis
         ),
         h("div", { class: "staff__foot" }, tally)
