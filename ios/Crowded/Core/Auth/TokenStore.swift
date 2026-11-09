@@ -76,7 +76,8 @@ actor TokenStore {
             return pair.access
         } catch {
             inFlight = nil
-            if let api = error as? APIError, api.status == 401 {
+            // The OpenAPI runtime wraps middleware errors in ClientError, so unwrap first.
+            if let api = underlyingError(error) as? APIError, api.status == 401 {
                 // Refresh token rejected (expired, revoked, reused). Sign out locally.
                 access = nil
                 secureStore.delete(Self.refreshKey)
