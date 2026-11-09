@@ -2,12 +2,22 @@
 
 No build step. Plain HTML, CSS and classic JavaScript. The backend serves this folder at `/`.
 
-- `index.html` is the student app (Tonight, Bar detail, In line timer, Settings).
-- `staff.html` is the door counter for bar staff.
-- Add `?mock=1` to either URL to run against fake in-memory data (no backend needed).
+## Two apps, two entry points
+| Who | URL | What they get |
+|---|---|---|
+| Students | `/` (`index.html`) | Tonight list, bar detail, crowd reports, line timer, settings |
+| Door staff | `/staff.html` | Staff sign in, invite code, door counter, outside line picker, what students see |
+
+- Both use the same phone code sign in and the 21+ attestation.
+- The student welcome screen has a "Work at a bar? Staff sign in" link. The staff page links
+  back with "Not staff? Open the app".
+- A staff account opening the student app sees a black banner on Tonight that opens the
+  door counter. Student features keep working.
+- A student account opening the staff page only gets the invite code step. The API also
+  refuses staff routes for anyone who is not staff at that bar.
 
 ## Run it
-With the backend: open http://localhost:8000/ (student) or http://localhost:8000/staff.html.
+With the backend: open http://localhost:8000/ (students) or http://localhost:8000/staff.html.
 
 Without the backend:
 ```bash
@@ -17,18 +27,36 @@ Then open http://localhost:8765/index.html?mock=1. In mock mode any 6 digit code
 the code step offers a "Use it" button. On the staff page any invite code of 8 or more
 characters works.
 
+### Mock mode is local only
+`?mock=1` only works on `localhost`, `127.0.0.1` or a `file:` page. On any other host the
+parameter is ignored, so a link cannot flip a real user into a fake app. A bundle can force it
+with `window.CROWDED_MOCK = true` (the preview bundler in `tools/` does this). Mock mode keeps
+its own storage keys (`crowded.mock.rt` in localStorage, `crowded.mock` in sessionStorage) and
+never reads, writes or removes the real refresh token `crowded.rt`.
+
+## The look (v2)
+Black and white on purpose. One calm column, hairline dividers instead of cards, flat black
+buttons with a small radius, and the numbers as the hero.
+
+- Crowd first: every bar leads with crowd level (word plus 3 segment meter) and the line wait,
+  then what the numbers are based on, then the pass call as quiet secondary text.
+- "Report" is on every Tonight row and "Report crowd" is the primary button on a bar.
+- Fonts: DM Sans for all text, Bricolage Grotesque only for big numbers (tabular figures).
+- Wordmark is plain type ("Crowded", or "Crowded for staff").
+- Crowd level never relies on color. Destructive actions are bold, not red.
+
 ## Change the look
 Every visual value lives in `css/tokens.css`. You should rarely need to touch `css/app.css`.
 
 | I want to change | Edit in `css/tokens.css` |
 |---|---|
-| Accent color (verdict chip, timer ring) | `--accent`, `--accent-ink` (text on accent), `--accent-soft` (tinted card). Set them in the light block and both dark blocks. |
-| Fonts | `--font-display` (headings and big numbers) and `--font-body`. To add a new self hosted font, drop the woff2 in `fonts/` and add an `@font-face` in `fonts/fonts.css`. |
-| Corner roundness | `--radius-scale`. 0 is square, 1 is default, 1.5 is rounder. |
-| Density | `--density`. 0.85 is tighter, 1 is default, 1.15 is airier. |
-| Light theme colors | the `:root` block (Uber style black and white). |
-| Dark theme colors | the `@media (prefers-color-scheme: dark)` block and the `:root[data-theme="dark"]` block. Keep them identical. |
-| Crowd colors | `--good` (easy), `--warn` (busy), `--alert` (packed). The label text always shows too. |
+| Bring color back | Set `--accent` and `--accent-ink` (they equal the text color today). Then, where you want color, point a rule at `var(--accent)`: good first candidates are `.verdict-line--strong`, `.ring__prog` (timer ring) and `.door__btn--in`. For colored crowd levels, give `.meter[data-level="easy"]` etc. their own `--meter-on`. Set values in the light block and both dark blocks. |
+| Fonts | `--font-display` (headings), `--font-body` (text), `--font-num` (big numbers). To add a self hosted font, drop the woff2 in `fonts/` and add an `@font-face` in `fonts/fonts.css`. |
+| Corner roundness | `--radius-scale`. 0 is square, 1 is default (6 to 12px). |
+| Density | `--density`. 0.9 is tighter, 1 is default, 1.15 is airier. |
+| Light theme | the bare `:root` block (white, black text, neutral greys). |
+| Dark theme | the `@media (prefers-color-scheme: dark)` block and the `:root[data-theme="dark"]` block. Keep them identical. |
+| Chart | `--chart-typ` (typical bars) and `--chart-now` (tonight). |
 | Motion speed | `--dur-fast`, `--dur-base`, `--dur-slow`. Reduce Motion sets them to 0. |
 | Type sizes | `--text-xs` through `--text-hero`. |
 
@@ -42,13 +70,16 @@ into `tokens.css`.
 | `css/tokens.css` | Design tokens for both themes. |
 | `css/app.css` | Component and screen styles. |
 | `js/theme.js` | Applies the saved theme before first paint. |
-| `js/ui.js` | DOM helper, icons, formatters, components (crowd meter, verdict chip, sheet, toast, segmented control, timer ring), one shot location read. |
+| `js/ui.js` | DOM helper, icons, wordmark, formatters, components (crowd meter, verdict line, sheet, toast, segmented control, timer ring), one shot location read. |
 | `js/mock.js` | Fake API. Every bar is named "FAKE ...". |
-| `js/api.js` | Real or mock API calls, token refresh, 401 and 429 handling. |
+| `js/api.js` | Real or mock API calls, token refresh, 401 and 429 handling, mock gating. |
 | `js/auth.js` | Sign in flow shared by both pages (21+ attestation, phone, code). |
-| `js/app.js` | Student app router and screens. Polls every 15 s while visible. |
-| `js/staff.js` | Door counter with optimistic updates. |
+| `js/app.js` | Student app router and screens, report sheet, staff banner. Polls every 15 s while visible. |
+| `js/staff.js` | Staff app: invite step and door counter with optimistic updates. |
 | `fonts/` | Bricolage Grotesque and DM Sans, latin subset, SIL OFL 1.1 (`OFL.txt`). |
+| `tools/bundle_preview.py` | Inlines everything into one HTML file in mock mode for a shareable preview. |
+
+End to end tests for this client live in `../e2e` (see its README).
 
 ## Rules this client follows
 - Works under a strict Content Security Policy: no inline scripts or styles, no CDNs.
@@ -59,4 +90,4 @@ into `tokens.css`.
   report. Never `watchPosition`. If denied, nothing is sent.
 - Access token in memory only. Refresh token in `localStorage` (`crowded.rt`). The iOS app
   will use the Keychain.
-- Crowd level is never color alone: label text plus a 3 segment meter.
+- Touch targets are at least 44px. Inline text links inside sentences are the only exception.

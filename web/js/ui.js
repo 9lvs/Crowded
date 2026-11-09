@@ -62,8 +62,8 @@
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>',
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
-    bolt: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>',
-    mark: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="12" width="4" height="8" rx="1.5"/><rect x="10" y="7" width="4" height="13" rx="1.5"/><rect x="17" y="3" width="4" height="17" rx="1.5"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
     signout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg>'
   };
 
@@ -130,20 +130,35 @@
       h("span", { class: "meter__seg" }),
       h("span", { class: "meter__seg" })
     );
-    if (opts.large) return m;
+    if (opts.large || opts.meterOnly) return m;
     return h("span", { class: "crowd", role: "img", "aria-label": "Crowd: " + label }, m, h("span", { "aria-hidden": "true" }, label));
   }
 
-  // Verdict chip used in list rows.
-  function verdictChip(v) {
+  // Short pass verdict for list rows. Secondary information, so it is plain text.
+  function verdictShort(v) {
     var r = v ? v.recommendation : "no_data";
     if (r === "buy_pass") {
       var p = fmtPrice(v.pass_price_cents);
-      return h("span", { class: "chip chip--pass" }, icon("bolt"), "Get the pass" + (p ? " " + p : ""));
+      return "Pass" + (p ? " " + p : "") + " worth it";
     }
-    if (r === "wait_it_out") return h("span", { class: "chip chip--wait" }, "Wait it out");
-    if (r === "no_pass_available") return h("span", { class: "chip chip--long" }, "Long line, no pass");
-    return h("span", { class: "chip chip--none" }, "No call");
+    if (r === "wait_it_out") return "Skip the pass";
+    if (r === "no_pass_available") return "No pass sold";
+    return "No pass call yet";
+  }
+
+  function verdictLine(v) {
+    var strong = v && v.recommendation === "buy_pass";
+    return h("span", { class: "verdict-line" + (strong ? " verdict-line--strong" : ""), text: verdictShort(v) });
+  }
+
+  // Typographic wordmark. Optional small suffix such as "for staff".
+  function wordmark(suffix) {
+    return h(
+      "p",
+      { class: "wordmark" },
+      h("span", { class: "wordmark__name", text: "Crowded" }),
+      suffix ? h("span", { class: "wordmark__suffix", text: suffix }) : null
+    );
   }
 
   // Toast
@@ -340,7 +355,9 @@
     clear: clear,
     icon: icon,
     crowd: crowd,
-    verdictChip: verdictChip,
+    verdictLine: verdictLine,
+    verdictShort: verdictShort,
+    wordmark: wordmark,
     toast: toast,
     sheet: sheet,
     segmented: segmented,

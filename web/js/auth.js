@@ -20,7 +20,7 @@
     return "•••• " + d.slice(-4);
   }
 
-  // opts: {title, pitch, kicker, onDone(me)}
+  // opts: {title, pitch, brandSuffix, demo, footer (node), onDone(me)}
   function mount(container, opts) {
     var phone = "";
     var attested = false;
@@ -40,8 +40,7 @@
       input.value = phone;
       check.checked = attested;
       var btn = h("button", { class: "btn btn--primary btn--block btn--lg", type: "submit", disabled: true }, "Continue");
-      var err = h("p", { class: "small", role: "alert", id: "phone-err" });
-      err.style.setProperty("color", "var(--alert)");
+      var err = h("p", { class: "small form-error", role: "alert", id: "phone-err" });
 
       function sync() {
         attested = check.checked;
@@ -90,14 +89,16 @@
       var wrap = h(
         "div",
         { class: "welcome" },
-        h("div", { class: "brand" }, h("span", { class: "brand__mark" }, ui.icon("mark")), "Crowded", opts.kicker ? h("span", { class: "fake-tag", text: opts.kicker }) : null),
+        ui.wordmark(opts.brandSuffix),
         h(
           "div",
           { class: "welcome__hero" },
           h("h1", { class: "welcome__title", text: opts.title || "Know the line before you go." }),
-          h("p", { class: "welcome__pitch", text: opts.pitch || "Live waits and crowd levels at bars downtown." })
+          h("p", { class: "welcome__pitch", text: opts.pitch || "Live crowd levels and line waits at bars downtown, reported by people there right now." })
         ),
-        form
+        form,
+        opts.footer || null,
+        opts.demo ? h("p", { class: "welcome__fine", text: "Demo mode. Every bar and number is fake. Any code works." }) : null
       );
       container.appendChild(wrap);
     }
@@ -115,8 +116,7 @@
         "aria-label": "6 digit code"
       });
       var btn = h("button", { class: "btn btn--primary btn--block btn--lg", type: "submit", disabled: true }, "Verify");
-      var err = h("p", { class: "small", role: "alert" });
-      err.style.setProperty("color", "var(--alert)");
+      var err = h("p", { class: "small form-error", role: "alert" });
       var busy = false;
 
       function sync() {
