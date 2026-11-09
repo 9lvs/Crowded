@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Crowded. Know the line before you go.</title>
+    <meta
+      name="description"
+      content="Live line waits and crowd levels at bars downtown, reported by students in line and door staff. 21+. Coming soon to iPhone."
+    />
+    <!-- Replace https://crowded.example with the real domain before launch. -->
+    <link rel="canonical" href="https://crowded.example/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Crowded" />
+    <meta property="og:title" content="Crowded. Know the line before you go." />
+    <meta
+      property="og:description"
+      content="Live line waits and crowd levels at bars downtown, reported by students in line and door staff."
+    />
+    <meta property="og:url" content="https://crowded.example/" />
+    <meta property="og:image" content="https://crowded.example/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Crowded wordmark and the line: Know the line before you go." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Crowded. Know the line before you go." />
+    <meta
+      name="twitter:description"
+      content="Live line waits and crowd levels at bars downtown, reported by students in line and door staff."
+    />
+    <meta name="twitter:image" content="https://crowded.example/og.png" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="fonts/BricolageGrotesque-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="top">
+      <div class="wrap top__row">
+        <a class="wordmark" href="index.html" aria-label="Crowded home">Crowded</a>
+        <nav class="nav" aria-label="Main">
+          <a href="#how">How it works</a>
+          <a href="#bars">For bars</a>
+          <a href="#privacy">Privacy</a>
+          <a href="#faq">FAQ</a>
+          <a class="nav__cta" href="#get">Get Crowded</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap hero__grid">
+          <div class="hero__copy">
+            <h1>Know the line before you go.</h1>
+            <p class="lede">
+              Live line waits and crowd levels at the bars downtown, reported by students standing
+              in line and the staff at the door.
+            </p>
+            <div class="cta" id="get">
+              <!--
+                App Store badge goes here once the app is live.
+                Use the official "Download on the App Store" badge from Apple's
+                marketing resources (developer.apple.com/app-store/marketing/guidelines)
+                and link it to the real App Store URL. Do not redraw the badge or the Apple logo.
+              -->
+              <span class="btn" role="status" aria-disabled="true">
+                <span class="btn__phone" aria-hidden="true"></span>
+                Coming soon to iPhone
+              </span>
+              <!-- Preview only: this form does not send anything anywhere yet. -->
+              <form class="waitlist" id="waitlist" novalidate>
+                <label for="waitlist-email">Get an email when it launches</label>
+                <input
+                  id="waitlist-email"
+                  name="email"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="email"
+                  placeholder="you@school.edu"
+                  required
+                />
+                <button class="btn" type="submit">Join the waitlist</button>
+              </form>
+              <p class="waitlist__done" id="waitlist-done" role="status" hidden>
+                You're on the list. See you out there.
+              </p>
+              <p class="fine">21+ only. Free.</p>
+            </div>
+          </div>
+
+          <figure class="phone-fig">
+            <div class="phone" aria-hidden="true">
+              <div class="screen">
+                <div class="screen__status">
+                  <span>11:42</span>
+                  <span class="screen__island"></span>
+                  <span class="screen__bat"></span>
+                </div>
+                <div class="screen__body">
+                  <div class="screen__title">Tonight</div>
+                  <div class="screen__date">Friday &middot; Pass when over 20 min</div>
+
+                  <div class="row">
+                    <div class="row__name">FAKE The Tipsy Owl</div>
+                    <div class="row__wait">35<small>min</small></div>
+                    <div class="row__crowd">
+                      <span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i></span>
+                      Packed
+                    </div>
+                    <div class="row__chip">Pass $15</div>
+                    <div class="row__basis">Based on 7 reports, 3 timers and staff counts in the last 30 min</div>
+                  </div>
+
+                  <div class="row">
+                    <div class="row__name">FAKE Copper Fox</div>
+                    <div class="row__wait">11<small>min</small></div>
+                    <div class="row__crowd">
+                      <span class="meter"><i class="on"></i><i class="on"></i><i></i></span>
+                      Busy
+                    </div>
+                    <div class="row__chip row__chip--quiet">Wait it out</div>
+                    <div class="row__basis">Based on 4 reports and 1 timer in the last 30 min</div>
+                  </div>
+
+                  <div class="row">
+                    <div class="row__name">FAKE Neon Moose</div>
+                    <div class="row__wait row__wait--none">No recent data</div>
+                    <div class="row__crowd row__crowd--none">
+                      <span class="meter"><i></i><i></i><i></i></span>
+                      Unknown
+                    </div>
+                    <div class="row__chip row__chip--quiet">No call</div>
+                    <div class="row__basis">Nobody has reported in the last 30 min</div>
+                  </div>
+                </div>
+                <div class="screen__session">
+                  <div>
+                    <div class="screen__session-k">In line at FAKE Copper Fox</div>
+                    <div class="screen__session-t">6:12</div>
+                  </div>
+                  <span class="screen__session-btn">I'm inside</span>
+                </div>
+                <div class="screen__tabs"><span>Tonight</span><span>Settings</span></div>
+              </div>
+            </div>
+            <figcaption>Illustration. Bars and numbers are made up.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <div class="strip">
+        <div class="wrap strip__row">
+          <span><b>Every number shows its source.</b></span>
+          <span>No recent reports means no number</span>
+          <span>No location trail</span>
+          <span>21+ only</span>
+        </div>
+      </div>
+
+      <section class="section" id="how" aria-labelledby="how-title">
+        <div class="wrap">
+          <div class="section__head">
+            <p class="label">How it works</p>
+            <h2 id="how-title">The people in line are the data.</h2>
+            <p class="lede">
+              Crowded runs on quick taps from students who are already out, plus counts from door
+              staff. The more people tap, the better the number gets for everyone.
+            </p>
+          </div>
+
+          <ol class="steps">
+            <li class="step">
+              <h3>Check Tonight</h3>
+              <p>
+                See the wait and how packed each bar is before you leave. Tap a bar for the normal
+                wait at this hour and how full it is versus capacity.
+              </p>
+            </li>
+            <li class="step">
+              <h3>Tap when you're in line</h3>
+              <p>
+                Hit "I'm in line", then "I'm inside" when you get in. Or send a two tap crowd
+                report: how busy it is and how long the line looks.
+              </p>
+            </li>
+            <li class="step">
+              <h3>Everyone gets a better number</h3>
+              <p>
+                Your real wait tunes the estimate for the next person. Door counts keep it honest
+                when the bar is at capacity and only lets people in as others leave.
+              </p>
+            </li>
+          </ol>
+
+          <div class="basis">
+            <div class="basis__card" aria-label="Example of how a wait is shown">
+              <p class="label">Estimated wait</p>
+              <p class="basis__num">20 to 32<small>min</small></p>
+              <p class="basis__line">Based on 6 reports and staff counts in the last 30 min</p>
+              <hr />
+              <p class="basis__empty">No recent data</p>
+              <p class="basis__line">Nobody has reported in the last 30 min</p>
+            </div>
+            <div class="basis__copy">
+              <h3>No guessing in the dark</h3>
+              <p>
+                Every wait shows what it is based on. When nobody has reported lately, Crowded says
+                so instead of showing an old number that looks fresh.
+              </p>
+              <p>
+                Set your own limit, like 20 minutes. If a bar sells a line skip pass and the wait is
+                over your limit, Crowded tells you whether it's worth it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="bars" aria-labelledby="bars-title">
+        <div class="wrap split">
+          <div class="split__head">
+            <p class="label">For bars</p>
+            <h2 id="bars-title">A free door counter that works on any phone.</h2>
+            <p class="lede">
+              Your door staff tap in and out. You get a live read on the night, and students get an
+              honest picture of the line before they walk over.
+            </p>
+            <p>
+              Running a bar in our pilot town?
+              <a href="mailto:partners@crowded.example">partners@crowded.example</a>
+            </p>
+          </div>
+          <ul class="list">
+            <li>
+              <strong>Nothing to install</strong>
+              <span>The counter is a web page. Staff sign in with a code from you.</span>
+            </li>
+            <li>
+              <strong>Headcount versus capacity</strong>
+              <span>Big plus and minus buttons, plus the outside line size in one tap.</span>
+            </li>
+            <li>
+              <strong>See what students report</strong>
+              <span>Crowd reports for your bar show up next to your own count.</span>
+            </li>
+            <li>
+              <strong>One bar per account</strong>
+              <span>Staff only ever see and change their own bar. Every change is logged.</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="privacy" aria-labelledby="privacy-title">
+        <div class="wrap split">
+          <div class="split__head">
+            <p class="label">Privacy</p>
+            <h2 id="privacy-title">We don't track where you go.</h2>
+          </div>
+          <ul class="list">
+            <li>
+              <strong>No location trail</strong>
+              <span>
+                Your location is checked once, only when you report or start a timer, to see if you
+                are near the bar. We keep "near" or "not near" and throw the rest away.
+              </span>
+            </li>
+            <li>
+              <strong>No birthday</strong>
+              <span>You confirm you're 21 or older. We store that you confirmed, nothing else.</span>
+            </li>
+            <li>
+              <strong>Your number stays hidden</strong>
+              <span>We store a scrambled version of your phone number, never the number itself.</span>
+            </li>
+            <li>
+              <strong>Delete means delete</strong>
+              <span>Delete your account in Settings and everything tied to you is gone.</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="faq" aria-labelledby="faq-title">
+        <div class="wrap">
+          <div class="section__head">
+            <p class="label">FAQ</p>
+            <h2 id="faq-title">Questions</h2>
+          </div>
+          <div class="faq">
+            <details>
+              <summary>Is it free?</summary>
+              <p>Yes. Crowded is free for students and the door counter is free for bars.</p>
+            </details>
+            <details>
+              <summary>Which bars?</summary>
+              <p>
+                We are starting with a small pilot of a few bars in one college town. More bars
+                come once the numbers prove themselves.
+              </p>
+            </details>
+            <details>
+              <summary>Is it accurate?</summary>
+              <p>
+                It is an estimate, and it gets better as more people tap. We combine door counts,
+                line timers and crowd reports, weigh recent and reliable reports more, and check our
+                estimates against real waits every night. If there is not enough recent data, we
+                show "No recent data" instead of a guess.
+              </p>
+            </details>
+            <details>
+              <summary>What do you do with my location?</summary>
+              <p>
+                Only when you report or start a line timer, the app reads your location once. Our
+                server works out how far you are from that bar, keeps a simple "near" or "not near",
+                and discards the coordinates. We never track you in the background and never store
+                where you have been.
+              </p>
+            </details>
+            <details>
+              <summary>How do I delete my account?</summary>
+              <p>
+                Open Settings in the app and tap Delete account. Your account, reports, timers and
+                points are deleted right away. See the <a href="privacy.html">privacy policy</a>.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing">
+        <div class="wrap">
+          <div class="closing__inner">
+          <h2>Check the line from your couch.</h2>
+          <p class="lede">Crowded is coming to iPhone. Join the waitlist above to hear when it's live.</p>
+          <div>
+            <a class="btn" href="#get">Join the waitlist</a>
+          </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap">
+        <div class="foot__row">
+          <span class="wordmark">Crowded</span>
+          <nav class="foot__links" aria-label="Footer">
+            <a href="privacy.html">Privacy</a>
+            <a href="terms.html">Terms</a>
+            <a href="support.html">Support</a>
+            <a href="mailto:partners@crowded.example">For bars</a>
+          </nav>
+        </div>
+        <p class="foot__note">
+          Preview build. The waitlist is not live yet, so nothing you type is sent or stored.
+          Crowded is for people 21 and older. Please drink responsibly.
+        </p>
+      </div>
+    </footer>
+
+    <script src="js/site.js"></script>
+  </body>
+</html>
