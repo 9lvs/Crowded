@@ -627,7 +627,7 @@
       ]);
     }
 
-    function result(s) {
+    function result(s, outcome) {
       cleanups.forEach(function (f) {
         f();
       });
@@ -635,18 +635,26 @@
       ui.clear(screen);
       var mins = Math.max(0, Math.round(s.actual_wait_min || 0));
       var inside = s.status === "completed";
+      // Tapped "I'm inside" but too fast to be a real wait (server marks it abandoned).
+      var tooQuick = !inside && outcome === "inside";
+      var title = inside ? "You're in" : tooQuick ? "Too quick to count" : "Line left";
+      var note = inside
+        ? "Your time makes everyone's wait estimate sharper."
+        : tooQuick
+          ? "Waits under 30 seconds are not used for the estimate."
+          : "Short visits help us spot slow lines too.";
       ui.append(screen, [
         h(
           "div",
           { class: "result", role: "status" },
-          h("div", { class: "result__check", "aria-hidden": "true" }, ui.icon(inside ? "check" : "close")),
-          h("h1", { class: "head__title", text: inside ? "You're in" : "Line left" }),
+          h("div", { class: "result__check", "aria-hidden": "true" }, ui.icon(inside || tooQuick ? "check" : "close")),
+          h("h1", { class: "head__title", text: title }),
           h("p", { class: "muted", text: inside ? "You waited" : "You were in line for" }),
           h("p", { class: "wait-num result__num" }, String(mins), h("span", { class: "unit", text: mins === 1 ? " min" : " min" })),
           s.points_awarded ? h("p", { class: "points" }, ui.icon("bolt"), "+" + s.points_awarded + " points") : h("p", { class: "small muted", text: "Thanks. This still helps." }),
           h(
             "p",
-            { class: "small muted", text: inside ? "Your time makes everyone's wait estimate sharper." : "Short visits help us spot slow lines too." }
+            { class: "small muted", text: note }
           ),
           h("div", { class: "btn-stack" }, h("a", { class: "btn btn--primary btn--block btn--lg", href: "#/tonight", text: "Done" }))
         )
@@ -674,7 +682,7 @@
           .endSession(s.id, outcome)
           .then(function (out) {
             state.session = null;
-            result(out);
+            result(out, outcome);
           })
           .catch(function (e) {
             inside.disabled = false;
