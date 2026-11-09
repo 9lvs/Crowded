@@ -53,11 +53,11 @@ bar level facts with the user link set to null.
 | Area | Control | Where | ASVS |
 |---|---|---|---|
 | Authn | Passwordless phone code, 6 digits, 5 min TTL, single use, older codes invalidated | services/auth.py | 2.7 |
-| Authn | 5 wrong attempts lock the phone for 15 min. 3 code requests per phone per 10 min. IP limits | services/auth.py, core/ratelimit.py | 2.2.1 |
+| Authn | 5 wrong attempts per phone (across all codes) in 15 min lock the phone for 15 min. 3 code requests per phone per 10 min. IP limits. ASCII digits only | services/auth.py, core/ratelimit.py | 2.2.1 |
 | Authn | Constant time code comparison (`hmac.compare_digest`) | core/security.py | 2.7 |
 | Authn | Sign in with Apple, RS256 against Apple JWKS, `aud` and `iss` pinned | core/apple.py | 2.x |
 | Session | Access JWT 15 min, `aud`, `iss`, `typ`, `exp`, `nbf` required | core/security.py | 3.5 |
-| Session | Refresh tokens opaque, hashed, rotated on use, reuse revokes the family, logout revokes | services/auth.py | 3.3, 3.5 |
+| Session | Refresh tokens opaque, hashed, rotated on use, reuse revokes the family (10 s grace for two tabs), logout revokes. 30 day idle, 180 day absolute lifetime | services/auth.py | 3.3, 3.5 |
 | Session | Weak or default secrets refused outside dev | config.py | 2.10, 6.4 |
 | Authz | Deny by default: every `/v1` route except auth requires a token (tested by enumerating routes) | core/deps.py, tests | 4.1 |
 | Authz | Roles user, staff, admin. Staff bound to one bar by single use invite. 404 on other bars | core/deps.py | 4.2 |
@@ -71,8 +71,9 @@ bar level facts with the user link set to null.
 | Output | HSTS (2 years) outside dev. TLS terminates at the host | core/middleware.py | 9.1 |
 | Errors | Generic 500 body. Validation errors never echo input | main.py | 7.4 |
 | Logs | No tokens, codes, coordinates or full phones are logged. Phones masked to last 2 digits | core/sms.py | 7.1 |
-| Abuse | Rate limits per user, IP and bar. Reliability weighting. Outlier trimming. Mismatch flag | ratelimit.py, estimation | 11.1 |
-| Audit | Every staff and admin write lands in `audit_log` | core/audit.py | 7.1 |
+| Abuse | Client IP resolved only by uvicorn with `FORWARDED_ALLOW_IPS`. Rate limits per user, IP and bar. Reliability weighting. Outlier trimming. Mismatch flag | ratelimit.py, estimation | 11.1 |
+| Audit | Every staff and admin write lands in `audit_log`, including staff removal and invite revocation | core/audit.py | 7.1 |
+| Review | App Review demo login: one configured phone with a fixed 6 digit code (strength checked), no SMS, normal limits | services/auth.py | 2.x |
 | Privacy | Coordinates discarded, distance bucket only. Raw data retention job | core/location.py, scripts/retention.py | 8.3 |
 | Supply chain | Locked deps (`uv.lock`), pip-audit, Dependabot, bandit, CodeQL, gitleaks | CI | 14.2 |
 | Container | `python:3.12-slim`, non-root uid 10001, app files owned by root (read only to the app) | backend/Dockerfile | 14.1 |
@@ -87,7 +88,10 @@ bar level facts with the user link set to null.
 - **Self attested age**: Apple and the bars do the real ID checks at the door. We store only the
   attestation and block signup without it.
 
-## 6. Open risks
+## 6. Independent reviews
+- Phase 1: `security-review-phase1.md`. Verdict PASS (0 Critical, 0 High, 4 Medium fixed).
+
+## 7. Open risks
 | Risk | Impact | Plan |
 |---|---|---|
 | In-memory rate limiter is per process | Limits weaken with replicas | Redis in Phase 2 |

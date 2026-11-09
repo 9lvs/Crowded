@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -53,14 +53,40 @@ def me_out(db: Session, user: User) -> MeOut:
     )
 
 
+def _phone_locked(db: Session, p_hash: str, now: datetime) -> bool:
+    return (
+        db.scalar(
+            select(LoginCode.id)
+            .where(LoginCode.phone_hash == p_hash, LoginCode.locked_until > now)
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def _recent_failures(db: Session, p_hash: str, now: datetime) -> int:
+    """Wrong guesses for this phone across ALL codes in the lockout window (finding M-1)."""
+    since = now - timedelta(seconds=get_settings().login_code_lockout_seconds)
+    total = db.scalar(
+        select(func.coalesce(func.sum(LoginCode.attempts), 0)).where(
+            LoginCode.phone_hash == p_hash, LoginCode.created_at >= since
+        )
+    )
+    return int(total or 0)
+
+
+def _is_review_phone(phone: str) -> bool:
+    s = get_settings()
+    return bool(s.review_phone and s.review_code.get_secret_value()) and constant_time_equals(
+        phone, s.review_phone
+    )
+
+
 def request_code(db: Session, phone: str) -> RequestCodeOut:
     s = get_settings()
     now = _now()
     p_hash = phone_hash(phone)
-    locked = db.scalar(
-        select(LoginCode.id).where(LoginCode.phone_hash == p_hash, LoginCode.locked_until > now)
-    )
-    if locked is not None:
+    if _phone_locked(db, p_hash, now):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="locked")
     # One live code per phone: invalidate older ones.
     db.execute(
@@ -68,7 +94,8 @@ def request_code(db: Session, phone: str) -> RequestCodeOut:
         .where(LoginCode.phone_hash == p_hash, LoginCode.consumed_at.is_(None))
         .values(consumed_at=now)
     )
-    code = new_login_code()
+    review = _is_review_phone(phone)
+    code = s.review_code.get_secret_value() if review else new_login_code()
     db.add(
         LoginCode(
             phone_hash=p_hash,
@@ -77,7 +104,10 @@ def request_code(db: Session, phone: str) -> RequestCodeOut:
         )
     )
     db.commit()
-    get_sms_sender().send_code(phone, code)
+    if review:
+        log.info("app review demo login code issued")
+    else:
+        get_sms_sender().send_code(phone, code)
     return RequestCodeOut(
         sent=True,
         expires_in=s.login_code_ttl_seconds,
@@ -96,16 +126,17 @@ def verify_code(db: Session, phone: str, code: str, age_attested: bool, platform
         .limit(1)
         .with_for_update()
     )
+    if _phone_locked(db, p_hash, now):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="locked")
     if row is None or row.expires_at <= now:
         raise INVALID_CODE
-    if row.locked_until is not None and row.locked_until > now:
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail="locked")
 
-    row.attempts += 1
     if not constant_time_equals(row.code_hash, _code_hash(p_hash, code)):
-        if row.attempts >= s.login_code_max_attempts:
+        row.attempts += 1  # counts failures only
+        db.flush()
+        if _recent_failures(db, p_hash, now) >= s.login_code_max_attempts:
             row.locked_until = now + timedelta(seconds=s.login_code_lockout_seconds)
-            log.warning("login code locked after max attempts")
+            log.warning("phone locked after max failed code attempts")
         db.commit()
         raise INVALID_CODE
 
@@ -143,8 +174,21 @@ def apple_sign_in(db: Session, apple_sub: str, age_attested: bool, platform: str
     return issue_tokens(db, user, platform)
 
 
-def _new_refresh(db: Session, user: User, device_id: uuid.UUID | None, family_id: uuid.UUID) -> str:
+def _new_refresh(
+    db: Session,
+    user: User,
+    device_id: uuid.UUID | None,
+    family_id: uuid.UUID,
+    family_started: datetime | None = None,
+) -> str:
+    """Sliding idle lifetime, capped by an absolute lifetime for the whole login."""
     s = get_settings()
+    now = _now()
+    start = family_started or now
+    expires = min(
+        now + timedelta(days=s.refresh_token_ttl_days),
+        start + timedelta(days=s.refresh_token_max_days),
+    )
     raw = new_opaque_token()
     db.add(
         RefreshToken(
@@ -152,7 +196,7 @@ def _new_refresh(db: Session, user: User, device_id: uuid.UUID | None, family_id
             device_id=device_id,
             family_id=family_id,
             token_hash=token_hash(raw),
-            expires_at=_now() + timedelta(days=s.refresh_token_ttl_days),
+            expires_at=expires,
         )
     )
     return raw
@@ -192,7 +236,9 @@ def refresh(db: Session, raw: str) -> TokenPair:
     unauthorized = HTTPException(status.HTTP_401_UNAUTHORIZED, detail="invalid_refresh")
     if row is None:
         raise unauthorized
-    if row.revoked_at is not None or row.used_at is not None:
+    grace = timedelta(seconds=get_settings().refresh_reuse_grace_seconds)
+    benign_race = row.revoked_at is None and row.used_at is not None and now - row.used_at <= grace
+    if row.revoked_at is not None or (row.used_at is not None and not benign_race):
         # Reuse of a rotated token means it leaked. Kill the whole family.
         _revoke_family(db, row.family_id)
         db.commit()
@@ -203,8 +249,12 @@ def refresh(db: Session, raw: str) -> TokenPair:
     user = db.get(User, row.user_id)
     if user is None:  # pragma: no cover - cascade delete removes tokens
         raise unauthorized
-    row.used_at = now
-    new_raw = _new_refresh(db, user, row.device_id, row.family_id)
+    if row.used_at is None:
+        row.used_at = now
+    started = db.scalar(
+        select(func.min(RefreshToken.created_at)).where(RefreshToken.family_id == row.family_id)
+    )
+    new_raw = _new_refresh(db, user, row.device_id, row.family_id, started)
     if row.device_id is not None:
         db.execute(update(Device).where(Device.id == row.device_id).values(last_seen_at=now))
     db.commit()

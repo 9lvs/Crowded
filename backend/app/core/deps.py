@@ -11,7 +11,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.core.ratelimit import hit
 from app.core.security import decode_access_token, pepper_hash
 from app.db import get_db
@@ -23,10 +22,12 @@ DB = Annotated[Session, Depends(get_db)]
 
 
 def client_ip(request: Request) -> str:
-    if get_settings().trust_proxy_headers:
-        fwd = request.headers.get("x-forwarded-for", "")
-        if fwd:
-            return fwd.split(",")[0].strip()
+    """Peer address as resolved by uvicorn.
+
+    There is exactly one trust layer for X-Forwarded-For: uvicorn's --forwarded-allow-ips
+    (env FORWARDED_ALLOW_IPS), set to the reverse proxy's address at deploy time. The app never
+    parses the header itself, so clients cannot spoof their IP (finding M-3).
+    """
     return request.client.host if request.client else "unknown"
 
 

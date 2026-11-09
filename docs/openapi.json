@@ -1273,6 +1273,45 @@
         "title": "SnapshotOut",
         "type": "object"
       },
+      "StaffMemberOut": {
+        "additionalProperties": false,
+        "properties": {
+          "bar_id": {
+            "format": "uuid",
+            "title": "Bar Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "phone_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Hint"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "bar_id",
+          "phone_hint",
+          "created_at"
+        ],
+        "title": "StaffMemberOut",
+        "type": "object"
+      },
       "StaffState": {
         "additionalProperties": false,
         "properties": {
@@ -1479,7 +1518,7 @@
             "type": "boolean"
           },
           "code": {
-            "pattern": "^\\d{6}$",
+            "pattern": "^[0-9]{6}$",
             "title": "Code",
             "type": "string"
           },
@@ -1834,6 +1873,150 @@
           }
         ],
         "summary": "Set Pass Price",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bars/{bar_id}/staff": {
+      "get": {
+        "operationId": "list_staff_v1_admin_bars__bar_id__staff_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StaffMemberOut"
+                  },
+                  "title": "Response List Staff V1 Admin Bars  Bar Id  Staff Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Staff",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bars/{bar_id}/staff/{user_id}": {
+      "delete": {
+        "operationId": "remove_staff_v1_admin_bars__bar_id__staff__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Staff",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/invites/{invite_id}/revoke": {
+      "post": {
+        "operationId": "revoke_invite_v1_admin_invites__invite_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invite_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Invite Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Invite",
         "tags": [
           "admin"
         ]

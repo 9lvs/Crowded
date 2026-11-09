@@ -72,7 +72,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
         algorithms=["HS256"],
         audience=s.jwt_audience,
         issuer=s.jwt_issuer,
-        options={"require": ["exp", "iat", "sub", "aud", "iss"]},
+        options={"require": ["exp", "iat", "nbf", "sub", "aud", "iss", "typ"]},
     )
     if claims.get("typ") != "access":
         raise jwt.InvalidTokenError("wrong token type")

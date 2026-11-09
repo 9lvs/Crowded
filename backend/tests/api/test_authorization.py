@@ -26,19 +26,26 @@ PUBLIC = {
 
 
 def _routes() -> list[tuple[str, str]]:
+    """Every operation in the OpenAPI contract (robust to router internals, finding M-4)."""
     out = []
-    for r in create_app().routes:
-        path = getattr(r, "path", "")
-        for m in getattr(r, "methods", set()) or set():
-            if m in ("HEAD", "OPTIONS") or path in PUBLIC or not path.startswith("/v1"):
+    for path, ops in create_app().openapi()["paths"].items():
+        for method in ops:
+            if path in PUBLIC or not path.startswith("/v1"):
                 continue
-            out.append((m, path))
+            out.append((method.upper(), path))
     return out
+
+
+def test_route_enumeration_is_not_empty() -> None:
+    assert len(_routes()) >= 20
 
 
 @pytest.mark.parametrize(("method", "path"), _routes())
 def test_every_route_requires_auth(client: TestClient, method: str, path: str) -> None:
-    url = path.replace("{bar_id}", str(uuid.uuid4())).replace("{session_id}", str(uuid.uuid4()))
+    url = path
+    for param in ("{bar_id}", "{session_id}", "{user_id}", "{invite_id}"):
+        url = url.replace(param, str(uuid.uuid4()))
+    assert "{" not in url, f"add a placeholder for {path}"
     r = client.request(method, url, json={})
     assert r.status_code == 401, (method, path, r.status_code)
 

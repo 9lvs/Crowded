@@ -85,9 +85,14 @@ def test_refresh_rotates_and_detects_reuse(client: TestClient, db: Session) -> N
     assert r1.status_code == 200
     new_rt = r1.json()["refresh_token"]
     assert new_rt != a.refresh
+    # Age the rotation past the two-tab grace window, then replay the old token.
+    for t in db.scalars(select(RefreshToken).where(RefreshToken.used_at.is_not(None))):
+        t.used_at = t.used_at - timedelta(seconds=60)
+    db.commit()
     # Replay the old token: whole family dies, including the new one.
     assert client.post("/v1/auth/refresh", json={"refresh_token": a.refresh}).status_code == 401
     assert client.post("/v1/auth/refresh", json={"refresh_token": new_rt}).status_code == 401
+    db.expire_all()
     assert all(t.revoked_at for t in db.scalars(select(RefreshToken)))
 
 
@@ -141,3 +146,68 @@ def test_apple_sign_in(client: TestClient, monkeypatch) -> None:
     assert again.json()["user"]["id"] == r.json()["user"]["id"]
     bad = client.post("/v1/auth/apple", json={"identity_token": "bad-" + "x" * 30})
     assert bad.status_code == 401
+
+
+def test_concurrent_refresh_within_grace_is_not_reuse(client: TestClient) -> None:
+    a = login(client)
+    r1 = client.post("/v1/auth/refresh", json={"refresh_token": a.refresh})
+    r2 = client.post("/v1/auth/refresh", json={"refresh_token": a.refresh})  # second tab
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert (
+        client.post(
+            "/v1/auth/refresh", json={"refresh_token": r1.json()["refresh_token"]}
+        ).status_code
+        == 200
+    )
+
+
+def test_refresh_has_absolute_lifetime(client: TestClient, db: Session) -> None:
+    a = login(client)
+    for t in db.scalars(select(RefreshToken)):
+        t.created_at = datetime.now(UTC) - timedelta(days=179, hours=23)
+    db.commit()
+    r = client.post("/v1/auth/refresh", json={"refresh_token": a.refresh})
+    new = db.scalars(select(RefreshToken).where(RefreshToken.used_at.is_(None))).one()
+    assert r.status_code == 200
+    assert new.expires_at < datetime.now(UTC) + timedelta(hours=2)
+
+
+def test_lockout_survives_new_code_requests(client: TestClient) -> None:
+    from app.core.ratelimit import limiter
+
+    phone = fake_phone()
+    for i in range(5):
+        limiter.reset()  # isolate the lockout from the request rate limit
+        code = client.post("/v1/auth/request-code", json={"phone": phone}).json()["dev_code"]
+        wrong = "000000" if code != "000000" else "111111"
+        r = client.post(
+            "/v1/auth/verify-code", json={"phone": phone, "code": wrong, "age_attested": True}
+        )
+        assert r.status_code == 400, i
+    limiter.reset()
+    assert client.post("/v1/auth/request-code", json={"phone": phone}).status_code == 429
+
+
+def test_non_ascii_digits_rejected(client: TestClient) -> None:
+    for phone in [
+        "+1555\u0661\u0662\u0663\u0664\u0665\u0666\u0667",
+        "+1555\uff11\uff12\uff13\uff14\uff15\uff16\uff17",
+    ]:
+        assert client.post("/v1/auth/request-code", json={"phone": phone}).status_code == 422
+
+
+def test_app_review_demo_login(client: TestClient, monkeypatch) -> None:
+    from pydantic import SecretStr
+
+    from app.config import get_settings
+
+    s = get_settings()
+    monkeypatch.setattr(s, "review_phone", "+15550001234")
+    monkeypatch.setattr(s, "review_code", SecretStr("482915"))
+    r = client.post("/v1/auth/request-code", json={"phone": "+15550001234"})
+    assert r.status_code == 200
+    body = {"phone": "+15550001234", "code": "482915", "age_attested": True}
+    assert client.post("/v1/auth/verify-code", json=body).status_code == 200
+    # Other phones still get random codes.
+    other = client.post("/v1/auth/request-code", json={"phone": "+15550001235"}).json()
+    assert other["dev_code"] != "482915" or other["dev_code"] is None

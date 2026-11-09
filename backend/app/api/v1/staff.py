@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.audit import audit
 from app.core.deps import DB, CurrentUser, StaffBar, ip_key
@@ -68,6 +69,11 @@ def redeem_invite(body: RedeemInviteIn, request: Request, user: CurrentUser, db:
     invite.redeemed_by = user.id
     db.add(BarStaff(bar_id=invite.bar_id, user_id=user.id, invite_id=invite.id))
     user.role = Role.staff
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="already_staff") from None
     audit(
         db,
         user,

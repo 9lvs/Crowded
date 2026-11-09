@@ -150,3 +150,32 @@ def test_admin_bar_crud(client: TestClient, admin: Auth) -> None:
     )
     assert r.json()["capacity"] == 90
     assert len(client.get("/v1/admin/bars", headers=admin.h).json()) == 1
+
+
+def test_admin_can_remove_staff_and_revoke_invites(
+    client: TestClient, db: Session, admin: Auth, bar: Bar
+) -> None:
+    staff = make_staff(client, admin, str(bar.id))
+    members = client.get(f"/v1/admin/bars/{bar.id}/staff", headers=admin.h).json()
+    assert len(members) == 1
+    uid = members[0]["user_id"]
+    r = client.delete(f"/v1/admin/bars/{bar.id}/staff/{uid}", headers=admin.h)
+    assert r.status_code == 204
+    assert client.get(f"/v1/staff/bars/{bar.id}", headers=staff.h).status_code == 404
+    inv = client.post(f"/v1/admin/bars/{bar.id}/invites", headers=admin.h).json()
+    assert client.post(f"/v1/admin/invites/{inv['id']}/revoke", headers=admin.h).status_code == 204
+    other = login(client)
+    r = client.post("/v1/staff/invites/redeem", json={"code": inv["code"]}, headers=other.h)
+    assert r.status_code == 400
+
+
+def test_bad_timezone_rejected(client: TestClient, admin: Auth) -> None:
+    body = {
+        "slug": "fake-tz",
+        "name": "FAKE TZ",
+        "latitude": 1.0,
+        "longitude": 2.0,
+        "capacity": 80,
+        "timezone": "Mars/Olympus",
+    }
+    assert client.post("/v1/admin/bars", json=body, headers=admin.h).status_code == 422

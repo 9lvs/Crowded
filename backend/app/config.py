@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     hash_pepper: SecretStr = SecretStr("dev-only-pepper-change-me-0123456789abcdef")
 
     access_token_ttl_seconds: int = 15 * 60
-    refresh_token_ttl_days: int = 30
+    refresh_token_ttl_days: int = 30  # sliding idle lifetime
+    refresh_token_max_days: int = 180  # absolute lifetime of a login
+    refresh_reuse_grace_seconds: int = 10  # two tabs refreshing at once
     jwt_issuer: str = "crowded"
     jwt_audience: str = "crowded-app"
 
@@ -29,12 +31,15 @@ class Settings(BaseSettings):
     login_code_lockout_seconds: int = 15 * 60
 
     sms_provider: Literal["stub"] = "stub"
+    # App Review demo login: Apple reviewers cannot receive our SMS. One configured phone gets a
+    # fixed code instead of an SMS. Rate limits and lockout still apply. Leave empty to disable.
+    review_phone: str = ""
+    review_code: SecretStr = SecretStr("")
     apple_client_id: str = "app.crowded.ios"
     apple_jwks_url: str = "https://appleid.apple.com/auth/keys"
 
     cors_origins: list[str] = Field(default_factory=list)
     max_request_bytes: int = 64 * 1024
-    trust_proxy_headers: bool = False
 
     raw_retention_days: int = 30
     min_age_years: int = 21
@@ -55,6 +60,11 @@ class Settings(BaseSettings):
                 raw = value.get_secret_value()
                 if raw.startswith("dev-only") or len(raw) < 32:
                     raise ValueError(f"CROWDED_{name.upper()} must be set to a strong value")
+            code = self.review_code.get_secret_value()
+            if self.review_phone and (
+                len(code) != 6 or not code.isascii() or not code.isdigit() or len(set(code)) < 4
+            ):
+                raise ValueError("CROWDED_REVIEW_CODE must be 6 digits with at least 4 distinct")
             if self.sms_provider == "stub":
                 raise ValueError("the stub SMS provider is dev only. Configure a real provider")
         return self

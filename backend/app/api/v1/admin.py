@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
@@ -12,7 +12,7 @@ from app.api.v1.staff import invite_hash
 from app.core.audit import audit
 from app.core.deps import DB, AdminUser, ip_key
 from app.core.security import new_invite_code
-from app.models import AuditLog, Bar, EstimateError, PassPrice, StaffInvite
+from app.models import AuditLog, Bar, BarStaff, EstimateError, PassPrice, Role, StaffInvite, User
 from app.schemas import (
     AccuracyOut,
     AuditOut,
@@ -22,6 +22,7 @@ from app.schemas import (
     InviteOut,
     PassPriceIn,
     PassPriceOut,
+    StaffMemberOut,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -137,6 +138,72 @@ def create_invite(bar_id: uuid.UUID, admin: AdminUser, request: Request, db: DB)
     )
     db.commit()
     return InviteOut(id=inv.id, bar_id=bar.id, code=code, expires_at=inv.expires_at)
+
+
+@router.get("/bars/{bar_id}/staff", response_model=list[StaffMemberOut])
+def list_staff(bar_id: uuid.UUID, admin: AdminUser, db: DB) -> list[StaffMemberOut]:
+    bar = _bar(db, bar_id)
+    rows = db.execute(
+        select(BarStaff, User.phone_last2)
+        .join(User, User.id == BarStaff.user_id)
+        .where(BarStaff.bar_id == bar.id)
+        .order_by(BarStaff.created_at)
+    ).all()
+    return [
+        StaffMemberOut(
+            user_id=m.user_id,
+            bar_id=m.bar_id,
+            phone_hint=f"ending in {last2}" if last2 else None,
+            created_at=m.created_at,
+        )
+        for m, last2 in rows
+    ]
+
+
+@router.delete("/bars/{bar_id}/staff/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_staff(
+    bar_id: uuid.UUID, user_id: uuid.UUID, admin: AdminUser, request: Request, db: DB
+) -> Response:
+    member = db.scalar(
+        select(BarStaff).where(BarStaff.bar_id == bar_id, BarStaff.user_id == user_id)
+    )
+    if member is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not_found")
+    user = db.get(User, user_id)
+    db.delete(member)
+    if user is not None and user.role == Role.staff:
+        user.role = Role.user
+    audit(
+        db,
+        admin,
+        "staff.remove",
+        target_type="user",
+        target_id=user_id,
+        bar_id=bar_id,
+        ip_hash=ip_key(request),
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/invites/{invite_id}/revoke", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invite(invite_id: uuid.UUID, admin: AdminUser, request: Request, db: DB) -> Response:
+    inv = db.get(StaffInvite, invite_id)
+    if inv is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not_found")
+    if inv.revoked_at is None and inv.redeemed_at is None:
+        inv.revoked_at = datetime.now(UTC)
+    audit(
+        db,
+        admin,
+        "invite.revoke",
+        target_type="invite",
+        target_id=inv.id,
+        bar_id=inv.bar_id,
+        ip_hash=ip_key(request),
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/metrics/accuracy", response_model=list[AccuracyOut])

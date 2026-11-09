@@ -20,8 +20,17 @@
 - [x] Retention script, OpenAPI export
 - [x] Night simulator and seed data (FAKE)
 - [x] Web client v1 (student screens, staff counter, mock mode)
-- [ ] Phase 1 security review passes (docs/security-review-phase1.md)
+- [x] Phase 1 security review passes (docs/security-review-phase1.md), Mediums fixed
 - [ ] Owner sign off on retention (30 days proposed)
+
+## Phase 1.5: owner feedback round (2026-11-09)
+- [x] Full CI/CD: lint, tests with coverage gates, migrations round trip, contract, security,
+      e2e browser tests, container boot, smoke test, image publish (docs/TESTING.md)
+- [x] App Review demo login, App Store checklist and listing copy (docs/APP_STORE.md)
+- [x] Ideas backlog: bar chat, map heatmap, location usage (docs/IDEAS.md)
+- [ ] Web v2: monochrome, crowd first, separate staff experience, e2e suite
+- [ ] Launch site with privacy, terms and support drafts (site/)
+- [ ] Owner decisions: Mac or Expo, Apple Developer enrollment, domain, host, SMS provider
 
 ## Phase 2: hardening and deploy readiness
 - [ ] Close Phase 1 review findings

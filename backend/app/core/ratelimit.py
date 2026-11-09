@@ -45,7 +45,7 @@ limiter = RateLimiter()
 # name: (limit, window seconds)
 LIMITS: dict[str, tuple[int, float]] = {
     "code_request_phone": (3, 600),
-    "code_request_ip": (20, 3600),
+    "code_request_ip": (60, 3600),  # campus wifi puts many students behind one IP
     "code_verify_ip": (30, 600),
     "apple_ip": (30, 600),
     "refresh_ip": (30, 600),

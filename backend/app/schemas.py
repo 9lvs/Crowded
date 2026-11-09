@@ -6,12 +6,13 @@ import re
 import uuid
 from datetime import datetime
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models import CrowdLevel, DistanceBucket, DoorDirection, LineSize, Role, SessionStatus
 
-E164 = re.compile(r"^\+[1-9]\d{7,14}$")
+E164 = re.compile(r"^\+[1-9][0-9]{7,14}$", re.ASCII)
 
 
 class Strict(BaseModel):
@@ -32,7 +33,7 @@ class RequestCodeIn(Strict):
     @field_validator("phone")
     @classmethod
     def _e164(cls, v: str) -> str:
-        v = re.sub(r"[\s\-().]", "", v)
+        v = re.sub(r"[ \-().]", "", v)
         if not E164.match(v):
             raise ValueError("phone must be E.164, for example +15551234567")
         return v
@@ -45,7 +46,7 @@ class RequestCodeOut(Strict):
 
 
 class VerifyCodeIn(RequestCodeIn):
-    code: Annotated[str, Field(pattern=r"^\d{6}$")]
+    code: Annotated[str, Field(pattern=r"^[0-9]{6}$")]
     age_attested: bool = Field(
         default=False, description="User confirmed they are 21 or older. Required to sign up."
     )
@@ -243,6 +244,15 @@ class BarCreate(Strict):
     capacity: Annotated[int, Field(ge=1, le=10000)]
     timezone: Annotated[str, Field(max_length=64)] = "America/New_York"
 
+    @field_validator("timezone")
+    @classmethod
+    def _tz(cls, v: str) -> str:
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("unknown IANA timezone") from None
+        return v
+
 
 class BarUpdate(Strict):
     name: Annotated[str, Field(min_length=1, max_length=120)] | None = None
@@ -273,6 +283,13 @@ class PassPriceOut(Strict):
     bar_id: uuid.UUID
     price_cents: int | None
     currency: str
+    created_at: datetime
+
+
+class StaffMemberOut(Strict):
+    user_id: uuid.UUID
+    bar_id: uuid.UUID
+    phone_hint: str | None
     created_at: datetime
 
 

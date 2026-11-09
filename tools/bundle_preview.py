@@ -1,7 +1,7 @@
 """Bundle the web client into one self-contained HTML file running in mock mode.
 
 Used to publish a shareable preview (for example a claude.ai Artifact) with no backend.
-Usage: python3 web/tools/bundle_preview.py OUT.html [--page index|staff]
+Usage: python3 tools/bundle_preview.py OUT.html [--page index|staff]
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import base64
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[1]
+WEB = Path(__file__).resolve().parents[1] / "web"
 
 
 def inline_fonts(css: str) -> str:

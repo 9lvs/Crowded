@@ -15,3 +15,15 @@ def test_prod_refuses_stub_sms() -> None:
     strong = SecretStr("x" * 48)
     with pytest.raises(ValidationError, match="stub SMS"):
         Settings(env="prod", jwt_secret=strong, hash_pepper=strong)
+
+
+def test_review_code_must_be_strong() -> None:
+    strong = SecretStr("x" * 48)
+    with pytest.raises(ValidationError, match="REVIEW_CODE"):
+        Settings(
+            env="prod",
+            jwt_secret=strong,
+            hash_pepper=strong,
+            review_phone="+15550001234",
+            review_code=SecretStr("111111"),
+        )

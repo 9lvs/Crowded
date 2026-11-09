@@ -36,3 +36,15 @@ Newest at the bottom. Format: ID, date, decision, why, revisit when.
 - **D-015 (2026-11-09) Visual direction for v1: Uber-like minimal.** Light theme is monochrome
   (black on white, black pill buttons). Dark theme uses the spec palette. Amber accent only for
   the verdict and the active timer. Fonts Bricolage Grotesque (display) and DM Sans (body).
+- **D-016 (2026-11-09) Crowd and line sourcing is the core.** The pass verdict stays but is
+  secondary in the UI. Reports and timers are first class actions.
+- **D-017 (2026-11-09) Black and white UI for now** (owner). Accent tokens remain so color can
+  come back with a single token change.
+- **D-018 (2026-11-09) Separate entry points for students and staff.** Students use `/`, staff use
+  `/staff.html` with its own sign in and invite flow. Same account system, roles decide access.
+- **D-019 (2026-11-09) App Review demo login** through `CROWDED_REVIEW_PHONE` and
+  `CROWDED_REVIEW_CODE`, off by default. Turn it on only while a review is open.
+- **D-020 (2026-11-09) Refresh token grace of 10 seconds** for concurrent refreshes, which would
+  otherwise log out users with two tabs. A thief racing within 10 s of a rotation is accepted.
+- **D-021 (2026-11-09) Client IP comes only from uvicorn's proxy handling**
+  (`FORWARDED_ALLOW_IPS`). The app never reads X-Forwarded-For.
