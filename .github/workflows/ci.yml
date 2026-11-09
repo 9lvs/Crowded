@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: crowded
+          POSTGRES_PASSWORD: crowded
+          POSTGRES_DB: crowded_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U crowded" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      CROWDED_ENV: test
+      CROWDED_TEST_DATABASE_URL: postgresql+psycopg://crowded:crowded@localhost:5432/crowded_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.x"
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Types
+        run: uv run mypy app scripts
+      - name: Tests
+        run: uv run pytest --cov=app --cov-report=term-missing
+      - name: Estimation coverage gate (90 percent)
+        run: uv run pytest tests/estimation --cov=app.estimation --cov-fail-under=90 -q
+      - name: OpenAPI contract is current
+        run: uv run python scripts/export_openapi.py --check
+      - name: Bandit
+        run: uv run bandit -q -r app scripts -c pyproject.toml
+      - name: pip-audit
+        run: uv export --frozen --no-dev --no-hashes -o /tmp/req.txt && uv run pip-audit -r /tmp/req.txt --strict
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

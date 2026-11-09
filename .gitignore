@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+
+# Node / web
+node_modules/
+
+# iOS
+ios/**/xcuserdata/
+ios/**/DerivedData/
+ios/**/*.xcworkspace/xcuserdata/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local data
+*.sqlite
+*.db
+sim-output/
