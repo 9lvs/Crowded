@@ -112,6 +112,10 @@ class Params:
     # and by at least this fraction of the larger one.
     disagree_min_people: float = 10.0
     disagree_ratio: float = 0.4
+    # Without a staff reading, student line reports must add up to at least this much weight
+    # (about one average, recent, near-bar report) before we turn them into a wait. Stops a
+    # single far, stale or low-trust report from producing a big made up number.
+    min_report_line_weight: float = 0.5
 
 
 @dataclass(frozen=True)

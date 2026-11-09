@@ -247,6 +247,8 @@ def estimate(inp: EstimateInput) -> Estimate:
         if r.line_size is not None and r.line_size in LINE_SIZE_PEOPLE
     ]
     people_from_staff = bool(staff_obs)
+    if not staff_obs and sum(w for _, w in user_obs) < p.min_report_line_weight:
+        user_obs = []  # too little evidence for a line size, see Params.min_report_line_weight
     people = weighted_median(staff_obs + user_obs)
     staff_people = weighted_median(staff_obs)
     user_people = weighted_median(user_obs)

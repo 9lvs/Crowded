@@ -210,6 +210,7 @@ def _maybe_snapshot(db: Session, bar: Bar, e: est.Estimate, now: datetime) -> No
                 "door_events": e.basis.door_events,
                 "staff_line_updates": e.basis.staff_line_updates,
                 "method": e.method,
+                "flags": list(e.flags),
             },
         )
     )

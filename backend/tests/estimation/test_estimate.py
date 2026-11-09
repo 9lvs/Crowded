@@ -507,9 +507,7 @@ def test_mismatch_widens_range() -> None:
     )
     assert est.confidence is Confidence.medium
     assert est.wait_low_min == pytest.approx(est.wait_min * 0.75)  # type: ignore[operator]
-    est2 = run(
-        doors=[door("in", 10, 5)], reports=[report(crowd="packed", size="short", near=False)]
-    )
+    est2 = run(doors=[door("in", 10, 5)], reports=[report(crowd="packed", size="short")])
     assert est2.confidence is Confidence.low
     assert est2.wait_low_min == pytest.approx(est2.wait_min * 0.6)  # type: ignore[operator]
 

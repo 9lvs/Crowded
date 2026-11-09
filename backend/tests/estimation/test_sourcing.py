@@ -59,3 +59,15 @@ def test_disagreement_lowers_confidence() -> None:
 def test_staff_without_reporter_id_uses_default_reliability() -> None:
     est = _run([LineStatusIn(ts=ago(1), line_size="short")], [])
     assert est.people_in_line == 6
+
+
+def test_single_far_report_does_not_create_a_wait() -> None:
+    far = _run([], [report(user="s1", size="very_long", near=False)])
+    assert far.people_in_line is None and far.wait_min is None
+    near = _run([], [report(user="s1", size="very_long")])
+    assert near.people_in_line == 65
+
+
+def test_low_trust_reporter_alone_is_ignored() -> None:
+    est = _run([], [report(user="liar", size="very_long")], {"liar": 0.2})
+    assert est.wait_min is None
