@@ -55,6 +55,8 @@ class Settings(BaseSettings):
                 raw = value.get_secret_value()
                 if raw.startswith("dev-only") or len(raw) < 32:
                     raise ValueError(f"CROWDED_{name.upper()} must be set to a strong value")
+            if self.sms_provider == "stub":
+                raise ValueError("the stub SMS provider is dev only. Configure a real provider")
         return self
 
 

@@ -1,0 +1,38 @@
+# Decisions log
+
+Newest at the bottom. Format: ID, date, decision, why, revisit when.
+
+- **D-001 (2026-11-09) Product name is Crowded.** "Line Check" is retired everywhere.
+- **D-002 (2026-11-09) uv for Python packaging.** Fast, one lockfile (`uv.lock`), Dependabot
+  supports it, and the Docker build uses `uv sync --frozen`. Poetry was the alternative.
+- **D-003 (2026-11-09) Sync SQLAlchemy 2 with psycopg 3.** FastAPI runs sync routes in a thread
+  pool. Simpler to test and reason about at pilot scale. Revisit if p95 latency matters.
+- **D-004 (2026-11-09) Estimation is computed on read, snapshots written at most every 2 min per
+  bar.** With 3 bars this is cheap and always fresh. Snapshots feed the hour chart and history.
+  Revisit at 20+ bars (move to a background job).
+- **D-005 (2026-11-09) "Tonight" runs from local noon to local noon** in the bar's IANA timezone.
+  Door headcount resets at noon. No manual reset button needed.
+- **D-006 (2026-11-09) Phones and Apple subs stored only as peppered HMAC-SHA256** plus the last 2
+  phone digits. We can look users up but a DB dump alone reveals no numbers.
+- **D-007 (2026-11-09) Raw retention proposal: 30 days** (owner asked for a number). Thirty days
+  covers four weekends, enough to calibrate and debug. Bar level aggregates (snapshots, estimate
+  errors) carry no user ids and are kept 365 days. Configurable via `CROWDED_RAW_RETENTION_DAYS`.
+  **Needs owner sign off.**
+- **D-008 (2026-11-09) In-process rate limiter for v1.** Single instance pilot. Must move to Redis
+  before running more than one replica.
+- **D-009 (2026-11-09) Web client is no-build vanilla JS with CSS tokens, served by the backend.**
+  Gives the owner a UI to tune today without Xcode, doubles as the Phase 2 staff door counter,
+  and keeps a strict same origin CSP. The iOS app (Phase 3) mirrors its tokens.
+- **D-010 (2026-11-09) Web refresh token in localStorage, access token in memory.** Strict CSP is
+  the XSS defense. iOS uses the Keychain only. Revisit with an HttpOnly cookie if web grows.
+- **D-011 (2026-11-09) No certificate pinning in v1.** ATS on, public CA TLS, HSTS. Pinning adds
+  outage risk on rotation for a small team. Revisit before public launch.
+- **D-012 (2026-11-09) All bar data requires sign in.** Keeps the 21+ gate meaningful and raises
+  the bar for scraping. Revisit if we want a public teaser page.
+- **D-013 (2026-11-09) Prod refuses to boot with dev secrets or the stub SMS provider.** Dev mode
+  returns login codes in the response, so it must never run on a public host.
+- **D-014 (2026-11-09) Calibration uses a one day half life** (separate from the 12 min live
+  recency half life) so a week of timers actually contributes.
+- **D-015 (2026-11-09) Visual direction for v1: Uber-like minimal.** Light theme is monochrome
+  (black on white, black pill buttons). Dark theme uses the spec palette. Amber accent only for
+  the verdict and the active timer. Fonts Bricolage Grotesque (display) and DM Sans (body).
