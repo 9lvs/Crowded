@@ -10,10 +10,11 @@ they are), docs/SECURITY.md (controls), docs/ESTIMATION.md (the wait formula).
 ## Layout
 - `backend/` FastAPI app (Python 3.12, uv). `app/` code, `tests/`, `scripts/`, `alembic/`.
 - `backend/app/estimation/` pure functions only. No DB, no clock, no I/O.
-- `web/` no-build web client (vanilla JS + CSS tokens), served by the backend at `/`.
+- `web/` no-build web client (vanilla JS + CSS tokens, black and white), served at `/`.
   Student screens plus the staff door counter at `/staff`. Has a mock mode (`?mock=1`).
 - `ios/` SwiftUI app (Phase 3, not started).
-- `docs/` roadmap, decisions, security packet, threat model, OpenAPI export.
+- `site/` launch site and legal drafts. `e2e/` Playwright suite. `tools/` preview bundler.
+- `docs/` roadmap, decisions, security packet, threat model, OpenAPI, testing, App Store, deploy, ideas.
 
 ## Run and test (from `backend/`)
 ```bash

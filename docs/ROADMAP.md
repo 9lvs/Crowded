@@ -28,7 +28,7 @@
       e2e browser tests, container boot, smoke test, image publish (docs/TESTING.md)
 - [x] App Review demo login, App Store checklist and listing copy (docs/APP_STORE.md)
 - [x] Ideas backlog: bar chat, map heatmap, location usage (docs/IDEAS.md)
-- [ ] Web v2: monochrome, crowd first, separate staff experience, e2e suite
+- [x] Web v2: monochrome, crowd first, separate staff experience, e2e suite (17 tests)
 - [x] Launch site with privacy, terms and support drafts (site/)
 - [ ] Owner decisions: Mac or Expo, Apple Developer enrollment, domain, host, SMS provider
 
