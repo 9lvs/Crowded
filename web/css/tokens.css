@@ -1,0 +1,159 @@
+/* =====================================================================
+   Crowded design tokens
+   ---------------------------------------------------------------------
+   Every color, font, size, radius, shadow and timing used by the web
+   client lives here. Change a value here and the whole app follows.
+
+   Quick tweaks (see web/README.md for more):
+   - Accent color ........ --accent and --accent-ink (both themes)
+   - Fonts ............... --font-display and --font-body
+   - Corner roundness .... --radius-scale (1 = default, 0 = square, 1.5 = rounder)
+   - Density ............. --density (1 = default, 0.85 = tighter, 1.15 = airier)
+   ===================================================================== */
+
+:root {
+  /* ---------- Knobs ---------- */
+  --radius-scale: 1;
+  --density: 1;
+
+  /* ---------- Fonts ---------- */
+  /* Headings and big numbers */
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  /* Body text, labels, buttons */
+  --font-body: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+
+  /* ---------- Type scale (rem, base 16px) ---------- */
+  --text-xs: 0.75rem;    /* 12 basis lines, captions */
+  --text-sm: 0.875rem;   /* 14 secondary text */
+  --text-md: 1rem;       /* 16 body */
+  --text-lg: 1.125rem;   /* 18 row titles */
+  --text-xl: 1.5rem;     /* 24 section titles */
+  --text-2xl: 2rem;      /* 32 screen titles */
+  --text-3xl: 2.75rem;   /* 44 hero numbers */
+  --text-hero: 4.5rem;   /* 72 timer, staff headcount */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+  --weight-heavy: 800;
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.25;
+  --leading-body: 1.45;
+  --tracking-display: -0.02em;
+
+  /* ---------- Spacing (multiplied by --density) ---------- */
+  --space-1: calc(4px * var(--density));
+  --space-2: calc(8px * var(--density));
+  --space-3: calc(12px * var(--density));
+  --space-4: calc(16px * var(--density));
+  --space-5: calc(20px * var(--density));
+  --space-6: calc(24px * var(--density));
+  --space-8: calc(32px * var(--density));
+  --space-10: calc(40px * var(--density));
+  --space-12: calc(48px * var(--density));
+
+  --gutter: 20px;          /* page side padding */
+  --max-width: 560px;      /* content column on wide screens */
+  --touch: 48px;           /* minimum touch target (spec says 44 minimum) */
+  --tabbar-h: 64px;
+
+  /* ---------- Radii (multiplied by --radius-scale) ---------- */
+  --radius-sm: calc(8px * var(--radius-scale));
+  --radius-md: calc(12px * var(--radius-scale));
+  --radius-lg: calc(16px * var(--radius-scale));
+  --radius-xl: calc(24px * var(--radius-scale));
+  --radius-pill: 999px;
+
+  /* ---------- Motion ---------- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.2, 1);
+
+  /* ---------- Light theme (default, Uber style monochrome) ---------- */
+  --bg: #ffffff;
+  --surface: #f3f3f3;         /* chips, inputs, segmented controls */
+  --elevated: #ffffff;        /* sheets, cards above bg */
+  --border: #e2e2e2;          /* dividers */
+  --text: #000000;
+  --text-2: #6b6b6b;          /* secondary text */
+  --text-3: #a6a6a6;          /* muted, "no recent data" */
+  --primary: #000000;         /* primary button fill */
+  --primary-ink: #ffffff;     /* text on primary */
+  --accent: #ffb84d;          /* amber: verdict "get the pass", active timer */
+  --accent-ink: #1a1200;      /* text on accent */
+  --accent-soft: #fff1db;     /* tinted accent background */
+  --good: #128a52;            /* easy crowd */
+  --warn: #c77a00;            /* busy crowd */
+  --alert: #d6443a;           /* packed crowd, destructive */
+  --meter-off: #e2e2e2;       /* empty meter segment */
+  --scrim: rgba(0, 0, 0, 0.4);
+  --focus: #276ef1;
+  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-bar: 0 -1px 0 var(--border);
+  color-scheme: light;
+}
+
+/* ---------- Dark theme (spec palette) ---------- */
+/* Applied when the OS is dark and the user did not force light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1017;
+    --surface: #161b25;
+    --elevated: #1f2633;
+    --border: #2a3242;
+    --text: #f2f4f8;
+    --text-2: #9aa4b5;
+    --text-3: #5f6a7d;
+    --primary: #f2f4f8;
+    --primary-ink: #0d1017;
+    --accent: #ffb84d;
+    --accent-ink: #1a1200;
+    --accent-soft: #2e2516;
+    --good: #5be0a3;
+    --warn: #f2d16b;
+    --alert: #ff7a6b;
+    --meter-off: #2a3242;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --focus: #7aa7ff;
+    --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+/* Same values, forced from Settings. Keep in sync with the block above. */
+:root[data-theme="dark"] {
+  --bg: #0d1017;
+  --surface: #161b25;
+  --elevated: #1f2633;
+  --border: #2a3242;
+  --text: #f2f4f8;
+  --text-2: #9aa4b5;
+  --text-3: #5f6a7d;
+  --primary: #f2f4f8;
+  --primary-ink: #0d1017;
+  --accent: #ffb84d;
+  --accent-ink: #1a1200;
+  --accent-soft: #2e2516;
+  --good: #5be0a3;
+  --warn: #f2d16b;
+  --alert: #ff7a6b;
+  --meter-off: #2a3242;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --focus: #7aa7ff;
+  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* Reduce Motion: kill durations everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}
