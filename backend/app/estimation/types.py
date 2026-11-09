@@ -26,9 +26,11 @@ class Confidence(StrEnum):
 
 
 class Recommendation(StrEnum):
-    buy_pass = "buy_pass"  # wait exceeds threshold and a pass is offered
+    # wait exceeds threshold and a pass is offered
+    buy_pass = "buy_pass"  # nosec B105
     wait_it_out = "wait_it_out"  # wait is under threshold
-    no_pass_available = "no_pass_available"  # wait exceeds threshold but no pass is sold
+    # wait exceeds threshold but no pass is sold
+    no_pass_available = "no_pass_available"  # nosec B105
     no_data = "no_data"  # no recent data, no recommendation
 
 

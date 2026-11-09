@@ -16,12 +16,12 @@ TEST_DB = os.environ.get(
 os.environ["CROWDED_DATABASE_URL"] = TEST_DB
 os.environ["CROWDED_ENV"] = "test"
 
-from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from alembic import command  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.core.ratelimit import limiter  # noqa: E402
 from app.db import Base, get_engine, get_sessionmaker  # noqa: E402

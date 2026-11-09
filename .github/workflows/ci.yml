@@ -48,7 +48,7 @@ jobs:
       - name: Bandit
         run: uv run bandit -q -r app scripts -c pyproject.toml
       - name: pip-audit
-        run: uv export --frozen --no-dev --no-hashes -o /tmp/req.txt && uv run pip-audit -r /tmp/req.txt --strict
+        run: uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/req.txt && uv run pip-audit -r /tmp/req.txt --strict
 
   secrets:
     runs-on: ubuntu-latest
