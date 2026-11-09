@@ -30,7 +30,11 @@
 - [x] Ideas backlog: bar chat, map heatmap, location usage (docs/IDEAS.md)
 - [x] Web v2: monochrome, crowd first, separate staff experience, e2e suite (17 tests)
 - [x] Launch site with privacy, terms and support drafts (site/)
-- [ ] Owner decisions: Mac or Expo, Apple Developer enrollment, domain, host, SMS provider
+- [x] Owner decisions: Mac (native SwiftUI, cloud CI), retention 30 days, iOS 17
+- [ ] Owner: Apple Developer enrollment (this week), host, SMS provider
+- [x] Sourcing v2: staff and student fusion by learned reliability, timers referee, disagreement
+      flag, minimum evidence guard, simulator bias scenarios (docs/SOURCING.md)
+- [x] Instagram launch kit and bar one pager (marketing/), pilot playbook (docs/PILOT.md)
 
 ## Phase 2: hardening and deploy readiness
 - [ ] Close Phase 1 review findings
@@ -41,5 +45,8 @@
 - [ ] Staff counter polish for real door use
 
 ## Phase 3: iOS
-- [ ] Confirm iOS 17 minimum and Xcode access with owner
-- [ ] SwiftUI app, generated client, design system, gallery, tests
+- [x] Confirm iOS 17 minimum and Xcode access with owner
+- [x] SwiftUI app v1 written: generated client, design system, gallery, tests, macOS CI
+- [ ] First green macOS CI build (fix compile errors from the first run)
+- [ ] Live Activity for the line timer (lock screen "I'm inside")
+- [ ] Signing, Xcode Cloud, TestFlight internal, then external public link
