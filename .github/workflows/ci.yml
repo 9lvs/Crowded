@@ -4,23 +4,43 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.x"
+
 jobs:
-  backend:
+  lint:
+    name: Lint and types
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with: { version: "${{ env.UV_VERSION }}" }
+      - run: uv python install 3.12 && uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy app scripts
+      - name: Web scripts parse
+        working-directory: web
+        run: for f in js/*.js; do node --check "$f"; done
+
+  test:
+    name: Unit, API and simulator tests
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
     services:
       postgres:
         image: postgres:16
-        env:
-          POSTGRES_USER: crowded
-          POSTGRES_PASSWORD: crowded
-          POSTGRES_DB: crowded_test
+        env: { POSTGRES_USER: crowded, POSTGRES_PASSWORD: crowded, POSTGRES_DB: crowded_test }
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U crowded" --health-interval 5s
@@ -29,33 +49,117 @@ jobs:
       CROWDED_ENV: test
       CROWDED_TEST_DATABASE_URL: postgresql+psycopg://crowded:crowded@localhost:5432/crowded_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          version: "0.11.x"
-      - run: uv python install 3.12
-      - run: uv sync --frozen
-      - name: Lint
-        run: uv run ruff check . && uv run ruff format --check .
-      - name: Types
-        run: uv run mypy app scripts
-      - name: Tests
-        run: uv run pytest --cov=app --cov-report=term-missing
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with: { version: "${{ env.UV_VERSION }}" }
+      - run: uv python install 3.12 && uv sync --frozen
+      - name: Full suite with coverage gate (90 percent)
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=90
       - name: Estimation coverage gate (90 percent)
         run: uv run pytest tests/estimation --cov=app.estimation --cov-fail-under=90 -q
+      - name: Migrations round trip and match the models
+        env:
+          CROWDED_DATABASE_URL: postgresql+psycopg://crowded:crowded@localhost:5432/crowded_test
+        run: |
+          psql postgresql://crowded:crowded@localhost:5432/crowded_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+          uv run alembic upgrade head
       - name: OpenAPI contract is current
         run: uv run python scripts/export_openapi.py --check
-      - name: Bandit
-        run: uv run bandit -q -r app scripts -c pyproject.toml
-      - name: pip-audit
-        run: uv export --frozen --no-dev --no-hashes -o /tmp/req.txt && uv run pip-audit -r /tmp/req.txt --strict
 
-  secrets:
+  security:
+    name: Security scans
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with: { version: "${{ env.UV_VERSION }}" }
+      - working-directory: backend
+        run: uv python install 3.12 && uv sync --frozen
+      - name: Bandit
+        working-directory: backend
+        run: uv run bandit -q -r app scripts -c pyproject.toml
+      - name: pip-audit
+        working-directory: backend
+        run: |
+          uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/req.txt
+          uv run pip-audit -r /tmp/req.txt --strict
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  e2e:
+    name: End to end (browser against real backend)
+    runs-on: ubuntu-latest
+    needs: [lint]
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: crowded, POSTGRES_PASSWORD: crowded, POSTGRES_DB: crowded }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U crowded" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      CROWDED_ENV: dev
+      CROWDED_DATABASE_URL: postgresql+psycopg://crowded:crowded@localhost:5432/crowded
+      BASE_URL: http://127.0.0.1:8000
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with: { version: "${{ env.UV_VERSION }}" }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: e2e/package-lock.json }
+      - name: Start backend with seeded fake data
+        working-directory: backend
+        run: |
+          uv python install 3.12 && uv sync --frozen
+          uv run alembic upgrade head
+          uv run python scripts/seed.py
+          uv run python scripts/simulate_night.py --live
+          nohup uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fs $BASE_URL/healthz && break; sleep 1; done
+      - name: Smoke test
+        working-directory: backend
+        run: uv run python scripts/smoke_test.py $BASE_URL
+      - name: Playwright
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test --trace off
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            /tmp/server.log
+          retention-days: 7
+
+  docker:
+    name: Container builds and boots
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with: { version: "${{ env.UV_VERSION }}" }
+      - run: docker build -f backend/Dockerfile -t crowded:ci .
+      - name: Prod config refuses to boot with dev secrets
+        run: |
+          if docker run --rm crowded:ci python -c "import app.main"; then
+            echo "prod image started with dev secrets"; exit 1; fi
+      - name: Image runs as non-root
+        run: test "$(docker run --rm crowded:ci id -u)" = "10001"
+      - name: Boot (dev config) and smoke test
+        run: |
+          docker run -d --name crowded -p 8000:8000 -e CROWDED_ENV=dev crowded:ci
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8000/healthz && break; sleep 1; done
+          cd backend && uv python install 3.12 && uv sync --frozen
+          uv run python scripts/smoke_test.py http://127.0.0.1:8000

@@ -1,0 +1,163 @@
+/* =====================================================================
+   Crowded design tokens (v2, monochrome)
+   ---------------------------------------------------------------------
+   Every color, font, size, radius and timing used by the web client
+   lives here. Change a value here and the whole app follows.
+
+   v2 is black and white on purpose. Meaning never depends on color:
+   crowd level is a word plus a 3 segment meter, the pass call is text.
+
+   Quick tweaks (web/README.md has more):
+   - Bring color back ..... set --accent and --accent-ink (both themes).
+                            Today they equal the text color.
+   - Fonts ................ --font-display, --font-body, --font-num
+   - Corner roundness ..... --radius-scale (1 = default, 0 = square)
+   - Density .............. --density (1 = default, 0.9 = tighter)
+   ===================================================================== */
+
+:root {
+  /* ---------- Knobs ---------- */
+  --radius-scale: 1;
+  --density: 1;
+
+  /* ---------- Fonts ---------- */
+  /* Headings, labels, buttons, body: one neutral grotesk keeps it calm. */
+  --font-display: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Big numbers only (waits, headcount, timer). */
+  --font-num: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* ---------- Type scale (rem, base 16px) ---------- */
+  --text-xs: 0.75rem;    /* 12 fine print */
+  --text-sm: 0.875rem;   /* 14 secondary */
+  --text-md: 1rem;       /* 16 body */
+  --text-lg: 1.0625rem;  /* 17 row titles */
+  --text-xl: 1.375rem;   /* 22 section titles */
+  --text-2xl: 2.125rem;  /* 34 screen titles */
+  --text-3xl: 3rem;      /* 48 detail numbers */
+  --text-hero: 5rem;     /* 80 timer, staff headcount */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.25;
+  --leading-body: 1.45;
+  --tracking-display: -0.025em;
+  --tracking-num: -0.04em;
+  --tracking-label: 0.02em;
+
+  /* ---------- Spacing (multiplied by --density) ---------- */
+  --space-1: calc(4px * var(--density));
+  --space-2: calc(8px * var(--density));
+  --space-3: calc(12px * var(--density));
+  --space-4: calc(16px * var(--density));
+  --space-5: calc(20px * var(--density));
+  --space-6: calc(24px * var(--density));
+  --space-8: calc(32px * var(--density));
+  --space-10: calc(40px * var(--density));
+  --space-12: calc(48px * var(--density));
+
+  --gutter: 20px;          /* page side padding */
+  --max-width: 560px;      /* content column on wide screens */
+  --touch: 48px;           /* minimum touch target (spec minimum is 44) */
+  --tabbar-h: 60px;
+
+  /* ---------- Radii (multiplied by --radius-scale) ---------- */
+  /* One small radius for almost everything. No pills. */
+  --radius-sm: calc(6px * var(--radius-scale));
+  --radius-md: calc(8px * var(--radius-scale));
+  --radius-lg: calc(12px * var(--radius-scale));
+
+  /* ---------- Motion ---------- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---------- Light theme (default) ---------- */
+  --bg: #ffffff;
+  --surface: #f5f5f5;       /* inputs, segmented controls, secondary buttons */
+  --elevated: #ffffff;      /* sheets */
+  --border: #e6e6e6;        /* hairlines */
+  --border-strong: #000000; /* outlined buttons, focus of selection */
+  --text: #000000;
+  --text-2: #545454;        /* secondary text, 7.4:1 on white */
+  --text-3: #767676;        /* muted, "no recent data", 4.5:1 on white */
+  --primary: #000000;       /* primary button fill */
+  --primary-ink: #ffffff;   /* text on primary */
+  --accent: #000000;        /* color hook, monochrome for now */
+  --accent-ink: #ffffff;
+  --meter-on: #000000;      /* filled meter segment */
+  --meter-off: #e0e0e0;     /* empty meter segment */
+  --chart-typ: #d6d6d6;     /* typical bars */
+  --chart-now: #000000;     /* tonight bars */
+  --danger: #000000;        /* destructive actions are bold, not red */
+  --scrim: rgba(0, 0, 0, 0.45);
+  --focus: #000000;
+  --shadow-sheet: 0 -1px 0 var(--border), 0 -12px 40px rgba(0, 0, 0, 0.12);
+  color-scheme: light;
+}
+
+/* ---------- Dark theme ---------- */
+/* Applied when the OS is dark and the user did not force light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000;
+    --surface: #161616;
+    --elevated: #121212;
+    --border: #262626;
+    --border-strong: #ffffff;
+    --text: #ffffff;
+    --text-2: #b3b3b3;
+    --text-3: #8a8a8a;
+    --primary: #ffffff;
+    --primary-ink: #000000;
+    --accent: #ffffff;
+    --accent-ink: #000000;
+    --meter-on: #ffffff;
+    --meter-off: #333333;
+    --chart-typ: #3a3a3a;
+    --chart-now: #ffffff;
+    --danger: #ffffff;
+    --scrim: rgba(0, 0, 0, 0.7);
+    --focus: #ffffff;
+    --shadow-sheet: 0 -1px 0 var(--border);
+    color-scheme: dark;
+  }
+}
+
+/* Same values, forced from Settings. Keep in sync with the block above. */
+:root[data-theme="dark"] {
+  --bg: #000000;
+  --surface: #161616;
+  --elevated: #121212;
+  --border: #262626;
+  --border-strong: #ffffff;
+  --text: #ffffff;
+  --text-2: #b3b3b3;
+  --text-3: #8a8a8a;
+  --primary: #ffffff;
+  --primary-ink: #000000;
+  --accent: #ffffff;
+  --accent-ink: #000000;
+  --meter-on: #ffffff;
+  --meter-off: #333333;
+  --chart-typ: #3a3a3a;
+  --chart-now: #ffffff;
+  --danger: #ffffff;
+  --scrim: rgba(0, 0, 0, 0.7);
+  --focus: #ffffff;
+  --shadow-sheet: 0 -1px 0 var(--border);
+  color-scheme: dark;
+}
+
+/* Reduce Motion: kill durations everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}

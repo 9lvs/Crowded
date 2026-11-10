@@ -18,7 +18,9 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    text,
 )
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -84,6 +86,24 @@ class DoorDirection(enum.StrEnum):
 
 
 TS = DateTime(timezone=True)
+
+
+class SpecialKind(enum.StrEnum):
+    happy_hour = "happy_hour"
+    drink = "drink"
+    food = "food"
+    cover = "cover"
+    event = "event"
+
+
+class DealCategory(enum.StrEnum):
+    beer = "beer"
+    pitchers = "pitchers"
+    shots = "shots"
+    mixers = "mixers"
+    wine = "wine"
+    food = "food"
+    other = "other"
 
 
 class User(Base):
@@ -216,8 +236,19 @@ class LineSession(Base):
     started_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(TS)
     predicted_wait_min: Mapped[float | None] = mapped_column(Float)
+    formula_wait_min: Mapped[float | None] = mapped_column(Float)  # uncalibrated, for calibration
+    # Entry rate when the timer started. actual wait x rate = how many people were really in
+    # line, which scores staff and student line reports (docs/SOURCING.md).
+    entry_rate_at_start: Mapped[float | None] = mapped_column(Float)
     actual_wait_min: Mapped[float | None] = mapped_column(Float)
     near_bar: Mapped[bool] = mapped_column(Boolean, default=False)
+    # True when the student typed the rotating door code at the door (docs/SOURCING.md).
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # True when this timer wrote the calibration point for its user, bar and night. Lets the
+    # calibration gate count distinct users without putting a user id on estimate_errors.
+    calibration_eligible: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     distance_bucket: Mapped[DistanceBucket] = mapped_column(
         _enum(DistanceBucket, "distance_bucket"), default=DistanceBucket.unknown
     )
@@ -225,6 +256,13 @@ class LineSession(Base):
     __table_args__ = (
         Index("ix_line_sessions_bar_started", "bar_id", "started_at"),
         Index("ix_line_sessions_user_status", "user_id", "status"),
+        # One active timer per user. Parallel starts lose with an IntegrityError (409).
+        Index(
+            "uq_line_sessions_one_active",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
     )
 
 
@@ -256,11 +294,39 @@ class DoorEvent(Base):
     ts: Mapped[datetime] = mapped_column(TS, default=utcnow)
     direction: Mapped[DoorDirection] = mapped_column(_enum(DoorDirection, "door_direction"))
     count: Mapped[int] = mapped_column(Integer, default=1)
+    # "tap" is one staff tap. "sync" is a clicker total entered as a difference.
+    source: Mapped[str] = mapped_column(String(8), default="tap", server_default="tap")
 
     __table_args__ = (
         Index("ix_door_events_bar_ts", "bar_id", "ts"),
-        CheckConstraint("count BETWEEN 1 AND 20", name="door_count_range"),
+        CheckConstraint(
+            "(source = 'tap' AND count BETWEEN 1 AND 20)"
+            " OR (source = 'sync' AND count BETWEEN 1 AND 5000)",
+            name="door_count_range",
+        ),
     )
+
+
+class LineSample(Base):
+    """A door staff member times a real person from the back of the line to the door."""
+
+    __tablename__ = "line_samples"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_uuid)
+    bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"))
+    staff_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    started_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(TS)
+    status: Mapped[SessionStatus] = mapped_column(
+        _enum(SessionStatus, "session_status"), default=SessionStatus.active
+    )
+    predicted_wait_min: Mapped[float | None] = mapped_column(Float)
+    formula_wait_min: Mapped[float | None] = mapped_column(Float)
+    entry_rate_at_start: Mapped[float | None] = mapped_column(Float)
+
+    __table_args__ = (Index("ix_line_samples_bar_started", "bar_id", "started_at"),)
 
 
 class OutsideLineStatus(Base):
@@ -323,9 +389,25 @@ class RewardLedger(Base):
     reason: Mapped[str] = mapped_column(String(32))
     ref_id: Mapped[uuid.UUID | None] = mapped_column()
 
+    __table_args__ = (
+        # One reward per timer or report, even if a request races (defense in depth).
+        Index(
+            "uq_reward_ledger_reason_ref",
+            "reason",
+            "ref_id",
+            unique=True,
+            postgresql_where=text("ref_id IS NOT NULL"),
+        ),
+    )
+
 
 class EstimateError(Base):
-    """Estimate vs actual for completed timers. No user id so it survives account deletion."""
+    """Estimate vs actual for completed timers and staff samples.
+
+    No user id or user key, so it survives account deletion. `source` is "timer" or "sample".
+    Only rows with `eligible` true feed calibration: trusted student timers, at most one per
+    user per bar per night (docs/ESTIMATION.md). Samples are never eligible.
+    """
 
     __tablename__ = "estimate_errors"
 
@@ -333,8 +415,13 @@ class EstimateError(Base):
     bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
     predicted_min: Mapped[float] = mapped_column(Float)
+    formula_min: Mapped[float | None] = mapped_column(Float)
     actual_min: Mapped[float] = mapped_column(Float)
     abs_error_min: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(8), default="timer", server_default="timer")
+    eligible: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+    __table_args__ = (Index("ix_estimate_errors_bar_created", "bar_id", "created_at"),)
 
 
 class AuditLog(Base):
@@ -352,3 +439,37 @@ class AuditLog(Base):
     bar_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("bars.id", ondelete="SET NULL"))
     ip_hash: Mapped[str] = mapped_column(String(64), default="")
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class BarSpecial(Base):
+    """A special, happy hour, cover charge or event posted by the bar itself."""
+
+    __tablename__ = "bar_specials"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_uuid)
+    bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[SpecialKind] = mapped_column(_enum(SpecialKind, "special_kind"))
+    title: Mapped[str] = mapped_column(String(80))
+    details: Mapped[str] = mapped_column(String(200), default="")
+    days: Mapped[list[int]] = mapped_column(JSON)  # weekday ints, Monday = 0
+    start_local: Mapped[str] = mapped_column(String(5))
+    end_local: Mapped[str] = mapped_column(String(5))
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    all_day: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    items: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    posted_by_role: Mapped[str] = mapped_column(String(16))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TS, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "price_cents IS NULL OR (price_cents >= 0 AND price_cents <= 100000)",
+            name="special_price_range",
+        ),
+    )

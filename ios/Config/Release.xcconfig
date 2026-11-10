@@ -1,0 +1,3 @@
+// Placeholder until a host and domain are chosen (docs/DEPLOY.md). HTTPS only (ATS stays on).
+CROWDED_API_BASE_URL = https:/$()/api.crowded.example
+CROWDED_SIWA_ENABLED = NO

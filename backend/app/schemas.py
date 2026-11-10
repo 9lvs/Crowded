@@ -6,12 +6,22 @@ import re
 import uuid
 from datetime import datetime
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models import CrowdLevel, DistanceBucket, DoorDirection, LineSize, Role, SessionStatus
+from app.models import (
+    CrowdLevel,
+    DealCategory,
+    DistanceBucket,
+    DoorDirection,
+    LineSize,
+    Role,
+    SessionStatus,
+    SpecialKind,
+)
 
-E164 = re.compile(r"^\+[1-9]\d{7,14}$")
+E164 = re.compile(r"^\+[1-9][0-9]{7,14}$", re.ASCII)
 
 
 class Strict(BaseModel):
@@ -32,7 +42,7 @@ class RequestCodeIn(Strict):
     @field_validator("phone")
     @classmethod
     def _e164(cls, v: str) -> str:
-        v = re.sub(r"[\s\-().]", "", v)
+        v = re.sub(r"[ \-().]", "", v)
         if not E164.match(v):
             raise ValueError("phone must be E.164, for example +15551234567")
         return v
@@ -45,7 +55,7 @@ class RequestCodeOut(Strict):
 
 
 class VerifyCodeIn(RequestCodeIn):
-    code: Annotated[str, Field(pattern=r"^\d{6}$")]
+    code: Annotated[str, Field(pattern=r"^[0-9]{6}$")]
     age_attested: bool = Field(
         default=False, description="User confirmed they are 21 or older. Required to sign up."
     )
@@ -117,6 +127,139 @@ class VerdictOut(Strict):
     minutes_saved: int | None
 
 
+# ---------- specials ----------
+
+TIME_HHMM = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+
+
+def _clean_text(v: str) -> str:
+    if any(ord(c) < 32 or ord(c) == 127 for c in v):
+        raise ValueError("control characters are not allowed")
+    return v
+
+
+MAX_DEAL_ITEMS = 20
+ALL_DAY_START = "12:00"
+ALL_DAY_END = "04:00"
+
+
+class DealItem(Strict):
+    name: Annotated[str, Field(min_length=1, max_length=60)]
+    price_label: Annotated[str, Field(min_length=1, max_length=20)]
+    category: DealCategory
+    note: Annotated[str, Field(max_length=40)] = ""
+
+    @field_validator("name", "price_label", "note")
+    @classmethod
+    def _text(cls, v: str) -> str:
+        return _clean_text(v)
+
+
+class DealItemOut(DealItem):
+    pass
+
+
+DealItems = Annotated[list[DealItem], Field(max_length=MAX_DEAL_ITEMS)]
+
+
+class SpecialIn(Strict):
+    kind: SpecialKind
+    title: Annotated[str, Field(min_length=1, max_length=80)]
+    details: Annotated[str, Field(max_length=200)] = ""
+    days: Annotated[list[Annotated[int, Field(ge=0, le=6)]], Field(min_length=1, max_length=7)]
+    start_local: str | None = None
+    end_local: str | None = None
+    price_cents: Annotated[int, Field(ge=0, le=100000)] | None = None
+    all_day: bool = False
+    items: DealItems = Field(default_factory=list)
+
+    @field_validator("title", "details")
+    @classmethod
+    def _text(cls, v: str) -> str:
+        return _clean_text(v)
+
+    @field_validator("days")
+    @classmethod
+    def _days(cls, v: list[int]) -> list[int]:
+        if len(set(v)) != len(v):
+            raise ValueError("days must be unique")
+        return sorted(v)
+
+    @field_validator("start_local", "end_local")
+    @classmethod
+    def _hhmm(cls, v: str | None) -> str | None:
+        if v is not None and not TIME_HHMM.match(v):
+            raise ValueError("time must be HH:MM, 24 hour")
+        return v
+
+    @model_validator(mode="after")
+    def _times(self) -> SpecialIn:
+        if self.all_day:
+            self.start_local = ALL_DAY_START
+            self.end_local = ALL_DAY_END
+        elif self.start_local is None or self.end_local is None:
+            raise ValueError("times_required")
+        elif self.start_local == self.end_local:
+            raise ValueError("start and end must differ")
+        return self
+
+
+class SpecialUpdate(Strict):
+    kind: SpecialKind | None = None
+    title: Annotated[str, Field(min_length=1, max_length=80)] | None = None
+    details: Annotated[str, Field(max_length=200)] | None = None
+    days: (
+        Annotated[list[Annotated[int, Field(ge=0, le=6)]], Field(min_length=1, max_length=7)] | None
+    ) = None
+    start_local: str | None = None
+    end_local: str | None = None
+    price_cents: Annotated[int, Field(ge=0, le=100000)] | None = None
+    is_active: bool | None = None
+    all_day: bool | None = None
+    items: DealItems | None = None
+
+    @field_validator("title", "details")
+    @classmethod
+    def _text(cls, v: str | None) -> str | None:
+        return None if v is None else _clean_text(v)
+
+    @field_validator("days")
+    @classmethod
+    def _days(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return None
+        if len(set(v)) != len(v):
+            raise ValueError("days must be unique")
+        return sorted(v)
+
+    @field_validator("start_local", "end_local")
+    @classmethod
+    def _hhmm(cls, v: str | None) -> str | None:
+        if v is not None and not TIME_HHMM.match(v):
+            raise ValueError("time must be HH:MM, 24 hour")
+        return v
+
+
+class SpecialOut(Strict):
+    id: uuid.UUID
+    kind: SpecialKind
+    title: str
+    details: str
+    days: list[int]
+    start_local: str
+    end_local: str
+    price_cents: int | None
+    all_day: bool
+    items: list[DealItemOut]
+    is_active: bool
+    posted_by: Literal["staff", "admin"]
+    updated_at: datetime
+
+
+class SpecialTonight(SpecialOut):
+    is_now: bool
+
+
 class BarSummary(Strict):
     id: uuid.UUID
     slug: str
@@ -126,6 +269,10 @@ class BarSummary(Strict):
     pass_price_cents: int | None
     live: LiveOut
     verdict: VerdictOut
+    specials_tonight: list[SpecialTonight] = Field(
+        default_factory=list, description="Posted by the bar. Now first, then by start time"
+    )
+    cover_tonight: SpecialTonight | None = None
 
 
 class HourPoint(Strict):
@@ -139,6 +286,7 @@ class BarDetail(BarSummary):
     longitude: float
     normal_wait_min: int | None = Field(description="Typical wait at this hour on past nights")
     wait_by_hour: list[HourPoint]
+    specials_week: list[SpecialOut] = Field(default_factory=list)
 
 
 class SnapshotOut(Strict):
@@ -168,6 +316,8 @@ class LineSessionStartIn(Strict):
 
 class LineSessionEndIn(Strict):
     outcome: Literal["inside", "gave_up"] = "inside"
+    # Rotating 4 digit code shown at the door. Optional. A wrong code never fails the request.
+    door_code: Annotated[str, Field(pattern=r"^[0-9]{4}$")] | None = None
 
 
 class LineSessionOut(Strict):
@@ -179,6 +329,7 @@ class LineSessionOut(Strict):
     predicted_wait_min: int | None
     actual_wait_min: float | None
     near_bar: bool
+    verified: bool = False
     points_awarded: int = 0
 
 
@@ -215,6 +366,29 @@ class DoorIn(Strict):
     count: Annotated[int, Field(ge=1, le=20)] = 1
 
 
+class CountSyncIn(Strict):
+    inside_now: Annotated[int, Field(ge=0, le=5000)]
+
+
+class DoorCodeOut(Strict):
+    code: Annotated[str, Field(pattern=r"^[0-9]{4}$")]
+    expires_in: int
+
+
+class LineSampleEndIn(Strict):
+    outcome: Literal["inside", "cancel"]
+
+
+class LineSampleOut(Strict):
+    id: uuid.UUID
+    bar_id: uuid.UUID
+    status: SessionStatus
+    started_at: datetime
+    ended_at: datetime | None
+    predicted_wait_min: int | None
+    actual_wait_min: float | None
+
+
 class LineSizeIn(Strict):
     line_size: LineSize
 
@@ -242,6 +416,15 @@ class BarCreate(Strict):
     longitude: Longitude
     capacity: Annotated[int, Field(ge=1, le=10000)]
     timezone: Annotated[str, Field(max_length=64)] = "America/New_York"
+
+    @field_validator("timezone")
+    @classmethod
+    def _tz(cls, v: str) -> str:
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("unknown IANA timezone") from None
+        return v
 
 
 class BarUpdate(Strict):
@@ -273,6 +456,13 @@ class PassPriceOut(Strict):
     bar_id: uuid.UUID
     price_cents: int | None
     currency: str
+    created_at: datetime
+
+
+class StaffMemberOut(Strict):
+    user_id: uuid.UUID
+    bar_id: uuid.UUID
+    phone_hint: str | None
     created_at: datetime
 
 

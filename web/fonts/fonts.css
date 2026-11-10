@@ -1,0 +1,18 @@
+/* Self hosted fonts. Both are licensed under the SIL Open Font License 1.1 (see OFL.txt).
+   Latin subset only. Variable weight files. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 500 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("BricolageGrotesque-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("DMSans-latin.woff2") format("woff2");
+}

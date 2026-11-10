@@ -1,0 +1,48 @@
+import Foundation
+
+/// Everything the app asks of the backend. Two implementations: LiveAPI (generated OpenAPI
+/// client) and MockAPI (in memory FAKE data for previews, tests and demos).
+protocol CrowdedAPI: AnyObject, Sendable {
+    // Session
+    func hasStoredSession() async -> Bool
+    func requestCode(phone: String) async throws -> CodeRequest
+    func verifyCode(phone: String, code: String, ageAttested: Bool) async throws -> Me
+    func signOut() async
+
+    // Me
+    func me() async throws -> Me
+    func updateThreshold(minutes: Int) async throws -> Me
+    func deleteAccount() async throws
+
+    // Bars
+    func bars() async throws -> [Bar]
+    func bar(id: String) async throws -> BarDetail
+
+    // Sourcing: line timers and crowd reports
+    func activeSession() async throws -> LineSession?
+    func startSession(barId: String, location: Coordinate?) async throws -> LineSession
+    /// `doorCode` is the optional 4 digit code from the door. A wrong code never fails the call.
+    func endSession(id: String, outcome: EndOutcome, doorCode: String?) async throws -> LineSession
+    func report(
+        barId: String, crowd: CrowdLevel?, line: LineSize?, location: Coordinate?
+    ) async throws -> ReportResult
+
+    // Staff
+    func redeemInvite(code: String) async throws -> Me
+    func staffState(barId: String) async throws -> StaffState
+    func door(barId: String, direction: DoorDirection, count: Int) async throws -> StaffState
+    func setLine(barId: String, size: LineSize) async throws -> StaffState
+
+    // Staff: line samples, door code, clicker sync
+    func startLineSample(barId: String) async throws -> LineSample
+    func endLineSample(barId: String, sampleId: String, outcome: SampleOutcome) async throws -> LineSample
+    func activeLineSamples(barId: String) async throws -> [LineSample]
+    func doorCode(barId: String) async throws -> DoorCode
+    func countSync(barId: String, insideNow: Int) async throws -> StaffState
+
+    // Staff: specials
+    func listSpecials(barID: String) async throws -> [Special]
+    func createSpecial(barID: String, input: SpecialInput) async throws -> Special
+    func updateSpecial(barID: String, specialID: String, update: SpecialPatch) async throws -> Special
+    func deleteSpecial(barID: String, specialID: String) async throws
+}

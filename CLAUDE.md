@@ -10,10 +10,11 @@ they are), docs/SECURITY.md (controls), docs/ESTIMATION.md (the wait formula).
 ## Layout
 - `backend/` FastAPI app (Python 3.12, uv). `app/` code, `tests/`, `scripts/`, `alembic/`.
 - `backend/app/estimation/` pure functions only. No DB, no clock, no I/O.
-- `web/` no-build web client (vanilla JS + CSS tokens), served by the backend at `/`.
+- `web/` no-build web client (vanilla JS + CSS tokens, black and white), served at `/`.
   Student screens plus the staff door counter at `/staff`. Has a mock mode (`?mock=1`).
 - `ios/` SwiftUI app (Phase 3, not started).
-- `docs/` roadmap, decisions, security packet, threat model, OpenAPI export.
+- `site/` launch site and legal drafts. `e2e/` Playwright suite. `tools/` preview bundler.
+- `docs/` roadmap, decisions, security packet, threat model, OpenAPI, testing, App Store, deploy, ideas.
 
 ## Run and test (from `backend/`)
 ```bash
@@ -57,6 +58,17 @@ Lead session (Opus) plans, reviews, merges and runs the security gate. Subagents
 `.claude/agents/`: backend-implementer and test-and-sim (Sonnet), security-reviewer (Opus,
 read only), docs-light (Haiku). Parallel work only across different directories, one branch
 per worker, written brief per task. The lead merges.
+
+Model and effort policy for workers (owner direction: not everything needs Opus):
+| Work | Model | Effort |
+|---|---|---|
+| Docs, changelogs, copy edits, renames, repetitive edits | Haiku | low |
+| One module from a clear brief, tests, simulator, seed data, CI fixes | Sonnet | medium |
+| Marketing assets and decks from a clear brief | Sonnet | medium |
+| UI design passes where taste matters, new architecture, tricky concurrency | Opus | medium |
+| Security review at a phase gate | Opus | high |
+Default to the cheapest row that fits. Escalate only when a cheaper worker failed or the task is
+ambiguous. Forks always run on the lead's model, so prefer a typed worker with a written brief.
 
 ## Phase gates
 A phase is done when: tests pass, estimation coverage >= 90 percent, `docs/openapi.json` is

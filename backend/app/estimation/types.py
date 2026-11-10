@@ -26,9 +26,11 @@ class Confidence(StrEnum):
 
 
 class Recommendation(StrEnum):
-    buy_pass = "buy_pass"  # wait exceeds threshold and a pass is offered
+    # wait exceeds threshold and a pass is offered
+    buy_pass = "buy_pass"  # nosec B105
     wait_it_out = "wait_it_out"  # wait is under threshold
-    no_pass_available = "no_pass_available"  # wait exceeds threshold but no pass is sold
+    # wait exceeds threshold but no pass is sold
+    no_pass_available = "no_pass_available"  # nosec B105
     no_data = "no_data"  # no recent data, no recommendation
 
 
@@ -47,6 +49,7 @@ class DoorEventIn:
     ts: datetime
     direction: str  # "in" or "out"
     count: int = 1
+    source: str = "tap"  # "tap" or "sync". Sync events move headcount but never the rates.
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,7 @@ class LineStatusIn:
 
     ts: datetime
     line_size: str  # key of LINE_SIZE_PEOPLE
+    reporter_id: str | None = None  # staff user id, for per staff reliability
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,7 @@ class TimerIn:
     started_at: datetime
     ended_at: datetime | None = None
     near_bar: bool = True
+    verified: bool = False  # door code typed at the door, or a staff sample
 
 
 @dataclass(frozen=True)
@@ -100,7 +105,21 @@ class Params:
     calibration_min: float = 0.5
     calibration_max: float = 2.0
     calibration_window_min: float = 7 * 24 * 60.0
+    calibration_half_life_min: float = 24 * 60.0  # one day
     mismatch_threshold: int = 2  # crowd level steps between staff count and reports
+    # One staff line reading weighs as much as this many perfectly reliable user reports, before
+    # the staff member's own reliability (learned from timers) is applied. See docs/SOURCING.md.
+    staff_line_weight: float = 3.0
+    # Staff and user line estimates "disagree" when they differ by at least this many people
+    # and by at least this fraction of the larger one.
+    disagree_min_people: float = 10.0
+    disagree_ratio: float = 0.4
+    # Without a staff reading, student line reports must add up to at least this much weight
+    # (about one average, recent, near-bar report) before we turn them into a wait. Stops a
+    # single far, stale or low-trust report from producing a big made up number.
+    min_report_line_weight: float = 0.5
+    # A verified timer (door code or staff sample) counts this many times as much.
+    verified_timer_weight: float = 2.0
 
 
 @dataclass(frozen=True)
