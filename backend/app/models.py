@@ -86,6 +86,14 @@ class DoorDirection(enum.StrEnum):
 TS = DateTime(timezone=True)
 
 
+class SpecialKind(enum.StrEnum):
+    happy_hour = "happy_hour"
+    drink = "drink"
+    food = "food"
+    cover = "cover"
+    event = "event"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -357,3 +365,33 @@ class AuditLog(Base):
     bar_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("bars.id", ondelete="SET NULL"))
     ip_hash: Mapped[str] = mapped_column(String(64), default="")
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class BarSpecial(Base):
+    """A special, happy hour, cover charge or event posted by the bar itself."""
+
+    __tablename__ = "bar_specials"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_uuid)
+    bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[SpecialKind] = mapped_column(_enum(SpecialKind, "special_kind"))
+    title: Mapped[str] = mapped_column(String(80))
+    details: Mapped[str] = mapped_column(String(200), default="")
+    days: Mapped[list[int]] = mapped_column(JSON)  # weekday ints, Monday = 0
+    start_local: Mapped[str] = mapped_column(String(5))
+    end_local: Mapped[str] = mapped_column(String(5))
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    posted_by_role: Mapped[str] = mapped_column(String(16))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TS, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "price_cents IS NULL OR (price_cents >= 0 AND price_cents <= 100000)",
+            name="special_price_range",
+        ),
+    )

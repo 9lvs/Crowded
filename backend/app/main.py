@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import activity, admin, auth, bars, me, staff
+from app.api.v1 import activity, admin, auth, bars, me, specials, staff
 from app.config import get_settings
 from app.core.middleware import BodySizeLimit, SecurityHeaders
 
@@ -59,7 +59,16 @@ def create_app() -> FastAPI:
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    for r in (auth.router, me.router, bars.router, activity.router, staff.router, admin.router):
+    for r in (
+        auth.router,
+        me.router,
+        bars.router,
+        activity.router,
+        staff.router,
+        admin.router,
+        specials.staff_router,
+        specials.admin_router,
+    ):
         app.include_router(r, prefix="/v1")
 
     if s.cors_origins:

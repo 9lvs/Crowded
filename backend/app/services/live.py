@@ -35,6 +35,7 @@ from app.schemas import (
     SnapshotOut,
     VerdictOut,
 )
+from app.services import specials as specials_svc
 
 PARAMS = est.Params()
 NIGHT_START_HOUR = 12  # "tonight" runs from local noon to local noon
@@ -259,6 +260,7 @@ def verdict_out(live: Live, threshold: int, price: int | None) -> VerdictOut:
 def bar_summary(db: Session, bar: Bar, user: User, now: datetime | None = None) -> BarSummary:
     live = compute(db, bar, now)
     price = current_pass_price(db, bar.id)
+    specials_now, cover = specials_svc.tonight(db, bar, live.now)
     return BarSummary(
         id=bar.id,
         slug=bar.slug,
@@ -268,6 +270,8 @@ def bar_summary(db: Session, bar: Bar, user: User, now: datetime | None = None) 
         pass_price_cents=price,
         live=live_out(live),
         verdict=verdict_out(live, user.wait_threshold_min, price),
+        specials_tonight=specials_now,
+        cover_tonight=cover,
     )
 
 
@@ -311,6 +315,7 @@ def bar_detail(db: Session, bar: Bar, user: User) -> BarDetail:
         longitude=bar.longitude,
         normal_wait_min=normal,
         wait_by_hour=hours,
+        specials_week=specials_svc.week(db, bar),
     )
 
 

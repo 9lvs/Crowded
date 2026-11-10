@@ -257,6 +257,16 @@
             "title": "Capacity",
             "type": "integer"
           },
+          "cover_tonight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpecialTonight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -304,6 +314,21 @@
             "title": "Slug",
             "type": "string"
           },
+          "specials_tonight": {
+            "description": "Posted by the bar. Now first, then by start time",
+            "items": {
+              "$ref": "#/components/schemas/SpecialTonight"
+            },
+            "title": "Specials Tonight",
+            "type": "array"
+          },
+          "specials_week": {
+            "items": {
+              "$ref": "#/components/schemas/SpecialOut"
+            },
+            "title": "Specials Week",
+            "type": "array"
+          },
           "verdict": {
             "$ref": "#/components/schemas/VerdictOut"
           },
@@ -343,6 +368,16 @@
             "title": "Capacity",
             "type": "integer"
           },
+          "cover_tonight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpecialTonight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -369,6 +404,14 @@
           "slug": {
             "title": "Slug",
             "type": "string"
+          },
+          "specials_tonight": {
+            "description": "Posted by the bar. Now first, then by start time",
+            "items": {
+              "$ref": "#/components/schemas/SpecialTonight"
+            },
+            "title": "Specials Tonight",
+            "type": "array"
           },
           "verdict": {
             "$ref": "#/components/schemas/VerdictOut"
@@ -1273,6 +1316,347 @@
         "title": "SnapshotOut",
         "type": "object"
       },
+      "SpecialIn": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "maximum": 6.0,
+              "minimum": 0.0,
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "details": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Details",
+            "type": "string"
+          },
+          "end_local": {
+            "title": "End Local",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpecialKind"
+          },
+          "price_cents": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Cents"
+          },
+          "start_local": {
+            "title": "Start Local",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "days",
+          "start_local",
+          "end_local"
+        ],
+        "title": "SpecialIn",
+        "type": "object"
+      },
+      "SpecialKind": {
+        "enum": [
+          "happy_hour",
+          "drink",
+          "food",
+          "cover",
+          "event"
+        ],
+        "title": "SpecialKind",
+        "type": "string"
+      },
+      "SpecialOut": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "details": {
+            "title": "Details",
+            "type": "string"
+          },
+          "end_local": {
+            "title": "End Local",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpecialKind"
+          },
+          "posted_by": {
+            "enum": [
+              "staff",
+              "admin"
+            ],
+            "title": "Posted By",
+            "type": "string"
+          },
+          "price_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Cents"
+          },
+          "start_local": {
+            "title": "Start Local",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "details",
+          "days",
+          "start_local",
+          "end_local",
+          "price_cents",
+          "is_active",
+          "posted_by",
+          "updated_at"
+        ],
+        "title": "SpecialOut",
+        "type": "object"
+      },
+      "SpecialTonight": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "details": {
+            "title": "Details",
+            "type": "string"
+          },
+          "end_local": {
+            "title": "End Local",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_now": {
+            "title": "Is Now",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpecialKind"
+          },
+          "posted_by": {
+            "enum": [
+              "staff",
+              "admin"
+            ],
+            "title": "Posted By",
+            "type": "string"
+          },
+          "price_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Cents"
+          },
+          "start_local": {
+            "title": "Start Local",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "details",
+          "days",
+          "start_local",
+          "end_local",
+          "price_cents",
+          "is_active",
+          "posted_by",
+          "updated_at",
+          "is_now"
+        ],
+        "title": "SpecialTonight",
+        "type": "object"
+      },
+      "SpecialUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "anyOf": [
+              {
+                "items": {
+                  "maximum": 6.0,
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                "maxItems": 7,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "end_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Local"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpecialKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price_cents": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Cents"
+          },
+          "start_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Local"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "SpecialUpdate",
+        "type": "object"
+      },
       "StaffMemberOut": {
         "additionalProperties": false,
         "properties": {
@@ -1873,6 +2257,231 @@
           }
         ],
         "summary": "Set Pass Price",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bars/{bar_id}/specials": {
+      "get": {
+        "operationId": "admin_list_v1_admin_bars__bar_id__specials_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpecialOut"
+                  },
+                  "title": "Response Admin List V1 Admin Bars  Bar Id  Specials Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin List",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "admin_create_v1_admin_bars__bar_id__specials_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Create",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bars/{bar_id}/specials/{special_id}": {
+      "delete": {
+        "operationId": "admin_delete_v1_admin_bars__bar_id__specials__special_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Special Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Delete",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "admin_update_v1_admin_bars__bar_id__specials__special_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Special Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Update",
         "tags": [
           "admin"
         ]
@@ -2855,6 +3464,231 @@
           }
         ],
         "summary": "Line",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/specials": {
+      "get": {
+        "operationId": "staff_list_v1_staff_bars__bar_id__specials_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpecialOut"
+                  },
+                  "title": "Response Staff List V1 Staff Bars  Bar Id  Specials Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff List",
+        "tags": [
+          "staff"
+        ]
+      },
+      "post": {
+        "operationId": "staff_create_v1_staff_bars__bar_id__specials_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Create",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/specials/{special_id}": {
+      "delete": {
+        "operationId": "staff_delete_v1_staff_bars__bar_id__specials__special_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Special Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Delete",
+        "tags": [
+          "staff"
+        ]
+      },
+      "patch": {
+        "operationId": "staff_update_v1_staff_bars__bar_id__specials__special_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Special Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Update",
         "tags": [
           "staff"
         ]
