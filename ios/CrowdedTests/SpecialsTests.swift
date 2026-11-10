@@ -2,20 +2,41 @@ import XCTest
 @testable import Crowded
 
 final class SpecialsFormattingTests: XCTestCase {
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    /// Friday 2026-11-13 at the given UTC hour. 20 is before 9 PM, 22 is inside it.
+    private func friday(hour: Int) -> Date {
+        return calendar.date(from: DateComponents(year: 2026, month: 11, day: 13, hour: hour))!
+    }
+
     private func special(
         _ kind: SpecialKind, title: String = "FAKE Item", start: String = "17:00",
-        end: String = "20:00", price: Int? = nil
+        end: String = "20:00", price: Int? = nil, allDay: Bool = false,
+        items: [DealItem] = [], details: String = ""
     ) -> Special {
         return Special(
-            id: UUID().uuidString, kind: kind, title: title, details: "", days: [0, 1, 2, 3, 4],
-            startLocal: start, endLocal: end, priceCents: price, isActive: true, postedBy: .bar,
-            updatedAt: Date()
+            id: UUID().uuidString, kind: kind, title: title, details: details,
+            days: [0, 1, 2, 3, 4, 5, 6],
+            startLocal: allDay ? "12:00" : start, endLocal: allDay ? "04:00" : end,
+            priceCents: price, isActive: true, postedBy: .bar, updatedAt: Date(),
+            allDay: allDay, items: items
         )
     }
 
     private func tonight(_ item: Special, now: Bool) -> SpecialTonight {
-        return SpecialTonight(special: item, isNow: now)
+        return SpecialTonight(special: item, isNow: now || item.allDay)
     }
+
+    private let fourItems = [
+        DealItem(name: "Double wells", priceLabel: "$2", category: .mixers),
+        DealItem(name: "Drafts", priceLabel: "$2", category: .beer),
+        DealItem(name: "Well mixers", priceLabel: "$1", category: .mixers),
+        DealItem(name: "Shots", priceLabel: "$3", category: .shots),
+    ]
 
     func testTwelveHourFormat() {
         XCTAssertEqual(SpecialTime.format12("17:00"), "5 PM")
@@ -54,36 +75,153 @@ final class SpecialsFormattingTests: XCTestCase {
         XCTAssertEqual(SpecialPrice.dollarsText(cents: 500), "5")
     }
 
-    func testLinePrefersNowItem() {
-        let happy = tonight(special(.happyHour, title: "FAKE Happy hour"), now: true)
-        let cover = tonight(special(.cover, start: "21:00", end: "02:00", price: 500), now: false)
-        let line = SpecialsText.tonightLine(specials: [happy, cover], cover: cover)
-        XCTAssertEqual(line, "Happy hour now until 8 PM")
+    func testDealTextShowsTwoItemsAndCount() {
+        XCTAssertEqual(SpecialsText.dealText(fourItems), "$2 double wells, $2 drafts +2")
+        XCTAssertEqual(SpecialsText.dealText([fourItems[1]]), "$2 drafts")
+        let ipa = DealItem(name: "IPA drafts", priceLabel: "$4", category: .beer)
+        XCTAssertEqual(SpecialsText.dealText([ipa]), "$4 IPA drafts")
+    }
+
+    func testLineHappyHourNowWithItems() {
+        let happy = tonight(
+            special(.happyHour, start: "21:00", end: "00:00", items: fourItems), now: true)
+        let line = SpecialsText.tonightLine(
+            specials: [happy], cover: nil, now: friday(hour: 22), calendar: calendar)
+        XCTAssertEqual(line, "Happy hour now: $2 double wells, $2 drafts +2")
+    }
+
+    func testLineAllNight() {
+        let drafts = special(
+            .drink, title: "FAKE Drafts", allDay: true,
+            items: [DealItem(name: "Lager drafts", priceLabel: "$3", category: .beer)])
+        let line = SpecialsText.tonightLine(
+            specials: [tonight(drafts, now: true)], cover: nil, now: friday(hour: 22),
+            calendar: calendar)
+        XCTAssertEqual(line, "All night: $3 lager drafts")
+    }
+
+    func testLineTimedNowBeatsAllNight() {
+        let drafts = special(
+            .drink, allDay: true,
+            items: [DealItem(name: "Lager drafts", priceLabel: "$3", category: .beer)])
+        let happy = tonight(
+            special(.happyHour, start: "21:00", end: "00:00", items: fourItems), now: true)
+        let line = SpecialsText.tonightLine(
+            specials: [tonight(drafts, now: true), happy], cover: nil, now: friday(hour: 22),
+            calendar: calendar)
+        XCTAssertEqual(line, "Happy hour now: $2 double wells, $2 drafts +2")
+    }
+
+    func testLineNextUp() {
+        let happy = tonight(
+            special(.happyHour, start: "21:00", end: "00:00", items: fourItems), now: false)
+        let line = SpecialsText.tonightLine(
+            specials: [happy], cover: nil, now: friday(hour: 20), calendar: calendar)
+        XCTAssertEqual(line, "Happy hour at 9: $2 double wells, $2 drafts +2")
+    }
+
+    func testLineNextUpWithoutItems() {
+        let dj = tonight(special(.event, title: "DJ", start: "21:00", end: "02:00"), now: false)
+        let line = SpecialsText.tonightLine(
+            specials: [dj], cover: nil, now: friday(hour: 20), calendar: calendar)
+        XCTAssertEqual(line, "DJ at 9")
+    }
+
+    func testLineIgnoresEndedSpecial() {
+        let happy = tonight(
+            special(.happyHour, start: "17:00", end: "20:00", items: fourItems), now: false)
+        XCTAssertNil(
+            SpecialsText.tonightLine(
+                specials: [happy], cover: nil, now: friday(hour: 22), calendar: calendar))
     }
 
     func testLineFallsBackToCover() {
-        let food = tonight(special(.food, title: "FAKE Wings"), now: false)
+        let food = tonight(
+            special(.food, title: "FAKE Wings", start: "17:00", end: "19:00"), now: false)
         let cover = tonight(special(.cover, start: "21:00", end: "02:00", price: 500), now: false)
-        let line = SpecialsText.tonightLine(specials: [food, cover], cover: cover)
+        let line = SpecialsText.tonightLine(
+            specials: [food, cover], cover: cover, now: friday(hour: 20), calendar: calendar)
         XCTAssertEqual(line, "Cover $5 from 9 PM")
     }
 
     func testLineForCoverThatIsOn() {
         let cover = tonight(special(.cover, start: "18:00", end: "02:00", price: 1000), now: true)
         XCTAssertEqual(
-            SpecialsText.tonightLine(specials: [cover], cover: cover), "Cover $10 now")
-    }
-
-    func testLineFallsBackToCount() {
-        let a = tonight(special(.food, title: "FAKE Wings"), now: false)
-        let b = tonight(special(.event, title: "FAKE Trivia"), now: false)
-        XCTAssertEqual(
-            SpecialsText.tonightLine(specials: [a, b], cover: nil), "2 specials tonight")
-        XCTAssertEqual(SpecialsText.tonightLine(specials: [a], cover: nil), "1 special tonight")
+            SpecialsText.tonightLine(
+                specials: [cover], cover: cover, now: friday(hour: 22), calendar: calendar),
+            "Cover $10 now")
     }
 
     func testNoSpecialsMeansNoLine() {
         XCTAssertNil(SpecialsText.tonightLine(specials: [], cover: nil))
+    }
+
+    func testMenuOrdersAllNightFirstThenTimedAndHidesEnded() {
+        let allNight = tonight(
+            special(
+                .drink, title: "FAKE Drafts", allDay: true,
+                items: [DealItem(name: "Lager drafts", priceLabel: "$3", category: .beer)]),
+            now: true)
+        let early = tonight(
+            special(.food, title: "FAKE Wings", start: "17:00", end: "19:00"), now: false)
+        let happy = tonight(
+            special(.happyHour, start: "21:00", end: "00:00", items: fourItems), now: true)
+        let dj = tonight(special(.event, title: "DJ", start: "23:00", end: "02:00"), now: false)
+        let groups = DealMenu.tonight(
+            [dj, happy, early, allNight], now: friday(hour: 22), calendar: calendar)
+        XCTAssertEqual(groups.map { $0.title }, ["All night", "Happy hour 9 to 12", "DJ from 11"])
+        XCTAssertTrue(groups[0].isAllNight)
+        XCTAssertTrue(groups[0].isNow)
+        XCTAssertNil(groups[0].status)
+        XCTAssertTrue(groups[1].isNow)
+        XCTAssertEqual(groups[1].status, "Until 12")
+        XCTAssertEqual(groups[1].rows.count, 4)
+        XCTAssertEqual(groups[1].rows[0].name, "Double wells")
+        XCTAssertEqual(groups[1].rows[0].price, "$2")
+        XCTAssertFalse(groups[2].isNow)
+        XCTAssertEqual(groups[2].status, "Starts at 11")
+        XCTAssertTrue(groups[2].rows.isEmpty)
+    }
+
+    func testMenuKeepsNoteAndRendersItemlessSpecialAsOneRow() {
+        let food = special(
+            .food, title: "FAKE Wings", start: "17:00", end: "23:00", details: "Ten for six.",
+            items: [
+                DealItem(name: "Ten wings", priceLabel: "$6", category: .food, note: "Dine in only")
+            ])
+        let plain = special(
+            .drink, title: "FAKE Wells", start: "22:00", end: "23:30", details: "Cheap.")
+        let groups = DealMenu.tonight(
+            [tonight(food, now: true), tonight(plain, now: false)], now: friday(hour: 21),
+            calendar: calendar)
+        XCTAssertEqual(groups.count, 2)
+        XCTAssertEqual(groups[0].rows.first?.note, "Dine in only")
+        XCTAssertEqual(groups[1].rows.count, 1)
+        XCTAssertEqual(groups[1].rows.first?.name, "FAKE Wells")
+        XCTAssertEqual(groups[1].rows.first?.note, "Cheap.")
+    }
+
+    func testCoverGroupSaysPriceInHeader() {
+        let cover = special(.cover, start: "21:00", end: "02:00", price: 500)
+        let groups = DealMenu.tonight(
+            [tonight(cover, now: false)], now: friday(hour: 20), calendar: calendar)
+        XCTAssertEqual(groups.first?.title, "Cover $5 from 9")
+        XCTAssertEqual(groups.first?.rows.count, 0)
+    }
+
+    func testWeekGroupsByDayWithoutStatus() {
+        var wings = special(
+            .food, title: "FAKE Wings", start: "17:00", end: "22:00",
+            items: [DealItem(name: "Ten wings", priceLabel: "$6", category: .food)])
+        wings.days = [2]
+        var happy = special(.happyHour, start: "21:00", end: "00:00", items: fourItems)
+        happy.days = [2, 3]
+        let days = DealMenu.week([wings, happy])
+        XCTAssertEqual(days.map { $0.day }, [2, 3])
+        XCTAssertEqual(days[0].groups.count, 2)
+        XCTAssertEqual(days[1].groups.count, 1)
+        XCTAssertNil(days[0].groups[0].status)
+        XCTAssertFalse(days[0].groups[0].isNow)
     }
 
     func testScheduleNowAndOvernight() {
@@ -117,7 +255,7 @@ final class StaffSpecialsViewModelTests: XCTestCase {
     func testLoadsSeededSpecials() async {
         let (vm, _) = makeVM()
         await vm.load()
-        XCTAssertEqual(vm.specials.count, 4)
+        XCTAssertEqual(vm.specials.count, 5)
         XCTAssertNil(vm.errorMessage)
     }
 
@@ -130,7 +268,7 @@ final class StaffSpecialsViewModelTests: XCTestCase {
         )
         let ok = await vm.add(input)
         XCTAssertTrue(ok)
-        XCTAssertEqual(vm.specials.count, 5)
+        XCTAssertEqual(vm.specials.count, 6)
         XCTAssertEqual(vm.specials.last?.title, "FAKE Dollar drafts")
         XCTAssertEqual(vm.specials.last?.priceCents, 100)
     }
@@ -145,7 +283,7 @@ final class StaffSpecialsViewModelTests: XCTestCase {
         let ok = await vm.add(input)
         XCTAssertFalse(ok)
         XCTAssertEqual(vm.errorMessage, "Start and end times must be different.")
-        XCTAssertEqual(vm.specials.count, 4)
+        XCTAssertEqual(vm.specials.count, 5)
     }
 
     func testToggleActive() async throws {
@@ -167,9 +305,81 @@ final class StaffSpecialsViewModelTests: XCTestCase {
         let target = try XCTUnwrap(vm.specials.first)
         let ok = await vm.delete(target)
         XCTAssertTrue(ok)
-        XCTAssertEqual(vm.specials.count, 3)
+        XCTAssertEqual(vm.specials.count, 4)
         let stored = try await api.listSpecials(barID: owl)
-        XCTAssertEqual(stored.count, 3)
+        XCTAssertEqual(stored.count, 4)
+    }
+
+    func testAddSpecialWithItemsAndAllNight() async throws {
+        let (vm, _) = makeVM()
+        await vm.load()
+        var draft = SpecialDraft()
+        draft.kind = .drink
+        draft.title = "FAKE Late drafts"
+        draft.allDay = true
+        draft.days = [4, 5]
+        var item = DealItemDraft()
+        item.name = " Lager drafts "
+        item.priceLabel = "$3"
+        item.category = .beer
+        item.note = "Dine in only"
+        draft.items = [item, DealItemDraft()]
+        XCTAssertNil(draft.problem)
+        XCTAssertEqual(draft.input.items.count, 1)
+        let ok = await vm.add(draft.input)
+        XCTAssertTrue(ok)
+        let created = try XCTUnwrap(vm.specials.last)
+        XCTAssertTrue(created.allDay)
+        XCTAssertEqual(created.startLocal, "12:00")
+        XCTAssertEqual(created.endLocal, "04:00")
+        XCTAssertEqual(created.items.count, 1)
+        XCTAssertEqual(created.items[0].name, "Lager drafts")
+        XCTAssertEqual(created.items[0].category, .beer)
+        XCTAssertEqual(created.items[0].note, "Dine in only")
+    }
+
+    func testUpdateItemsAndAllNight() async throws {
+        let (vm, _) = makeVM()
+        await vm.load()
+        let target = try XCTUnwrap(vm.specials.first(where: { $0.id == "fake-special-2" }))
+        XCTAssertEqual(target.items.count, 4)
+        var draft = SpecialDraft(editing: target)
+        XCTAssertEqual(draft.items.count, 4)
+        draft.items.removeLast()
+        draft.allDay = true
+        let ok = await vm.update(target, patch: draft.patch)
+        XCTAssertTrue(ok)
+        let fresh = try XCTUnwrap(vm.specials.first(where: { $0.id == target.id }))
+        XCTAssertEqual(fresh.items.count, 3)
+        XCTAssertTrue(fresh.allDay)
+    }
+
+    func testDraftItemValidation() {
+        var draft = SpecialDraft()
+        draft.title = "FAKE Deal"
+        draft.items = [DealItemDraft()]
+        XCTAssertNil(draft.problem, "a blank row is ignored")
+        var half = DealItemDraft()
+        half.name = "Drafts"
+        draft.items = [half]
+        XCTAssertEqual(draft.problem, "Each item needs a name and a price.")
+        var full = DealItemDraft()
+        full.name = "Drafts"
+        full.priceLabel = "$2"
+        draft.items = Array(repeating: full, count: 21)
+        XCTAssertEqual(draft.problem, "Add up to 20 items.")
+        draft.items = Array(repeating: full, count: 20)
+        XCTAssertNil(draft.problem)
+    }
+
+    func testAllNightIgnoresMatchingTimes() {
+        var draft = SpecialDraft()
+        draft.title = "FAKE All night"
+        draft.start = "20:00"
+        draft.end = "20:00"
+        XCTAssertNotNil(draft.problem)
+        draft.allDay = true
+        XCTAssertNil(draft.problem)
     }
 
     func testStudentCannotManageSpecials() async {

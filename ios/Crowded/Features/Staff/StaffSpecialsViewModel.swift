@@ -82,8 +82,43 @@ final class StaffSpecialsViewModel {
     }
 }
 
+/// One editable item row in the add and edit sheet.
+struct DealItemDraft: Identifiable, Equatable {
+    var id = UUID()
+    var name: String = ""
+    var priceLabel: String = ""
+    var category: DealCategory = .other
+    var note: String = ""
+
+    init() {}
+
+    init(_ item: DealItem) {
+        name = item.name
+        priceLabel = item.priceLabel
+        category = item.category
+        note = item.note
+    }
+
+    /// A row with no name and no price is ignored on save.
+    var isBlank: Bool {
+        return name.trimmingCharacters(in: .whitespaces).isEmpty
+            && priceLabel.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var item: DealItem {
+        return DealItem(
+            name: name.trimmingCharacters(in: .whitespaces),
+            priceLabel: priceLabel.trimmingCharacters(in: .whitespaces),
+            category: category,
+            note: note.trimmingCharacters(in: .whitespaces)
+        )
+    }
+}
+
 /// Form state for the add and edit sheet. Kept apart from the view so it can be tested.
 struct SpecialDraft: Equatable {
+    static let maxItems = 20
+
     var kind: SpecialKind = .happyHour
     var title: String = ""
     var details: String = ""
@@ -91,6 +126,8 @@ struct SpecialDraft: Equatable {
     var start: String = "17:00"
     var end: String = "20:00"
     var priceText: String = ""
+    var allDay: Bool = false
+    var items: [DealItemDraft] = []
 
     init() {}
 
@@ -102,6 +139,13 @@ struct SpecialDraft: Equatable {
         start = special.startLocal
         end = special.endLocal
         priceText = SpecialPrice.dollarsText(cents: special.priceCents)
+        allDay = special.allDay
+        items = special.items.map { DealItemDraft($0) }
+    }
+
+    /// The rows that will be sent. Blank rows are dropped.
+    var filledItems: [DealItemDraft] {
+        return items.filter { !$0.isBlank }
     }
 
     /// Plain words for the first thing wrong, or nil when the draft can be sent.
@@ -112,11 +156,30 @@ struct SpecialDraft: Equatable {
         if days.isEmpty {
             return "Pick at least one day."
         }
-        if start == end {
+        if !allDay && start == end {
             return "Start and end times must be different."
         }
         if !SpecialPrice.isValid(dollars: priceText) {
             return "Enter the price in dollars, like 5 or 5.50."
+        }
+        let filled = filledItems
+        if filled.count > SpecialDraft.maxItems {
+            return "Add up to \(SpecialDraft.maxItems) items."
+        }
+        for row in filled {
+            let item = row.item
+            if item.name.isEmpty || item.priceLabel.isEmpty {
+                return "Each item needs a name and a price."
+            }
+            if item.name.count > 60 {
+                return "Item names can be 60 characters at most."
+            }
+            if item.priceLabel.count > 20 {
+                return "Item prices can be 20 characters at most."
+            }
+            if item.note.count > 40 {
+                return "Item notes can be 40 characters at most."
+            }
         }
         return nil
     }
@@ -133,7 +196,9 @@ struct SpecialDraft: Equatable {
             days: days.sorted(),
             startLocal: start,
             endLocal: end,
-            priceCents: priceCents
+            priceCents: priceCents,
+            allDay: allDay,
+            items: filledItems.map { $0.item }
         )
     }
 
@@ -145,7 +210,9 @@ struct SpecialDraft: Equatable {
             days: days.sorted(),
             startLocal: start,
             endLocal: end,
-            priceCents: priceCents
+            priceCents: priceCents,
+            allDay: allDay,
+            items: filledItems.map { $0.item }
         )
     }
 }

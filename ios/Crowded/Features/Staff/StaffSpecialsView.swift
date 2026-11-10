@@ -99,6 +99,10 @@ struct StaffSpecialsView: View {
         .refreshable { await vm.load() }
     }
 
+    private func scheduleText(_ special: Special) -> String {
+        return special.allDay ? "All night" : special.window
+    }
+
     private func row(_ special: Special) -> some View {
         HStack(alignment: .center, spacing: Spacing.s3) {
             Button {
@@ -111,13 +115,18 @@ struct StaffSpecialsView: View {
                     Text(special.title)
                         .font(.crowdedRowTitle)
                         .multilineTextAlignment(.leading)
-                    Text("\(SpecialTime.daysSummary(special.days)), \(special.window)")
+                    Text("\(SpecialTime.daysSummary(special.days)), \(scheduleText(special))")
                         .font(.crowdedSmall)
                         .foregroundStyle(Colors.text2)
                         .multilineTextAlignment(.leading)
                     if let price = special.priceText {
                         Text(price)
                             .font(.crowdedSmall)
+                    }
+                    if !special.items.isEmpty {
+                        Text(special.items.count == 1 ? "1 item" : "\(special.items.count) items")
+                            .font(.crowdedSmall)
+                            .foregroundStyle(Colors.text2)
                     }
                     Text(special.isActive ? "Showing to students" : "Hidden")
                         .font(.crowdedCaption)
@@ -185,7 +194,11 @@ struct SpecialEditorSheet: View {
                     field("Title", text: $draft.title, id: "specialTitleField")
                     field("Details (optional)", text: $draft.details, id: "specialDetailsField")
                     dayToggles
-                    timePickers
+                    allNightToggle
+                    if !draft.allDay {
+                        timePickers
+                    }
+                    itemsEditor
                     priceField
                     if let message = localProblem ?? vm.errorMessage {
                         Text(message)
@@ -275,6 +288,89 @@ struct SpecialEditorSheet: View {
                 }
             }
         }
+    }
+
+    private var allNightToggle: some View {
+        VStack(alignment: .leading, spacing: Spacing.s1) {
+            Toggle("All night", isOn: $draft.allDay)
+                .font(.crowdedBody)
+                .tint(Colors.text)
+                .frame(minHeight: Spacing.touch)
+                .accessibilityIdentifier("specialAllNightToggle")
+            Text("Runs the whole night. No start or end time needed.")
+                .font(.crowdedCaption)
+                .foregroundStyle(Colors.text2)
+        }
+    }
+
+    private var itemsEditor: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            Text("Items (optional)")
+                .font(.crowdedLabel)
+                .foregroundStyle(Colors.text2)
+            ForEach($draft.items) { $item in
+                itemEditor($item)
+            }
+            Button {
+                draft.items.append(DealItemDraft())
+            } label: {
+                Label("Add item", systemImage: "plus")
+                    .font(.crowdedBodyStrong)
+                    .frame(minHeight: Spacing.touch)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(draft.items.count >= SpecialDraft.maxItems)
+            .accessibilityIdentifier("addDealItemButton")
+            Text("\(draft.items.count) of \(SpecialDraft.maxItems) items")
+                .font(.crowdedCaption)
+                .foregroundStyle(Colors.text2)
+        }
+    }
+
+    private func itemEditor(_ item: Binding<DealItemDraft>) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack(spacing: Spacing.s2) {
+                itemField("Item name", text: item.name)
+                itemField("Price", text: item.priceLabel)
+                    .frame(maxWidth: 110)
+            }
+            HStack(spacing: Spacing.s2) {
+                Picker("Category", selection: item.category) {
+                    ForEach(DealCategory.allCases) { category in
+                        Text(category.label).tag(category)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Colors.text)
+                .frame(minHeight: Spacing.touch)
+                Spacer(minLength: 0)
+                Button {
+                    let target = item.wrappedValue.id
+                    draft.items.removeAll { $0.id == target }
+                } label: {
+                    Image(systemName: "trash")
+                        .frame(minWidth: Spacing.touch, minHeight: Spacing.touch)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete item")
+            }
+            itemField("Note, like Dine in only (optional)", text: item.note)
+        }
+        .padding(Spacing.s3)
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.md).stroke(Colors.border, lineWidth: 1)
+        )
+    }
+
+    private func itemField(_ title: String, text: Binding<String>) -> some View {
+        TextField(title, text: text)
+            .font(.crowdedBody)
+            .padding(.horizontal, Spacing.s3)
+            .frame(minHeight: Spacing.touch)
+            .background(RoundedRectangle(cornerRadius: Radius.md).fill(Colors.surface))
+            .accessibilityLabel(title)
     }
 
     private var timePickers: some View {

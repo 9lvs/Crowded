@@ -1,10 +1,10 @@
 import SwiftUI
 
 /// One bar on the Tonight list (the BarCard of the spec, drawn as a flat row with a hairline).
-/// Crowd first: name, crowd level, basis, then the quiet pass line and a Report button.
+/// Name, crowd level, wait, basis, then one quiet deal line. The whole row opens the bar page,
+/// where the pass verdict and the report actions live.
 struct BarRow: View {
     let bar: Bar
-    var onReport: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -15,19 +15,13 @@ struct BarRow: View {
                         .multilineTextAlignment(.leading)
                     CrowdMeter(level: bar.live.crowdLevel)
                     BasisLine(live: bar.live)
-                    SpecialsLine(bar: bar)
                 }
                 Spacer(minLength: Spacing.s2)
                 WaitStat(live: bar.live)
             }
-            HStack {
-                VerdictLine(verdict: bar.verdict)
-                Spacer()
-                Button("Report", action: onReport)
-                    .buttonStyle(ChipButtonStyle())
-                    .accessibilityLabel("Report crowd at \(bar.name)")
-            }
+            SpecialsLine(bar: bar)
         }
+        .frame(minHeight: Spacing.touch)
         .padding(.vertical, Spacing.s4)
         .hairlineBottom()
     }

@@ -62,10 +62,38 @@ final class LiveAPITests: XCTestCase {
         XCTAssertEqual(bars[0].coverTonight?.special.priceCents, 500)
         XCTAssertEqual(bars[0].coverTonight?.special.startLocal, "21:00")
         XCTAssertEqual(bars[0].coverTonight?.special.postedBy, .bar)
-        XCTAssertEqual(SpecialsText.tonightLine(for: bars[0]), "Happy hour now until 8 PM")
+        XCTAssertEqual(
+            SpecialsText.tonightLine(for: bars[0]), "Happy hour now: $2 double wells, $2 drafts +2")
         XCTAssertTrue(bars[1].specialsTonight.isEmpty)
         XCTAssertNil(bars[1].coverTonight)
         XCTAssertNil(SpecialsText.tonightLine(for: bars[1]))
+    }
+
+    func testSpecialTonightDecodesItemsAndAllDay() async throws {
+        try await signIn()
+        StubURLProtocol.stub("GET", "/v1/bars", json: Fixtures.barsWithSpecials)
+        let bars = try await api.bars()
+        let happy = bars[0].specialsTonight[0].special
+        XCTAssertFalse(happy.allDay)
+        XCTAssertEqual(happy.items.count, 4)
+        XCTAssertEqual(happy.items[0].name, "Double wells")
+        XCTAssertEqual(happy.items[0].priceLabel, "$2")
+        XCTAssertEqual(happy.items[0].category, .mixers)
+        XCTAssertEqual(happy.items[0].note, "")
+        XCTAssertEqual(happy.items[1].note, "")
+        XCTAssertEqual(happy.items[2].category, .food)
+        XCTAssertEqual(happy.items[2].note, "Dine in only")
+        XCTAssertEqual(happy.items[3].category, .other)
+        XCTAssertFalse(bars[0].specialsTonight[1].special.allDay)
+        XCTAssertTrue(bars[0].specialsTonight[1].special.items.isEmpty)
+
+        StubURLProtocol.stub("GET", "/v1/bars", json: Fixtures.barsAllNight)
+        let nightBars = try await api.bars()
+        let night = nightBars[0].specialsTonight[0].special
+        XCTAssertTrue(night.allDay)
+        XCTAssertEqual(night.items.count, 1)
+        XCTAssertEqual(night.items[0].category, .beer)
+        XCTAssertEqual(SpecialsText.tonightLine(for: nightBars[0]), "All night: $3 lager drafts")
     }
 
     func testBarsWithoutSpecialFieldsStillDecode() async throws {

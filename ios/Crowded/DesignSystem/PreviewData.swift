@@ -22,7 +22,12 @@ enum PreviewData {
         special: Special(
             id: "fake-s1", kind: .happyHour, title: "FAKE Happy hour", details: "Half off wells.",
             days: [0, 1, 2, 3, 4], startLocal: "17:00", endLocal: "20:00", priceCents: nil,
-            isActive: true, postedBy: .bar, updatedAt: Date().addingTimeInterval(-3 * 3600)
+            isActive: true, postedBy: .bar, updatedAt: Date().addingTimeInterval(-3 * 3600),
+            items: [
+                DealItem(name: "Double wells", priceLabel: "$2", category: .mixers),
+                DealItem(name: "Drafts", priceLabel: "$2", category: .beer),
+                DealItem(name: "Well mixers", priceLabel: "$1", category: .mixers),
+            ]
         ),
         isNow: true
     )

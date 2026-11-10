@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// One quiet line under the basis line: "Happy hour now until 8 PM", "Cover $5 from 9 PM",
-/// "2 specials tonight". Draws nothing when the bar has no specials. The words carry the
-/// meaning, the small tag icon is decoration.
+/// One quiet deal line under the basis line: "Happy hour now: $2 double wells, $2 drafts +2",
+/// "Happy hour at 9: $1 well mixers +3", "Cover $5 from 9 PM". Always one line, cut with an
+/// ellipsis. Draws nothing when the bar has no deals. The words carry the meaning, the small
+/// tag icon is decoration, and VoiceOver reads the full text.
 struct SpecialsLine: View {
     let specials: [SpecialTonight]
     let cover: SpecialTonight?
@@ -25,9 +26,11 @@ struct SpecialsLine: View {
                     .accessibilityHidden(true)
                 Text(text)
                     .font(.crowdedCaption)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             .foregroundStyle(Colors.text2)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(text)
         }

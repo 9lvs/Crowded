@@ -44,6 +44,50 @@ enum PostedBy: Sendable, Equatable {
     }
 }
 
+/// What kind of thing a deal item is. Unknown values from a newer server fall back to other.
+enum DealCategory: String, CaseIterable, Sendable, Equatable, Identifiable {
+    case beer
+    case pitchers
+    case shots
+    case mixers
+    case wine
+    case food
+    case other
+
+    var id: String { rawValue }
+
+    init(api value: String) {
+        self = DealCategory(rawValue: value) ?? .other
+    }
+
+    var label: String {
+        switch self {
+        case .beer: return "Beer"
+        case .pitchers: return "Pitchers"
+        case .shots: return "Shots"
+        case .mixers: return "Mixers"
+        case .wine: return "Wine"
+        case .food: return "Food"
+        case .other: return "Other"
+        }
+    }
+}
+
+/// One line of a deal menu: "Double wells" at "$2", with an optional short note.
+struct DealItem: Sendable, Equatable {
+    var name: String
+    var priceLabel: String
+    var category: DealCategory
+    var note: String
+
+    init(name: String, priceLabel: String, category: DealCategory = .other, note: String = "") {
+        self.name = name
+        self.priceLabel = priceLabel
+        self.category = category
+        self.note = note
+    }
+}
+
 struct Special: Sendable, Equatable, Identifiable {
     var id: String
     var kind: SpecialKind
@@ -56,6 +100,8 @@ struct Special: Sendable, Equatable, Identifiable {
     var isActive: Bool
     var postedBy: PostedBy
     var updatedAt: Date
+    var allDay: Bool = false
+    var items: [DealItem] = []
 
     var window: String {
         return SpecialTime.window(start: startLocal, end: endLocal)
@@ -82,6 +128,8 @@ struct SpecialInput: Sendable, Equatable {
     var startLocal: String
     var endLocal: String
     var priceCents: Int?
+    var allDay: Bool = false
+    var items: [DealItem] = []
 }
 
 /// What staff send when they change a special. Nil fields stay as they are.
@@ -94,11 +142,14 @@ struct SpecialPatch: Sendable, Equatable {
     var endLocal: String?
     var priceCents: Int?
     var isActive: Bool?
+    var allDay: Bool?
+    var items: [DealItem]?
 
     init(
         kind: SpecialKind? = nil, title: String? = nil, details: String? = nil,
         days: [Int]? = nil, startLocal: String? = nil, endLocal: String? = nil,
-        priceCents: Int? = nil, isActive: Bool? = nil
+        priceCents: Int? = nil, isActive: Bool? = nil, allDay: Bool? = nil,
+        items: [DealItem]? = nil
     ) {
         self.kind = kind
         self.title = title
@@ -108,6 +159,8 @@ struct SpecialPatch: Sendable, Equatable {
         self.endLocal = endLocal
         self.priceCents = priceCents
         self.isActive = isActive
+        self.allDay = allDay
+        self.items = items
     }
 }
 
@@ -136,6 +189,16 @@ enum SpecialTime {
             return "\(h12) \(suffix)"
         }
         return "\(h12):\(String(format: "%02d", t.minute)) \(suffix)"
+    }
+
+    /// "21:00" -> "9", "21:30" -> "9:30", "00:00" -> "12". For tight deal lines.
+    static func short(_ hhmm: String) -> String {
+        guard let t = parse(hhmm) else { return hhmm }
+        let h12 = t.hour % 12 == 0 ? 12 : t.hour % 12
+        if t.minute == 0 {
+            return "\(h12)"
+        }
+        return "\(h12):\(String(format: "%02d", t.minute))"
     }
 
     static func window(start: String, end: String) -> String {
@@ -268,9 +331,10 @@ enum SpecialSchedule {
             .map { special in
                 SpecialTonight(
                     special: special,
-                    isNow: isNow(
-                        days: special.days, start: special.startLocal, end: special.endLocal,
-                        now: now, calendar: calendar)
+                    isNow: special.allDay
+                        || isNow(
+                            days: special.days, start: special.startLocal, end: special.endLocal,
+                            now: now, calendar: calendar)
                 )
             }
         return items.sorted { a, b in
@@ -284,9 +348,33 @@ enum SpecialSchedule {
             .filter { $0.special.kind == .cover }
             .min { $0.special.startLocal < $1.special.startLocal }
     }
+
+    /// Minutes since the night started (local noon). Orders times across midnight.
+    static func nightOffset(_ hhmm: String) -> Int {
+        let m = SpecialTime.minutes(hhmm) ?? 0
+        return (m - nightStartHour * 60 + 1440) % 1440
+    }
+
+    static func phase(of item: SpecialTonight, now: Date, calendar: Calendar) -> SpecialPhase {
+        if item.special.allDay || item.isNow {
+            return .now
+        }
+        let parts = calendar.dateComponents([.hour, .minute], from: now)
+        let minutes = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        let current = (minutes - nightStartHour * 60 + 1440) % 1440
+        return current < nightOffset(item.special.startLocal) ? .upcoming : .ended
+    }
 }
 
-/// The one quiet line under a bar row on Tonight.
+/// Where a special sits in tonight's timeline.
+enum SpecialPhase: Sendable, Equatable {
+    case now
+    case upcoming
+    case ended
+}
+
+
+/// The one quiet line under a bar row on Tonight, built from deal items.
 enum SpecialsText {
     static func label(_ special: Special) -> String {
         switch special.kind {
@@ -302,27 +390,243 @@ enum SpecialsText {
         }
     }
 
-    /// Prefers an item that is on now (not cover), then cover, then a count. Nil when empty.
-    static func tonightLine(specials: [SpecialTonight], cover: SpecialTonight?) -> String? {
-        if let now = specials.first(where: { $0.isNow && $0.special.kind != .cover }) {
-            return "\(label(now.special)) now until \(SpecialTime.format12(now.special.endLocal))"
+    /// "double wells" from "Double wells". Keeps names like "IPA" as they are.
+    static func lowerFirst(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        let rest = String(text.dropFirst())
+        if let second = rest.first, second.isUppercase {
+            return text
         }
-        if let cover {
-            if cover.isNow {
-                return "\(label(cover.special)) now"
-            }
-            return "\(label(cover.special)) from \(SpecialTime.format12(cover.special.startLocal))"
-        }
-        if specials.isEmpty {
-            return nil
-        }
-        if specials.count == 1 {
-            return "1 special tonight"
-        }
-        return "\(specials.count) specials tonight"
+        return first.lowercased() + rest
     }
 
-    static func tonightLine(for bar: Bar) -> String? {
-        return tonightLine(specials: bar.specialsTonight, cover: bar.coverTonight)
+    /// "$2 double wells, $2 drafts +2". Two items, then a count of the rest.
+    static func dealText(_ items: [DealItem]) -> String {
+        let shown = items.prefix(2).map { "\($0.priceLabel) \(lowerFirst($0.name))" }
+        var text = shown.joined(separator: ", ")
+        if items.count > 2 {
+            text += " +\(items.count - 2)"
+        }
+        return text
+    }
+
+    private static func nowLine(_ special: Special) -> String {
+        if special.allDay {
+            return "All night: " + (special.items.isEmpty ? special.title : dealText(special.items))
+        }
+        let name = label(special)
+        if special.items.isEmpty {
+            return "\(name) now"
+        }
+        return "\(name) now: \(dealText(special.items))"
+    }
+
+    private static func nextLine(_ special: Special) -> String {
+        let name = label(special)
+        let when = "\(name) at \(SpecialTime.short(special.startLocal))"
+        if special.items.isEmpty {
+            return when
+        }
+        return "\(when): \(dealText(special.items))"
+    }
+
+    /// What is on now, else what starts next, else cover. Nil when there is nothing to say.
+    static func tonightLine(
+        specials: [SpecialTonight], cover: SpecialTonight?, now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String? {
+        let others = specials.filter { $0.special.kind != .cover }
+        let live = others.filter {
+            SpecialSchedule.phase(of: $0, now: now, calendar: calendar) == .now
+        }
+        let timed = live.filter { !$0.special.allDay }
+        let allNight = live.filter { $0.special.allDay }
+        let pick: SpecialTonight? =
+            timed.first(where: { !$0.special.items.isEmpty })
+            ?? allNight.first(where: { !$0.special.items.isEmpty })
+            ?? live.first
+        if let pick {
+            return nowLine(pick.special)
+        }
+        let upcoming = others
+            .filter { SpecialSchedule.phase(of: $0, now: now, calendar: calendar) == .upcoming }
+            .sorted {
+                SpecialSchedule.nightOffset($0.special.startLocal)
+                    < SpecialSchedule.nightOffset($1.special.startLocal)
+            }
+        if let next = upcoming.first {
+            return nextLine(next.special)
+        }
+        if let cover {
+            let name = label(cover.special)
+            switch SpecialSchedule.phase(of: cover, now: now, calendar: calendar) {
+            case .now:
+                return "\(name) now"
+            case .upcoming:
+                return "\(name) from \(SpecialTime.format12(cover.special.startLocal))"
+            case .ended:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    static func tonightLine(for bar: Bar, now: Date = Date(), calendar: Calendar = .current) -> String? {
+        return tonightLine(
+            specials: bar.specialsTonight, cover: bar.coverTonight, now: now, calendar: calendar)
+    }
+}
+
+/// One line in a deal price list.
+struct DealRow: Sendable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var price: String?
+    var note: String
+}
+
+/// A block of the bar page price list: "All night", or one timed special.
+struct DealGroup: Sendable, Equatable, Identifiable {
+    var id: String
+    var title: String
+    var isAllNight: Bool
+    var isNow: Bool
+    /// "Until 12" or "Starts at 9". Nil on the weekly list.
+    var status: String?
+    var rows: [DealRow]
+    var postedBy: PostedBy
+    var updatedAt: Date
+}
+
+struct DayDeals: Sendable, Equatable, Identifiable {
+    var day: Int
+    var groups: [DealGroup]
+
+    var id: Int { day }
+}
+
+/// Turns specials into the "Deals tonight" price list and the weekly list.
+enum DealMenu {
+    private struct Entry {
+        var special: Special
+        var phase: SpecialPhase?
+    }
+
+    /// All night first, then timed groups in time order. Ended groups are left out.
+    static func tonight(
+        _ list: [SpecialTonight], now: Date = Date(), calendar: Calendar = .current
+    ) -> [DealGroup] {
+        var entries: [Entry] = []
+        for item in list {
+            let phase = SpecialSchedule.phase(of: item, now: now, calendar: calendar)
+            if phase != .ended {
+                entries.append(Entry(special: item.special, phase: phase))
+            }
+        }
+        return build(entries)
+    }
+
+    /// Monday to Sunday. A special that runs on several days appears under each of them.
+    static func week(_ all: [Special]) -> [DayDeals] {
+        var days: [DayDeals] = []
+        for day in 0...6 {
+            var entries: [Entry] = []
+            for special in all where special.days.contains(day) {
+                entries.append(Entry(special: special, phase: nil))
+            }
+            let groups = build(entries)
+            if !groups.isEmpty {
+                days.append(DayDeals(day: day, groups: groups))
+            }
+        }
+        return days
+    }
+
+    private static func build(_ entries: [Entry]) -> [DealGroup] {
+        var groups: [DealGroup] = []
+        let allNight = entries.filter { $0.special.allDay }
+        if let first = allNight.first {
+            let newest = allNight.map { $0.special.updatedAt }.max() ?? first.special.updatedAt
+            var rows: [DealRow] = []
+            for entry in allNight {
+                rows.append(contentsOf: Self.rows(for: entry.special))
+            }
+            groups.append(
+                DealGroup(
+                    id: "all-night", title: "All night", isAllNight: true,
+                    isNow: allNight.contains { $0.phase == SpecialPhase.now }, status: nil,
+                    rows: rows, postedBy: first.special.postedBy, updatedAt: newest
+                ))
+        }
+        let timed = entries
+            .filter { !$0.special.allDay }
+            .sorted { a, b in
+                let oa = SpecialSchedule.nightOffset(a.special.startLocal)
+                let ob = SpecialSchedule.nightOffset(b.special.startLocal)
+                if oa != ob { return oa < ob }
+                return a.special.title < b.special.title
+            }
+        for entry in timed {
+            let special = entry.special
+            var status: String? = nil
+            if entry.phase == SpecialPhase.now {
+                status = "Until \(SpecialTime.short(special.endLocal))"
+            } else if entry.phase == SpecialPhase.upcoming {
+                status = "Starts at \(SpecialTime.short(special.startLocal))"
+            }
+            groups.append(
+                DealGroup(
+                    id: special.id, title: timedTitle(special), isAllNight: false,
+                    isNow: entry.phase == SpecialPhase.now, status: status,
+                    rows: rows(for: special), postedBy: special.postedBy,
+                    updatedAt: special.updatedAt
+                ))
+        }
+        return groups
+    }
+
+    /// "Happy hour 9 to 12", "DJ from 9", "Cover $5 from 9".
+    static func timedTitle(_ special: Special) -> String {
+        let start = SpecialTime.short(special.startLocal)
+        let end = SpecialTime.short(special.endLocal)
+        switch special.kind {
+        case .happyHour:
+            return "Happy hour \(start) to \(end)"
+        case .event:
+            return "\(special.title) from \(start)"
+        case .cover:
+            if let price = special.priceText {
+                return "Cover \(price) from \(start)"
+            }
+            return "Cover from \(start)"
+        case .drink, .food:
+            return "\(special.title) \(start) to \(end)"
+        }
+    }
+
+    /// Items become rows. A special without items is one row of title and details, unless the
+    /// header already says it all (an event or cover with no details).
+    static func rows(for special: Special) -> [DealRow] {
+        if !special.items.isEmpty {
+            var rows: [DealRow] = []
+            for (index, item) in special.items.enumerated() {
+                rows.append(
+                    DealRow(
+                        id: "\(special.id)-\(index)", name: item.name, price: item.priceLabel,
+                        note: item.note))
+            }
+            return rows
+        }
+        let headerSaysAll =
+            !special.allDay && special.details.isEmpty
+            && (special.kind == .event || special.kind == .cover)
+        if headerSaysAll {
+            return []
+        }
+        return [
+            DealRow(
+                id: "\(special.id)-row", name: special.title, price: special.priceText,
+                note: special.details)
+        ]
     }
 }

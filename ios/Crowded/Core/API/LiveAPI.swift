@@ -298,12 +298,14 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
     func createSpecial(barID: String, input: SpecialInput) async throws -> Special {
         return try await run {
             let body = Components.Schemas.SpecialIn(
+                all_day: input.allDay,
                 days: input.days,
                 details: input.details,
-                end_local: input.endLocal,
+                end_local: input.allDay ? nil : input.endLocal,
+                items: input.items.map { Self.dealItemIn($0) },
                 kind: input.kind.rawValue,
                 price_cents: input.priceCents,
-                start_local: input.startLocal,
+                start_local: input.allDay ? nil : input.startLocal,
                 title: input.title
             )
             let output = try await client.staff_create_v1_staff_bars__bar_id__specials_post(
@@ -317,10 +319,12 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
     func updateSpecial(barID: String, specialID: String, update: SpecialPatch) async throws -> Special {
         return try await run {
             let body = Components.Schemas.SpecialUpdate(
+                all_day: update.allDay,
                 days: update.days,
                 details: update.details,
                 end_local: update.endLocal,
                 is_active: update.isActive,
+                items: update.items?.map { Self.dealItemIn($0) },
                 kind: update.kind?.rawValue,
                 price_cents: update.priceCents,
                 start_local: update.startLocal,
@@ -344,6 +348,17 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
 
     // MARK: Mapping generated types to domain models
 
+    private static func dealItem(_ d: Components.Schemas.DealItemOut) -> DealItem {
+        return DealItem(
+            name: d.name, priceLabel: d.price_label, category: DealCategory(api: d.category),
+            note: d.note ?? "")
+    }
+
+    private static func dealItemIn(_ d: DealItem) -> Components.Schemas.DealItem {
+        return Components.Schemas.DealItem(
+            category: d.category.rawValue, name: d.name, note: d.note, price_label: d.priceLabel)
+    }
+
     private static func mapSpecial(_ s: Components.Schemas.SpecialOut) -> Special {
         return Special(
             id: s.id,
@@ -356,7 +371,9 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             priceCents: s.price_cents,
             isActive: s.is_active,
             postedBy: PostedBy(api: s.posted_by),
-            updatedAt: APIDate.parse(s.updated_at) ?? Date()
+            updatedAt: APIDate.parse(s.updated_at) ?? Date(),
+            allDay: s.all_day,
+            items: s.items.map { Self.dealItem($0) }
         )
     }
 
@@ -372,7 +389,9 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             priceCents: s.price_cents,
             isActive: s.is_active,
             postedBy: PostedBy(api: s.posted_by),
-            updatedAt: APIDate.parse(s.updated_at) ?? Date()
+            updatedAt: APIDate.parse(s.updated_at) ?? Date(),
+            allDay: s.all_day,
+            items: s.items.map { Self.dealItem($0) }
         )
         return SpecialTonight(special: special, isNow: s.is_now)
     }

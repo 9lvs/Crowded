@@ -4,7 +4,6 @@ struct TonightView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
     @State private var vm: TonightViewModel
-    @State private var reportTarget: Bar?
 
     init(api: CrowdedAPI) {
         _vm = State(initialValue: TonightViewModel(api: api))
@@ -30,10 +29,8 @@ struct TonightView: View {
                 }
                 ForEach(vm.bars) { bar in
                     NavigationLink(value: bar.id) {
-                        BarRow(bar: bar) {
-                            reportTarget = bar
-                        }
-                        .contentShape(Rectangle())
+                        BarRow(bar: bar)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("barRow-\(bar.slug)")
@@ -53,10 +50,6 @@ struct TonightView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { barId in
             BarDetailView(api: app.api, barId: barId)
-        }
-        .sheet(item: $reportTarget) { bar in
-            ReportSheet(api: app.api, barId: bar.id, barName: bar.name)
-                .environment(app)
         }
         .overlay(alignment: .bottom) {
             if let session = app.activeSession {

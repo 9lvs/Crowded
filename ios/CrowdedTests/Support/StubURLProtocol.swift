@@ -120,14 +120,37 @@ enum Fixtures {
     static let specialTonight = """
     {"id":"sp1","kind":"cover","title":"FAKE Cover","details":"","days":[3,4,5],
      "start_local":"21:00","end_local":"02:00","price_cents":500,"is_active":true,
-     "posted_by":"staff","updated_at":"2026-11-14T03:30:00Z","is_now":false}
+     "all_day":false,"items":[],"posted_by":"staff","updated_at":"2026-11-14T03:30:00Z",
+     "is_now":false}
     """
 
     static let happyHourTonight = """
     {"id":"sp2","kind":"happy_hour","title":"FAKE Happy hour","details":"Half off.",
      "days":[0,1,2,3,4],"start_local":"17:00","end_local":"20:00","price_cents":null,
      "is_active":true,"posted_by":"admin","updated_at":"2026-11-14T03:30:00.25Z",
+     "all_day":false,
+     "items":[{"name":"Double wells","price_label":"$2","category":"mixers","note":""},
+              {"name":"Drafts","price_label":"$2","category":"beer"},
+              {"name":"Ten wings","price_label":"$6","category":"food","note":"Dine in only"},
+              {"name":"Mystery","price_label":"$1","category":"some_future_category"}],
      "is_now":true}
+    """
+
+    static let allNightTonight = """
+    {"id":"sp3","kind":"drink","title":"FAKE All night drafts","details":"",
+     "days":[0,1,2,3,4,5,6],"start_local":"12:00","end_local":"04:00","price_cents":null,
+     "is_active":true,"posted_by":"staff","updated_at":"2026-11-14T03:30:00Z",
+     "all_day":true,
+     "items":[{"name":"Lager drafts","price_label":"$3","category":"beer","note":""}],
+     "is_now":true}
+    """
+
+    static let barsAllNight = """
+    [{"id":"b1","slug":"fake-owl","name":"FAKE Owl","address":"1 Fake St","capacity":220,
+      "pass_price_cents":1500,"live":\(live),
+      "verdict":{"recommendation":"buy_pass","text":"Get the pass.","threshold_min":20,
+                 "pass_price_cents":1500,"minutes_saved":31},
+      "specials_tonight":[\(allNightTonight)],"cover_tonight":null}]
     """
 
     static let barsWithSpecials = """

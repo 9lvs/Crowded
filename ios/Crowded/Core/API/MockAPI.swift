@@ -232,51 +232,76 @@ actor MockAPI: CrowdedAPI {
         )
     }
 
-    /// FAKE specials. Happy hour 17:00 to 20:00 Mon to Fri, cover from 21:00 Thu to Sat, one bar
-    /// with cover from 18:00 every night, plus a food special and an event.
+    /// FAKE specials. Owl has all night drafts, a four item happy hour, a DJ event, a food item
+    /// with a note and a cover. Lantern has a cover every night and a small mixer menu.
     private static func seedSpecials() -> [String: [Special]] {
         let owl = "00000000-0000-4000-8000-000000000001"
         let lantern = "00000000-0000-4000-8000-000000000002"
         let hoursAgo: (Double) -> Date = { Date().addingTimeInterval(-$0 * 3600) }
+        let everyNight = [0, 1, 2, 3, 4, 5, 6]
         return [
             owl: [
                 Special(
-                    id: "fake-special-1", kind: .happyHour, title: "FAKE Happy hour",
-                    details: "Half off wells and drafts.", days: [0, 1, 2, 3, 4],
-                    startLocal: "17:00", endLocal: "20:00", priceCents: nil, isActive: true,
-                    postedBy: .bar, updatedAt: hoursAgo(3)
+                    id: "fake-special-1", kind: .drink, title: "FAKE All night drafts",
+                    details: "", days: everyNight,
+                    startLocal: "12:00", endLocal: "04:00", priceCents: nil, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(2), allDay: true,
+                    items: [
+                        DealItem(name: "Lager drafts", priceLabel: "$3", category: .beer)
+                    ]
                 ),
                 Special(
-                    id: "fake-special-2", kind: .cover, title: "FAKE Cover",
-                    details: "Cash or card.", days: [3, 4, 5],
-                    startLocal: "21:00", endLocal: "02:00", priceCents: 500, isActive: true,
+                    id: "fake-special-2", kind: .happyHour, title: "FAKE Happy hour",
+                    details: "", days: everyNight,
+                    startLocal: "21:00", endLocal: "00:00", priceCents: nil, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(3),
+                    items: [
+                        DealItem(name: "Double wells", priceLabel: "$2", category: .mixers),
+                        DealItem(name: "Drafts", priceLabel: "$2", category: .beer),
+                        DealItem(name: "Well mixers", priceLabel: "$1", category: .mixers),
+                        DealItem(name: "Shots", priceLabel: "$3", category: .shots),
+                    ]
+                ),
+                Special(
+                    id: "fake-special-3", kind: .event, title: "FAKE DJ",
+                    details: "", days: [3, 4, 5],
+                    startLocal: "21:00", endLocal: "02:00", priceCents: nil, isActive: true,
                     postedBy: .bar, updatedAt: hoursAgo(26)
                 ),
                 Special(
-                    id: "fake-special-3", kind: .food, title: "FAKE Wing night",
-                    details: "Ten wings for six dollars.", days: [2],
-                    startLocal: "17:00", endLocal: "22:00", priceCents: 600, isActive: true,
-                    postedBy: .bar, updatedAt: hoursAgo(50)
+                    id: "fake-special-4", kind: .food, title: "FAKE Wing night",
+                    details: "", days: [2],
+                    startLocal: "17:00", endLocal: "22:00", priceCents: nil, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(50),
+                    items: [
+                        DealItem(
+                            name: "Ten wings", priceLabel: "$6", category: .food,
+                            note: "Dine in only")
+                    ]
                 ),
                 Special(
-                    id: "fake-special-4", kind: .event, title: "FAKE Trivia night",
-                    details: "Teams of up to six.", days: [1],
-                    startLocal: "20:00", endLocal: "22:00", priceCents: nil, isActive: true,
-                    postedBy: .bar, updatedAt: hoursAgo(72)
+                    id: "fake-special-5", kind: .cover, title: "FAKE Cover",
+                    details: "", days: [3, 4, 5],
+                    startLocal: "21:00", endLocal: "02:00", priceCents: 500, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(26)
                 ),
             ],
             lantern: [
                 Special(
-                    id: "fake-special-5", kind: .cover, title: "FAKE Cover",
-                    details: "", days: [0, 1, 2, 3, 4, 5, 6],
+                    id: "fake-special-6", kind: .cover, title: "FAKE Cover",
+                    details: "", days: everyNight,
                     startLocal: "18:00", endLocal: "02:00", priceCents: 1000, isActive: true,
                     postedBy: .crowded, updatedAt: hoursAgo(5)
                 ),
                 Special(
-                    id: "fake-special-6", kind: .drink, title: "FAKE Three dollar wells",
+                    id: "fake-special-7", kind: .drink, title: "FAKE Mixer deals",
                     details: "", days: [0, 1, 2, 3, 4],
-                    startLocal: "19:00", endLocal: "22:00", priceCents: 300, isActive: true,
-                    postedBy: .bar, updatedAt: hoursAgo(8)
+                    startLocal: "19:00", endLocal: "22:00", priceCents: nil, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(8),
+                    items: [
+                        DealItem(name: "Well mixers", priceLabel: "$3", category: .mixers),
+                        DealItem(name: "House wine", priceLabel: "$4", category: .wine),
+                    ]
                 ),
             ],
         ]
@@ -530,8 +555,17 @@ actor MockAPI: CrowdedAPI {
     }
 
     private func checkSpecial(
-        days: [Int]?, start: String?, end: String?, title: String?
+        days: [Int]?, start: String?, end: String?, title: String?, items: [DealItem]? = nil
     ) throws {
+        if let items {
+            let bad = items.contains {
+                $0.name.trimmingCharacters(in: .whitespaces).isEmpty
+                    || $0.priceLabel.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            if items.count > 20 || bad {
+                throw APIError.http(status: 422, detail: "validation_error")
+            }
+        }
         if let title, title.trimmingCharacters(in: .whitespaces).isEmpty {
             throw APIError.http(status: 422, detail: "validation_error")
         }
@@ -553,8 +587,9 @@ actor MockAPI: CrowdedAPI {
     func createSpecial(barID: String, input: SpecialInput) async throws -> Special {
         let bar = try requireStaff(barID)
         try checkSpecial(
-            days: input.days, start: input.startLocal, end: input.endLocal, title: input.title)
-        if input.startLocal == input.endLocal {
+            days: input.days, start: input.startLocal, end: input.endLocal, title: input.title,
+            items: input.items)
+        if !input.allDay && input.startLocal == input.endLocal {
             throw APIError.http(status: 422, detail: "start_equals_end")
         }
         var list = specials[bar.id] ?? []
@@ -563,8 +598,11 @@ actor MockAPI: CrowdedAPI {
         }
         let created = Special(
             id: UUID().uuidString, kind: input.kind, title: input.title, details: input.details,
-            days: input.days.sorted(), startLocal: input.startLocal, endLocal: input.endLocal,
-            priceCents: input.priceCents, isActive: true, postedBy: .bar, updatedAt: now
+            days: input.days.sorted(),
+            startLocal: input.allDay ? "12:00" : input.startLocal,
+            endLocal: input.allDay ? "04:00" : input.endLocal,
+            priceCents: input.priceCents, isActive: true, postedBy: .bar, updatedAt: now,
+            allDay: input.allDay, items: input.items
         )
         list.append(created)
         specials[bar.id] = list
@@ -578,7 +616,8 @@ actor MockAPI: CrowdedAPI {
             throw APIError.http(status: 404, detail: "not_found")
         }
         try checkSpecial(
-            days: update.days, start: update.startLocal, end: update.endLocal, title: update.title)
+            days: update.days, start: update.startLocal, end: update.endLocal, title: update.title,
+            items: update.items)
         var item = list[index]
         if let kind = update.kind { item.kind = kind }
         if let title = update.title { item.title = title }
@@ -588,6 +627,12 @@ actor MockAPI: CrowdedAPI {
         if let end = update.endLocal { item.endLocal = end }
         if let price = update.priceCents { item.priceCents = price }
         if let active = update.isActive { item.isActive = active }
+        if let items = update.items { item.items = items }
+        if let allDay = update.allDay { item.allDay = allDay }
+        if item.allDay {
+            item.startLocal = "12:00"
+            item.endLocal = "04:00"
+        }
         if item.startLocal == item.endLocal {
             throw APIError.http(status: 422, detail: "start_equals_end")
         }
