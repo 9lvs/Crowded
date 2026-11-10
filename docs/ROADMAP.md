@@ -42,6 +42,8 @@
 - [x] Deals: deal line on Tonight (A), price list menu on the bar page (C), structured items,
       all night specials, staff menu editor (web and iOS)
 - [x] Phase 1.5 security review: H-1 race and all Mediums fixed (docs/security-review-phase1_5.md)
+- [x] Staff side rework (owner feedback): door staff count IN, line and inside conditions only,
+      manager role edits specials, drink wait estimate, count-entries-only bars, door code off
 
 ## Phase 2: hardening and deploy readiness
 - [ ] Close Phase 1 review findings
