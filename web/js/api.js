@@ -213,6 +213,18 @@
         count: count || 1
       });
     },
+    staffSpecials: function (barId) {
+      return request("GET", "/v1/staff/bars/" + encodeURIComponent(barId) + "/specials");
+    },
+    addSpecial: function (barId, body) {
+      return request("POST", "/v1/staff/bars/" + encodeURIComponent(barId) + "/specials", body);
+    },
+    updateSpecial: function (barId, id, body) {
+      return request("PATCH", "/v1/staff/bars/" + encodeURIComponent(barId) + "/specials/" + encodeURIComponent(id), body);
+    },
+    deleteSpecial: function (barId, id) {
+      return request("DELETE", "/v1/staff/bars/" + encodeURIComponent(barId) + "/specials/" + encodeURIComponent(id));
+    },
     lineSize: function (barId, size) {
       return request("POST", "/v1/staff/bars/" + encodeURIComponent(barId) + "/line", { line_size: size });
     }

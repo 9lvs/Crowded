@@ -58,6 +58,20 @@
       typical: [0, 0, 3, 8, 14, 19, 18, 12, 6, 1]
     }
   ];
+  // FAKE specials. Days are Monday = 0. Ages are hours since "posted".
+  var SPECIAL_SEED = {
+    "fake-tipsy-owl": [
+      ["happy_hour", "FAKE Happy Hour", "Half price wells and drafts", [0, 1, 2, 3, 4], "17:00", "20:00", null, "staff", 5],
+      ["cover", "FAKE Cover", "Cash or card", [3, 4, 5], "21:00", "02:00", 500, "staff", 30],
+      ["food", "FAKE Wing Night", "Ten wings", [2], "18:00", "22:00", 700, "staff", 52]
+    ],
+    "fake-copper-lantern": [
+      ["cover", "FAKE Cover", "Every night", [0, 1, 2, 3, 4, 5, 6], "18:00", "02:00", 300, "admin", 70],
+      ["event", "FAKE Trivia", "Teams of up to six", [1], "20:00", "22:00", null, "staff", 8]
+    ],
+    "fake-night-heron": []
+  };
+  var MAX_SPECIALS = 30;
   var HOURS = [18, 19, 20, 21, 22, 23, 0, 1, 2, 3];
 
   // ---------- persisted mock state (per tab) ----------
@@ -195,8 +209,83 @@
     };
   }
 
+  // ---------- specials ----------
+  function specialsFor(bar) {
+    if (!state.specials) state.specials = {};
+    if (!state.specials[bar.id]) {
+      state.specials[bar.id] = (SPECIAL_SEED[bar.slug] || []).map(function (r) {
+        return {
+          id: uuid(),
+          kind: r[0],
+          title: r[1],
+          details: r[2],
+          days: r[3],
+          start_local: r[4],
+          end_local: r[5],
+          price_cents: r[6],
+          is_active: true,
+          posted_by: r[7],
+          updated_at: new Date(Date.now() - r[8] * 3600000).toISOString()
+        };
+      });
+    }
+    return state.specials[bar.id];
+  }
+
+  function sortedSpecials(bar, activeOnly) {
+    return specialsFor(bar)
+      .filter(function (sp) {
+        return !activeOnly || sp.is_active;
+      })
+      .slice()
+      .sort(function (a, b) {
+        var da = Math.min.apply(null, a.days);
+        var db = Math.min.apply(null, b.days);
+        if (da !== db) return da - db;
+        if (a.start_local !== b.start_local) return a.start_local < b.start_local ? -1 : 1;
+        return a.title < b.title ? -1 : 1;
+      });
+  }
+
+  function mins(hhmm) {
+    return Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
+  }
+
+  // Same rules as the backend: a night runs noon to noon and belongs to the weekday it began on.
+  function specialsTonight(bar) {
+    var now = new Date();
+    var nightStart = new Date(now.getTime() - (now.getHours() < 12 ? 86400000 : 0));
+    var nightDay = (nightStart.getDay() + 6) % 7;
+    var today = (now.getDay() + 6) % 7;
+    var yesterday = (today + 6) % 7;
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var out = [];
+    sortedSpecials(bar, true).forEach(function (sp) {
+      if (sp.days.indexOf(nightDay) === -1) return;
+      var a = mins(sp.start_local);
+      var b = mins(sp.end_local);
+      var overnight = b <= a;
+      var isNow = false;
+      if (sp.days.indexOf(today) !== -1 && (overnight ? nowMin >= a : nowMin >= a && nowMin < b)) isNow = true;
+      if (overnight && sp.days.indexOf(yesterday) !== -1 && nowMin < b) isNow = true;
+      var copy = JSON.parse(JSON.stringify(sp));
+      copy.is_now = isNow;
+      out.push(copy);
+    });
+    out.sort(function (x, y) {
+      if (x.is_now !== y.is_now) return x.is_now ? -1 : 1;
+      return x.start_local < y.start_local ? -1 : x.start_local > y.start_local ? 1 : 0;
+    });
+    return out;
+  }
+
   function summary(bar) {
     var lv = live(bar);
+    var tonight = specialsTonight(bar);
+    var cover = null;
+    tonight.forEach(function (sp) {
+      if (!cover && sp.kind === "cover") cover = sp;
+    });
     return {
       id: bar.id,
       slug: bar.slug,
@@ -205,7 +294,9 @@
       capacity: bar.capacity,
       pass_price_cents: bar.pass_price_cents,
       live: lv,
-      verdict: verdict(bar, lv)
+      verdict: verdict(bar, lv),
+      specials_tonight: tonight,
+      cover_tonight: cover
     };
   }
 
@@ -221,6 +312,7 @@
     var cur = currentHourIndex();
     s.latitude = bar.latitude;
     s.longitude = bar.longitude;
+    s.specials_week = sortedSpecials(bar, true);
     s.normal_wait_min = bar.typical[cur];
     s.wait_by_hour = HOURS.map(function (hr, i) {
       var tonight = null;
@@ -279,6 +371,72 @@
 
   function err(status, detail) {
     return res(status, { detail: detail });
+  }
+
+  function validateSpecial(b, partial) {
+    var hhmm = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!partial || "title" in b) {
+      if (typeof b.title !== "string" || b.title.length < 1) return "title_required";
+      if (b.title.length > 80) return "title must be at most 80 characters";
+    }
+    if (!partial || "kind" in b) {
+      if (["happy_hour", "drink", "food", "cover", "event"].indexOf(b.kind) === -1) return "kind_required";
+    }
+    if (!partial || "days" in b) {
+      if (!Array.isArray(b.days) || !b.days.length) return "days_required";
+      if (b.days.some(function (d, i) { return d < 0 || d > 6 || b.days.indexOf(d) !== i; })) return "days must be unique";
+    }
+    if ((!partial || "start_local" in b) && !hhmm.test(b.start_local || "")) return "time must be HH:MM, 24 hour";
+    if ((!partial || "end_local" in b) && !hhmm.test(b.end_local || "")) return "time must be HH:MM, 24 hour";
+    if (b.price_cents !== null && b.price_cents !== undefined && (b.price_cents < 0 || b.price_cents > 100000)) return "price_cents must be 0 to 100000";
+    return null;
+  }
+
+  function specialsRoute(method, bar, id, body) {
+    var list = specialsFor(bar);
+    var i;
+    if (method === "GET" && !id) return res(200, sortedSpecials(bar, false));
+    if (method === "POST" && !id) {
+      var bad = validateSpecial(body, false);
+      if (bad) return err(422, bad);
+      if (body.start_local === body.end_local) return err(422, "start and end must differ");
+      if (list.length >= MAX_SPECIALS) return err(409, "too_many_specials");
+      var row = {
+        id: uuid(),
+        kind: body.kind,
+        title: body.title,
+        details: body.details || "",
+        days: body.days.slice().sort(),
+        start_local: body.start_local,
+        end_local: body.end_local,
+        price_cents: body.price_cents === undefined ? null : body.price_cents,
+        is_active: true,
+        posted_by: "staff",
+        updated_at: nowIso()
+      };
+      list.push(row);
+      save();
+      return res(201, row);
+    }
+    for (i = 0; i < list.length; i++) if (list[i].id === id) break;
+    if (!id || i === list.length) return err(404, "not_found");
+    if (method === "PATCH") {
+      var bad2 = validateSpecial(body, true);
+      if (bad2) return err(422, bad2);
+      var next = Object.assign({}, list[i], body);
+      if (next.start_local === next.end_local) return err(422, "start_equals_end");
+      next.days = next.days.slice().sort();
+      next.updated_at = nowIso();
+      list[i] = next;
+      save();
+      return res(200, next);
+    }
+    if (method === "DELETE") {
+      list.splice(i, 1);
+      save();
+      return res(204);
+    }
+    return err(404, "Not found");
   }
 
   // ---------- router ----------
@@ -395,6 +553,10 @@
       state.me.staff_bar_id = BARS[0].id;
       save();
       return res(200, state.me);
+    }
+    if ((m = p.match(/^\/v1\/staff\/bars\/([^/]+)\/specials(?:\/([^/]+))?$/))) {
+      if (state.me.role !== "staff" || state.me.staff_bar_id !== m[1]) return err(403, "Forbidden");
+      return specialsRoute(method, findBar(m[1]), m[2], body);
     }
     if ((m = p.match(/^\/v1\/staff\/bars\/([^/]+)(\/door|\/line)?$/))) {
       if (state.me.role !== "staff" || state.me.staff_bar_id !== m[1]) return err(403, "Forbidden");
