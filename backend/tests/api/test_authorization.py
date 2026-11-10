@@ -101,14 +101,21 @@ STAFF_CALLS = [
     ("GET", "/v1/staff/bars/{bar}", None),
     ("POST", "/v1/staff/bars/{bar}/door", {"direction": "in"}),
     ("POST", "/v1/staff/bars/{bar}/line", {"line_size": "short"}),
-    ("GET", "/v1/staff/bars/{bar}/specials", None),
+    ("POST", "/v1/staff/bars/{bar}/inside", {"crowd_level": "busy", "drink_wait": "5_to_10"}),
     ("POST", "/v1/staff/bars/{bar}/count-sync", {"inside_now": 3}),
     ("GET", "/v1/staff/bars/{bar}/door-code", None),
     ("GET", "/v1/staff/bars/{bar}/line-samples/active", None),
 ]
+# Routes for managers (and admins) only. Door staff get 403 at their own bar.
+MANAGER_CALLS = [
+    ("GET", "/v1/staff/bars/{bar}/specials", None),
+    ("PATCH", "/v1/staff/bars/{bar}/settings", {"counts_exits": False}),
+]
 
 
 @pytest.mark.parametrize(("method", "path", "body"), STAFF_CALLS)
+@pytest.mark.parametrize("level", ["door", "manager"])
+@pytest.mark.usefixtures("door_code_on")
 def test_staff_scoped_to_their_bar(
     client: TestClient,
     admin: Auth,
@@ -118,8 +125,9 @@ def test_staff_scoped_to_their_bar(
     method: str,
     path: str,
     body: object,
+    level: str,
 ) -> None:
-    staff = make_staff(client, admin, str(bar.id))
+    staff = make_staff(client, admin, str(bar.id), level)
     own = client.request(method, path.replace("{bar}", str(bar.id)), json=body, headers=staff.h)
     assert own.status_code == 200
     other = client.request(
@@ -132,6 +140,31 @@ def test_staff_scoped_to_their_bar(
         method, path.replace("{bar}", str(bar.id)), json=body, headers=admin.h
     )
     assert as_admin.status_code == 200
+
+
+@pytest.mark.parametrize(("method", "path", "body"), MANAGER_CALLS)
+def test_manager_routes_are_manager_only(
+    client: TestClient,
+    admin: Auth,
+    user: Auth,
+    bar: Bar,
+    other_bar: Bar,
+    method: str,
+    path: str,
+    body: object,
+) -> None:
+    door_staff = make_staff(client, admin, str(bar.id), "door")
+    manager = make_staff(client, admin, str(bar.id), "manager")
+    url = path.replace("{bar}", str(bar.id))
+    denied = client.request(method, url, json=body, headers=door_staff.h)
+    assert (denied.status_code, denied.json()["detail"]) == (403, "manager_only")
+    assert client.request(method, url, json=body, headers=manager.h).status_code == 200
+    assert client.request(method, url, json=body, headers=admin.h).status_code == 200
+    assert client.request(method, url, json=body, headers=user.h).status_code == 404
+    other = path.replace("{bar}", str(other_bar.id))
+    # Other bars stay 404 for both levels, so ids cannot be probed through the level check.
+    for who in (door_staff, manager):
+        assert client.request(method, other, json=body, headers=who.h).status_code == 404
 
 
 def test_cannot_end_someone_elses_session(client: TestClient, bar: Bar) -> None:

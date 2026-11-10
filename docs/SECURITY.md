@@ -33,8 +33,10 @@ Staff counter page ┘                  │
 | Line session | line_sessions | Bar, start, end, `near_bar`, `verified` (door code typed on a timer that started near the bar), `calibration_eligible`, distance bucket | Wait measurement | 30 days |
 | Staff line sample | line_samples | Bar, staff id, start, end, status, predictions | Wait measurement | 30 days (staff id set to null on account deletion) |
 | Bar special | bar_specials | Bar, text, days, times, price, `created_by` staff or admin id | Shown to students | Until removed (bar data, `created_by` set to null on deletion) |
-| Crowd report | crowd_reports | Bar, time, level, line bucket, `near_bar`, distance bucket | Estimate | 30 days (proposed) |
+| Crowd report | crowd_reports | Bar, time, level, line bucket, drink wait bucket, `near_bar`, distance bucket | Estimate | 30 days (proposed) |
 | Coordinates | none | Never stored or logged | Distance check only, in memory | 0 |
+| Inside status | inside_status | Bar, staff id (null on account deletion), time, crowd level, drink wait bucket | Crowd level and drink wait | 30 days |
+| Staff level | bar_staff, staff_invites | `door` or `manager` | Who may edit specials and settings | With the staff row or invite |
 | Door counts, line status | door_events, outside_line_status | Bar, staff id, time | Estimate | 30 days |
 | Snapshots, estimate errors | bar_snapshots, estimate_errors | Bar level aggregates, no user ids or user keys. Errors carry `source` (timer or sample) and `eligible` (feeds calibration) | Charts, accuracy, calibration | 365 days |
 | Audit log | audit_log | Actor id, role, action, target, hashed IP | Accountability | 365 days |
@@ -63,6 +65,7 @@ bar level facts with the user link set to null.
 | Session | Weak or default secrets refused outside dev | config.py | 2.10, 6.4 |
 | Authz | Deny by default: every `/v1` route except auth requires a token (tested by enumerating routes) | core/deps.py, tests | 4.1 |
 | Authz | Roles user, staff, admin. Staff bound to one bar by single use invite. 404 on other bars | core/deps.py | 4.2 |
+| Authz | Staff levels: `door` (counter, line, inside reports) and `manager` (also specials and bar settings). Door level gets 403 `manager_only` on manager routes, other bars stay 404. Level comes from the invite an admin created | core/deps.py, api/v1/specials.py | 4.2 |
 | Authz | Object ownership on line sessions. Same 404 for missing and not yours | services/activity.py | 4.2.1 |
 | Integrity | Ending a timer or sample locks the row (`SELECT ... FOR UPDATE`) and re-checks the status, so only one request scores, rewards and records it. One active timer per user (partial unique index). One reward per `(reason, ref_id)` (partial unique index). Bar row lock for sample starts and count sync | services/activity.py, services/samples.py, api/v1/staff.py, models.py | 11.1 |
 | Integrity | Samples never score their own author and never feed calibration. 4 samples per staff member per hour. Door code only verifies a timer that started near the bar. Calibration needs 5 eligible points from 3 distinct users, one per user per bar per night | services/samples.py, services/activity.py, services/live.py | 11.1 |
@@ -75,7 +78,7 @@ bar level facts with the user link set to null.
 | Output | HSTS (2 years) outside dev. TLS terminates at the host | core/middleware.py | 9.1 |
 | Errors | Generic 500 body. Validation errors never echo input. SQLAlchemy `hide_parameters=True`, so bound values never reach error logs | main.py, db.py | 7.4 |
 | Logs | No tokens, codes, coordinates or full phones are logged. Phones masked to last 2 digits | core/sms.py | 7.1 |
-| Abuse | Client IP resolved only by uvicorn with `FORWARDED_ALLOW_IPS`. Rate limits per user, IP and bar, including 20 timer ends per user per hour. Wrong door codes: check, match and count in one locked step. Reliability weighting. Outlier trimming. Mismatch flag | ratelimit.py, estimation | 11.1 |
+| Abuse | The rotating door code is off by default (`CROWDED_DOOR_CODE_ENABLED`). While off, the route is 404 and codes are never checked. Client IP resolved only by uvicorn with `FORWARDED_ALLOW_IPS`. Rate limits per user, IP and bar, including 20 timer ends per user per hour. Wrong door codes: check, match and count in one locked step. Reliability weighting. Outlier trimming. Mismatch flag | ratelimit.py, estimation | 11.1 |
 | Audit | Every staff and admin write lands in `audit_log`, including staff removal and invite revocation | core/audit.py | 7.1 |
 | Review | App Review demo login: one configured phone with a fixed 6 digit code (strength checked), no SMS, normal limits | services/auth.py | 2.x |
 | Privacy | Coordinates discarded, distance bucket only. Raw data retention job | core/location.py, scripts/retention.py | 8.3 |

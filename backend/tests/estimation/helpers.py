@@ -8,6 +8,7 @@ from app.estimation import (
     DoorEventIn,
     Estimate,
     EstimateInput,
+    InsideStatusIn,
     LineStatusIn,
     Params,
     ReportIn,
@@ -57,9 +58,26 @@ def report(
     crowd: str | None = None,
     size: str | None = None,
     near: bool = True,
+    drink: str | None = None,
 ) -> ReportIn:
     return ReportIn(
-        user_id=user, ts=ago(minutes_ago), crowd_level=crowd, line_size=size, near_bar=near
+        user_id=user,
+        ts=ago(minutes_ago),
+        crowd_level=crowd,
+        line_size=size,
+        near_bar=near,
+        drink_wait=drink,
+    )
+
+
+def inside(
+    crowd: str | None = None,
+    drink: str | None = None,
+    minutes_ago: float = 3,
+    reporter: str | None = None,
+) -> InsideStatusIn:
+    return InsideStatusIn(
+        ts=ago(minutes_ago), crowd_level=crowd, drink_wait=drink, reporter_id=reporter
     )
 
 
@@ -70,6 +88,8 @@ def run(
     lines: list[LineStatusIn] | None = None,
     timers: list[TimerIn] | None = None,
     reports: list[ReportIn] | None = None,
+    insides: list[InsideStatusIn] | None = None,
+    counts_exits: bool = True,
     reliability: dict[str, float] | None = None,
     calibration: float = 1.0,
     params: Params | None = None,
@@ -82,6 +102,8 @@ def run(
             line_statuses=lines or [],
             timers=timers or [],
             reports=reports or [],
+            inside_statuses=insides or [],
+            counts_exits=counts_exits,
             reliability=reliability or {},
             calibration=calibration,
             params=params or Params(),

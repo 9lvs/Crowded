@@ -38,6 +38,9 @@ from tests.api.conftest import Auth, login, make_staff
 N = 10
 
 
+pytestmark = pytest.mark.usefixtures("door_code_on")
+
+
 @pytest.fixture
 def staff(client: TestClient, admin: Auth, bar: Bar) -> Auth:
     return make_staff(client, admin, str(bar.id))

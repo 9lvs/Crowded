@@ -42,12 +42,16 @@ def _code_hash(p_hash: str, code: str) -> str:
 
 
 def me_out(db: Session, user: User) -> MeOut:
-    staff_bar_id = db.scalar(select(BarStaff.bar_id).where(BarStaff.user_id == user.id))
+    staff = db.execute(
+        select(BarStaff.bar_id, BarStaff.level).where(BarStaff.user_id == user.id)
+    ).first()
+    staff_bar_id = staff[0] if staff else None
     return MeOut(
         id=user.id,
         role=user.role,
         wait_threshold_min=user.wait_threshold_min,
         staff_bar_id=staff_bar_id,
+        staff_level=staff[1] if staff else None,
         phone_hint=f"ending in {user.phone_last2}" if user.phone_last2 else None,
         created_at=user.created_at,
     )

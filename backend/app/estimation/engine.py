@@ -9,13 +9,16 @@ from datetime import datetime, timedelta
 
 from app.estimation.stats import mad, median, weighted_median
 from app.estimation.types import (
+    DRINK_WAIT_MIN,
     LINE_SIZE_PEOPLE,
     Basis,
     CalibrationPoint,
     Confidence,
     Crowd,
+    DrinkWaitBasis,
     Estimate,
     EstimateInput,
+    InsideStatusIn,
     LineStatusIn,
     Params,
     Recommendation,
@@ -90,7 +93,7 @@ def _report_weight(r: ReportIn, inp: EstimateInput) -> float:
     return w
 
 
-def _staff_weight(s: LineStatusIn, inp: EstimateInput) -> float:
+def _staff_weight(s: LineStatusIn | InsideStatusIn, inp: EstimateInput) -> float:
     p = inp.params
     w = p.staff_line_weight * _recency(_age_min(inp.now, s.ts), p.half_life_min)
     if s.reporter_id is not None:
@@ -100,20 +103,49 @@ def _staff_weight(s: LineStatusIn, inp: EstimateInput) -> float:
     return w
 
 
-def _vote(reports: Sequence[ReportIn], inp: EstimateInput) -> Crowd | None:
+def _vote(
+    reports: Sequence[ReportIn], inp: EstimateInput, inside: Sequence[InsideStatusIn] = ()
+) -> Crowd | None:
+    """One weighted vote over student reports and staff inside statuses."""
     totals: dict[Crowd, float] = defaultdict(float)
-    for r in reports:
-        if r.crowd_level is None:
+    weighted = [(r.crowd_level, _report_weight(r, inp)) for r in reports]
+    weighted += [(i.crowd_level, _staff_weight(i, inp)) for i in inside]
+    for raw, weight in weighted:
+        if raw is None:
             continue
         try:
-            level = Crowd(r.crowd_level)
+            level = Crowd(raw)
         except ValueError:
             continue
-        totals[level] += _report_weight(r, inp)
+        totals[level] += weight
     if not totals:
         return None
     # Highest weight wins. Ties go to the busier level.
     return max(totals, key=lambda lv: (totals[lv], _CROWD_ORDER[lv]))
+
+
+def _drink_wait(
+    reports: Sequence[ReportIn], inside: Sequence[InsideStatusIn], inp: EstimateInput
+) -> tuple[str | None, DrinkWaitBasis]:
+    """Weighted median of bucket minutes over staff and student readings, as the nearest bucket."""
+    obs: list[tuple[float, float]] = []
+    staff_n = report_n = 0
+    for i in inside:
+        if i.drink_wait is not None and i.drink_wait in DRINK_WAIT_MIN:
+            obs.append((DRINK_WAIT_MIN[i.drink_wait], _staff_weight(i, inp)))
+            staff_n += 1
+    for r in reports:
+        if r.drink_wait is not None and r.drink_wait in DRINK_WAIT_MIN:
+            obs.append((DRINK_WAIT_MIN[r.drink_wait], _report_weight(r, inp)))
+            report_n += 1
+    middle = weighted_median(obs)
+    if middle is None:
+        return None, DrinkWaitBasis()
+    # Nearest bucket. A tie goes to the longer wait.
+    bucket = min(
+        DRINK_WAIT_MIN, key=lambda b: (abs(DRINK_WAIT_MIN[b] - middle), -DRINK_WAIT_MIN[b])
+    )
+    return bucket, DrinkWaitBasis(staff_updates=staff_n, reports=report_n)
 
 
 def _timer_wait(timers: Sequence[TimerIn], inp: EstimateInput) -> tuple[float, int] | None:
@@ -187,17 +219,18 @@ def estimate(inp: EstimateInput) -> Estimate:
     ]
     active_recent = [t for t in active if in_window(t.started_at, p.window_min)]
     doors_all = [e for e in inp.door_events if _age_min(now, e.ts) >= 0]
+    insides = [i for i in inp.inside_statuses if in_window(i.ts, p.window_min)]
     doors_window = [e for e in doors_all if in_window(e.ts, p.window_min)]
     # Sync events are a clicker total, not real arrivals, so they never set a rate.
     doors_rate = [e for e in doors_all if e.source == "tap" and in_window(e.ts, p.rate_window_min)]
 
-    if not (reports or lines or done or active_recent or doors_window):
+    if not (reports or lines or insides or done or active_recent or doors_window):
         return _no_data(inp)
 
     window = int(p.window_min)
     n_timers = len(done) + len(active_recent)
     # Door events between the rate window and the full window still count as staff data.
-    staff_counts = bool(doors_window or lines)
+    staff_counts = bool(doors_window or lines or insides)
     basis = Basis(
         window_min=window,
         reports=len(reports),
@@ -205,13 +238,15 @@ def estimate(inp: EstimateInput) -> Estimate:
         door_events=len(doors_rate),
         staff_line_updates=len(lines),
         text=_basis_text(len(reports), n_timers, staff_counts, window),
+        inside_updates=len(insides),
     )
 
-    # Headcount and crowd level.
+    # Headcount and crowd level. Bars that only count people in (counts_exits false) have no
+    # headcount, so their crowd level comes from the inside reports alone.
     headcount: int | None = None
     ratio: float | None = None
     door_crowd: Crowd | None = None
-    if doors_all:
+    if doors_all and inp.counts_exits:
         ins = sum(e.count for e in doors_all if e.direction == "in")
         outs = sum(e.count for e in doors_all if e.direction == "out")
         headcount = max(0, ins - outs)
@@ -219,10 +254,12 @@ def estimate(inp: EstimateInput) -> Estimate:
             ratio = headcount / inp.capacity
             door_crowd = crowd_from_ratio(ratio, p)
     vote = _vote(reports, inp)
-    crowd = door_crowd or vote
+    crowd = door_crowd or _vote(reports, inp, insides)
     flags: list[str] = []
-    if door_crowd is not None and vote is not None:
-        gap = abs(_CROWD_ORDER[door_crowd] - _CROWD_ORDER[vote])
+    # The staff view is the door count, or else the staff inside statuses.
+    staff_crowd = door_crowd or _vote([], inp, insides)
+    if staff_crowd is not None and vote is not None:
+        gap = abs(_CROWD_ORDER[staff_crowd] - _CROWD_ORDER[vote])
         if gap >= p.mismatch_threshold:
             flags.append("staff_report_mismatch")
 
@@ -301,6 +338,8 @@ def estimate(inp: EstimateInput) -> Estimate:
         if people_in_line == 0:
             wait = 0.0
 
+    drink, drink_basis = _drink_wait(reports, insides, inp)
+
     # Confidence.
     score = 0.0
     if lines:
@@ -348,6 +387,8 @@ def estimate(inp: EstimateInput) -> Estimate:
             else basis
         ),
         flags=tuple(flags),
+        drink_wait=drink,
+        drink_wait_basis=drink_basis,
     )
 
 

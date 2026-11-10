@@ -63,3 +63,16 @@ Newest at the bottom. Format: ID, date, decision, why, revisit when.
 - **D-027 (2026-11-09) Pilot may start with one bar.** Nothing in the system assumes more than one.
 - **D-028 (2026-11-09) Legal pages on GitHub Pages.** GitHub Pages needs a public repo on the free
   plan. If the main repo goes private, the pages live in a small public repo (crowded-legal).
+- **D-029 (2026-11-10) Staff levels.** Door staff only do fast door work: count IN, report the
+  line wait, report how busy it is inside. Counting OUT is optional. Managers (and admins) also
+  edit specials and bar settings. Door staff get 403 `manager_only` on those routes. The level
+  comes from the admin invite (`door` by default). Owner feedback.
+- **D-030 (2026-11-10) Door code off by default.** The rotating code slowed students down at the
+  door. `CROWDED_DOOR_CODE_ENABLED` defaults to false. The route returns 404 `door_code_disabled`
+  and a typed code is never verified. All code and tests stay so we can turn it back on.
+- **D-031 (2026-11-10) Drink wait.** Staff and students report how long a drink takes in four
+  buckets. A 10 minute line plus a 20 minute drink wait matters. One weighted median over staff and
+  student readings, shown as the nearest bucket with its basis. Nothing recent means none.
+- **D-032 (2026-11-10) Count in only bars.** A bar can skip exit counting (`counts_exits` false).
+  No headcount or capacity mode from the door. Entry rate still comes from IN events and crowd
+  level comes from the inside reports.

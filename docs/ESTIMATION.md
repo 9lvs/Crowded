@@ -8,7 +8,8 @@ Code: `backend/app/estimation/` (pure functions, contract in `types.py`).
 | Door events (in, out) | Staff counter | Headcount, entry rate, exit rate |
 | Outside line size | Staff picker | People in line |
 | Line timers | Users ("I'm in line" to "I'm inside") | Observed waits, calibration |
-| Crowd reports | Users | Crowd level and line size when staff data is missing |
+| Crowd reports | Users | Crowd level and line size when staff data is missing, drink wait |
+| Inside statuses | Staff (crowd level, drink wait) | Crowd level without a door headcount, drink wait |
 
 ## Formula
 1. **Headcount** = tonight's ins minus outs (never below 0). Ratio = headcount / capacity.
@@ -36,6 +37,26 @@ Code: `backend/app/estimation/` (pure functions, contract in `types.py`).
   max(pred, 5)`. Target = 1 when e is 0, falling linearly to 0 at e = 1. Move 20 percent of the
   way toward the target. Clamp to [0.05, 1].
 
+## Inside conditions, drink wait and count in only bars
+Input `inside_statuses` carries staff readings (ts, crowd level, drink wait, reporter). Reports
+carry an optional `drink_wait`. `EstimateInput.counts_exits` (default True) says whether the bar
+counts people out.
+
+**Crowd level.** With `counts_exits` and door events, headcount and the capacity ratio come from
+the door and the level is unchanged from before. Otherwise one weighted vote runs over staff
+inside statuses (weight = `staff_line_weight` x staff reliability x recency) and student reports
+(the usual weights). The `staff_report_mismatch` flag compares the staff view (door level, or
+the staff inside vote) with the student vote.
+
+**Count in only (`counts_exits` false).** Headcount and capacity ratio are None and capacity mode
+is off. Entry rate still comes from IN `tap` events. OUT events are ignored.
+
+**Drink wait.** Buckets map to minutes: under_5 = 3, 5_to_10 = 8, 10_to_20 = 15, over_20 = 25.
+The weighted median over staff statuses and student reports in the window maps back to the
+nearest bucket. A tie goes to the longer bucket. Output: `drink_wait` and `drink_wait_basis`
+(staff updates, reports). `Basis.inside_updates` counts staff inside updates. The basis text says
+"staff counts" when there are inside updates. Nothing recent means `drink_wait` is None.
+
 ## Verified timers and sync events
 A timer is verified when a student typed the door code on a timer that started near the bar, or
 when door staff timed the person. A
@@ -47,7 +68,7 @@ difference. Headcount uses every event. Entry and exit rates use only `tap` even
 only sync events has a headcount but no known rate, so the default rate is used.
 
 ## Confidence and "no recent data"
-- No reports, timers, staff line updates or door events in the window means `has_recent_data =
+- No reports, timers, staff line or inside updates or door events in the window means `has_recent_data =
   False`, `confidence = none`, and every number is None. The UI shows "No recent data".
 - Score points: staff line update in window +2, door events in rate window +2, each completed
   timer +1 (max 3), each near-bar report +0.5 (max 2). 0 to 1.5 low, 2 to 3.5 medium, 4+ high.

@@ -19,7 +19,9 @@ from app.models import (
     CrowdReport,
     DoorDirection,
     DoorEvent,
+    DrinkWait,
     EstimateError,
+    InsideStatus,
     LineSample,
     LineSession,
     OutsideLineStatus,
@@ -162,12 +164,21 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
             ),
         )
     ).all()
+    insides = db.execute(
+        select(
+            InsideStatus.ts,
+            InsideStatus.crowd_level,
+            InsideStatus.drink_wait,
+            InsideStatus.staff_user_id,
+        ).where(InsideStatus.bar_id == bar.id, InsideStatus.ts >= window)
+    ).all()
     reports = db.execute(
         select(
             CrowdReport.user_id,
             CrowdReport.created_at,
             CrowdReport.crowd_level,
             CrowdReport.line_size,
+            CrowdReport.drink_wait,
             CrowdReport.near_bar,
         ).where(CrowdReport.bar_id == bar.id, CrowdReport.created_at >= window)
     ).all()
@@ -177,6 +188,7 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
         | {r.user_id for r in reports}
         | {ln.staff_user_id for ln in lines if ln.staff_user_id is not None}
         | {sm.staff_user_id for sm in samples if sm.staff_user_id is not None}
+        | {i.staff_user_id for i in insides if i.staff_user_id is not None}
     )
     reliability: dict[str, float] = {}
     if user_ids:
@@ -227,9 +239,20 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
                 crowd_level=r.crowd_level.value if r.crowd_level else None,
                 line_size=r.line_size.value if r.line_size else None,
                 near_bar=r.near_bar,
+                drink_wait=r.drink_wait.value if r.drink_wait else None,
             )
             for r in reports
         ],
+        inside_statuses=[
+            est.InsideStatusIn(
+                ts=i.ts,
+                crowd_level=i.crowd_level.value if i.crowd_level else None,
+                drink_wait=i.drink_wait.value if i.drink_wait else None,
+                reporter_id=str(i.staff_user_id) if i.staff_user_id else None,
+            )
+            for i in insides
+        ],
+        counts_exits=bar.counts_exits,
         reliability=reliability,
         calibration=_calibration(db, bar.id, now),
         params=PARAMS,
@@ -268,12 +291,22 @@ def _maybe_snapshot(db: Session, bar: Bar, e: est.Estimate, now: datetime) -> No
                 "timers": e.basis.timers,
                 "door_events": e.basis.door_events,
                 "staff_line_updates": e.basis.staff_line_updates,
+                "inside_updates": e.basis.inside_updates,
+                "drink_wait": e.drink_wait,
                 "method": e.method,
                 "flags": list(e.flags),
             },
         )
     )
     db.commit()
+
+
+DRINK_WAIT_LABELS = {
+    "under_5": "Under 5 min",
+    "5_to_10": "5 to 10 min",
+    "10_to_20": "10 to 20 min",
+    "over_20": "Over 20 min",
+}
 
 
 def _r(x: float | None) -> int | None:
@@ -290,6 +323,8 @@ def live_out(live: Live) -> LiveOut:
         crowd_level=CrowdLevel(e.crowd_level.value) if e.crowd_level else None,
         headcount=e.headcount,
         capacity_ratio=None if e.capacity_ratio is None else round(e.capacity_ratio, 3),
+        drink_wait=DrinkWait(e.drink_wait) if e.drink_wait else None,
+        drink_wait_label=DRINK_WAIT_LABELS[e.drink_wait] if e.drink_wait else None,
         confidence=e.confidence.value,
         basis=BasisOut(
             text=e.basis.text,
@@ -298,6 +333,7 @@ def live_out(live: Live) -> LiveOut:
             timers=e.basis.timers,
             door_events=e.basis.door_events,
             staff_line_updates=e.basis.staff_line_updates,
+            inside_updates=e.basis.inside_updates,
         ),
         flags=list(e.flags),
         updated_at=live.now,

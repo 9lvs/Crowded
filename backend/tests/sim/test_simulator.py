@@ -30,6 +30,12 @@ def test_seed_is_idempotent(db: Session) -> None:
     first = seed.run(db)
     second = seed.run(db)
     assert set(first) == set(second) == {b.slug for b in FAKE_BARS}
+    assert all(set(c) == {"manager", "door"} for c in first.values())
+    assert [b.counts_exits for b in db.scalars(select(Bar).order_by(Bar.capacity))] == [
+        True,
+        True,
+        False,
+    ]
     bars = db.scalars(select(Bar).order_by(Bar.capacity)).all()
     assert [b.name for b in bars] == [
         "FAKE The Tipsy Owl",
@@ -39,11 +45,11 @@ def test_seed_is_idempotent(db: Session) -> None:
     assert [b.capacity for b in bars] == [120, 180, 250]
     assert [live.current_pass_price(db, b.id) for b in bars] == [1500, 2000, None]
     assert db.scalar(select(func.count()).select_from(PassPrice)) == 3
-    # One live invite per bar: the second run revoked the first batch.
+    # One live manager invite and one door invite per bar: the second run revoked the first batch.
     live_invites = db.scalar(
         select(func.count()).select_from(StaffInvite).where(StaffInvite.revoked_at.is_(None))
     )
-    assert live_invites == 3
+    assert live_invites == 6
 
 
 def test_one_night_simulation(db: Session) -> None:

@@ -81,6 +81,27 @@ The staff counter shows what students are reporting ("What students see"). Staff
 numbers diverge can fix them. Repeated large gaps show up in admin metrics, which gives the
 partner conversation facts instead of opinions.
 
+## Door staff jobs and conditions inside
+Door staff do three fast jobs. Count people IN (the most important one), report the line wait,
+and report how busy it is inside. Counting people OUT is optional (see "Count in only bars").
+Door staff do not edit specials or menus. A bar manager or our admin team does that weekly.
+
+**Staff levels.** Staff have a level. `door` is the default and covers the door counter. `manager`
+can also post specials and change bar settings. Managers can use every door route. Admins can do
+both. Admin invites say which level the new staff member gets.
+
+**Inside conditions.** Staff post a crowd level (easy, busy, packed) and a drink wait at any
+time. Drink wait is how long it takes to get a drink at the bar, in four buckets: under 5, 5 to
+10, 10 to 20, over 20 minutes. A 10 minute line plus a 20 minute drink wait matters to students,
+so the app shows both. Students can add a drink wait to a report too. The estimate takes one
+weighted median over staff readings (weight 3 times staff reliability times recency) and student
+readings (the usual report weights) and shows the nearest bucket. No recent reading means no
+drink wait, never a stale one. The basis says how many staff updates and reports it used.
+
+**Count in only bars.** A bar can turn off exit counting (`counts_exits`, set by a manager or an
+admin). Then we do not compute headcount from the door. The entry rate still comes from IN
+events, so the line wait still works. Crowd level comes from the inside reports above.
+
 ## Staff line samples, door code and clicker sync
 Students do not always stop their timers. Three tools cover that.
 
@@ -92,7 +113,9 @@ student timer does, except that it never scores its own author. A staffer cannot
 own line readings. A sample writes an estimate error row marked `sample` for the accuracy
 metric, but samples never feed calibration. Every start and end is in the audit log.
 
-**Door code.** Staff screens show a 4 digit code that changes every 2 minutes. It is an HMAC of
+**Door code (off by default).** The door code slowed the door down, so it is switched off for
+now (D-030, `CROWDED_DOOR_CODE_ENABLED=false`). The staff route returns 404 `door_code_disabled`
+and a code sent by a student is never checked. The code and its tests stay. When it is on, staff screens show a 4 digit code that changes every 2 minutes. It is an HMAC of
 the bar id and the time bucket, so nothing is stored. A student types it when they get inside.
 The current and the previous code both work. The code proves where the student was at the
 end, not at the start. So a right code only marks the timer verified when the timer also started

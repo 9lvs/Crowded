@@ -147,6 +147,10 @@
             "title": "Capacity",
             "type": "integer"
           },
+          "counts_exits": {
+            "title": "Counts Exits",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -186,7 +190,8 @@
           "longitude",
           "capacity",
           "timezone",
-          "is_active"
+          "is_active",
+          "counts_exits"
         ],
         "title": "BarAdminOut",
         "type": "object"
@@ -357,6 +362,20 @@
         "title": "BarDetail",
         "type": "object"
       },
+      "BarSettingsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "counts_exits": {
+            "title": "Counts Exits",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "counts_exits"
+        ],
+        "title": "BarSettingsIn",
+        "type": "object"
+      },
       "BarSummary": {
         "additionalProperties": false,
         "properties": {
@@ -458,6 +477,17 @@
             ],
             "title": "Capacity"
           },
+          "counts_exits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts Exits"
+          },
           "is_active": {
             "anyOf": [
               {
@@ -491,6 +521,11 @@
         "properties": {
           "door_events": {
             "title": "Door Events",
+            "type": "integer"
+          },
+          "inside_updates": {
+            "default": 0,
+            "title": "Inside Updates",
             "type": "integer"
           },
           "reports": {
@@ -687,6 +722,17 @@
         "title": "DoorIn",
         "type": "object"
       },
+      "DrinkWait": {
+        "description": "How long it takes to get a drink at the bar. Shared by staff and student reports.",
+        "enum": [
+          "under_5",
+          "5_to_10",
+          "10_to_20",
+          "over_20"
+        ],
+        "title": "DrinkWait",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -740,6 +786,81 @@
         "title": "HourPoint",
         "type": "object"
       },
+      "InsideIn": {
+        "additionalProperties": false,
+        "properties": {
+          "crowd_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CrowdLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drink_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DrinkWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "InsideIn",
+        "type": "object"
+      },
+      "InsideStatusOut": {
+        "additionalProperties": false,
+        "properties": {
+          "crowd_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CrowdLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drink_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DrinkWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crowd_level",
+          "drink_wait",
+          "updated_at"
+        ],
+        "title": "InsideStatusOut",
+        "type": "object"
+      },
+      "InviteCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/StaffLevel",
+            "default": "door"
+          }
+        },
+        "title": "InviteCreate",
+        "type": "object"
+      },
       "InviteOut": {
         "additionalProperties": false,
         "properties": {
@@ -762,6 +883,10 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "level": {
+            "$ref": "#/components/schemas/StaffLevel",
+            "default": "door"
           }
         },
         "required": [
@@ -1057,6 +1182,27 @@
               }
             ]
           },
+          "drink_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DrinkWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drink_wait_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drink Wait Label"
+          },
           "flags": {
             "items": {
               "type": "string"
@@ -1197,6 +1343,17 @@
             ],
             "title": "Staff Bar Id"
           },
+          "staff_level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaffLevel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "door or manager. Null if the user is not staff"
+          },
           "wait_threshold_min": {
             "title": "Wait Threshold Min",
             "type": "integer"
@@ -1335,6 +1492,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CrowdLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drink_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DrinkWait"
               },
               {
                 "type": "null"
@@ -1952,6 +2119,15 @@
         "title": "SpecialUpdate",
         "type": "object"
       },
+      "StaffLevel": {
+        "description": "door: door counter work only. manager: also specials and bar settings.",
+        "enum": [
+          "door",
+          "manager"
+        ],
+        "title": "StaffLevel",
+        "type": "string"
+      },
       "StaffMemberOut": {
         "additionalProperties": false,
         "properties": {
@@ -1964,6 +2140,10 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "level": {
+            "$ref": "#/components/schemas/StaffLevel",
+            "default": "door"
           },
           "phone_hint": {
             "anyOf": [
@@ -2007,6 +2187,11 @@
             "title": "Capacity",
             "type": "integer"
           },
+          "counts_exits": {
+            "default": true,
+            "title": "Counts Exits",
+            "type": "boolean"
+          },
           "entries_tonight": {
             "title": "Entries Tonight",
             "type": "integer"
@@ -2018,6 +2203,16 @@
           "headcount": {
             "title": "Headcount",
             "type": "integer"
+          },
+          "inside": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InsideStatusOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "line_size": {
             "anyOf": [
@@ -2466,6 +2661,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/InviteCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "content": {
@@ -3813,6 +4025,65 @@
         ]
       }
     },
+    "/v1/staff/bars/{bar_id}/inside": {
+      "post": {
+        "description": "Conditions inside: how busy it is and how long a drink takes. Door level may post.",
+        "operationId": "inside_v1_staff_bars__bar_id__inside_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsideIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Inside",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
     "/v1/staff/bars/{bar_id}/line": {
       "post": {
         "operationId": "line_v1_staff_bars__bar_id__line_post",
@@ -4034,6 +4305,65 @@
           }
         ],
         "summary": "End Line Sample",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/settings": {
+      "patch": {
+        "description": "Bar settings a manager may change. Managers and admins only.",
+        "operationId": "update_settings_v1_staff_bars__bar_id__settings_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BarSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Settings",
         "tags": [
           "staff"
         ]

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Bar, CrowdReport
+from app.models import Bar, CrowdLevel, CrowdReport, DrinkWait, InsideStatus
 from scripts.retention import purge
 
 
@@ -22,3 +22,12 @@ def test_retention_deletes_old_raw_reports(client: TestClient, db: Session, user
     counts = purge(db, datetime.now(UTC), 30)
     assert counts["crowd_reports"] == 1
     assert db.scalar(select(func.count()).select_from(CrowdReport)) == 1
+
+
+def test_retention_deletes_old_inside_status(db: Session, bar: Bar) -> None:
+    now = datetime.now(UTC)
+    db.add(InsideStatus(bar_id=bar.id, ts=now - timedelta(days=31), drink_wait=DrinkWait.under_5))
+    db.add(InsideStatus(bar_id=bar.id, ts=now - timedelta(days=1), crowd_level=CrowdLevel.busy))
+    db.commit()
+    assert purge(db, now, 30)["inside_status"] == 1
+    assert db.scalar(select(func.count()).select_from(InsideStatus)) == 1

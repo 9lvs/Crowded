@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.ratelimit import hit
 from app.core.security import decode_access_token, pepper_hash
 from app.db import get_db
-from app.models import Bar, BarStaff, Role, User
+from app.models import Bar, BarStaff, Role, StaffLevel, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -74,25 +74,43 @@ def require_admin(user: CurrentUser) -> User:
 AdminUser = Annotated[User, Depends(require_admin)]
 
 
-def staff_bar(bar_id: uuid.UUID, user: CurrentUser, db: DB) -> Bar:
-    """Resolve a bar the caller is staff at. Admins may act on any bar.
+def _resolve_bar(bar_id: uuid.UUID, user: User, db: Session) -> tuple[Bar, StaffLevel | None]:
+    """The bar and the caller's staff level there. Admins may act on any bar (level None).
 
     Returns 404 for both "no such bar" and "not your bar" so ids cannot be probed.
     """
+    level: StaffLevel | None = None
     if user.role == Role.admin:
         bar = db.get(Bar, bar_id)
     elif user.role == Role.staff:
-        bar = db.scalar(
-            select(Bar)
+        row = db.execute(
+            select(Bar, BarStaff.level)
             .join(BarStaff, BarStaff.bar_id == Bar.id)
             .where(BarStaff.user_id == user.id, Bar.id == bar_id)
-        )
+        ).first()
+        bar, level = (row[0], row[1]) if row else (None, None)
     else:
         bar = None
     if bar is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not_found")
     hit("staff_user", str(user.id))
-    return bar
+    return bar, level
+
+
+def staff_bar(bar_id: uuid.UUID, user: CurrentUser, db: DB) -> Bar:
+    """Resolve a bar the caller is staff at (any level). Admins may act on any bar."""
+    return _resolve_bar(bar_id, user, db)[0]
 
 
 StaffBar = Annotated[Bar, Depends(staff_bar)]
+
+
+def manager_bar(bar_id: uuid.UUID, user: CurrentUser, db: DB) -> Bar:
+    """Like staff_bar, but door level staff get 403 manager_only. Admins pass."""
+    bar, level = _resolve_bar(bar_id, user, db)
+    if user.role == Role.staff and level != StaffLevel.manager:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="manager_only")
+    return bar
+
+
+ManagerBar = Annotated[Bar, Depends(manager_bar)]

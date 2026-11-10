@@ -26,6 +26,7 @@ from app.models import (
     Role,
     SpecialKind,
     StaffInvite,
+    StaffLevel,
     utcnow,
 )
 from scripts._common import (
@@ -170,12 +171,12 @@ SPECIALS: dict[str, list[FakeSpecial]] = {
 }
 
 
-def run(db: Session) -> dict[str, str]:
-    """Create or update the seed data. Returns {bar slug: fresh invite code}."""
+def run(db: Session) -> dict[str, dict[str, str]]:
+    """Create or update the seed data. Returns {bar slug: {staff level: fresh invite code}}."""
     admin = get_or_create_user(db, ADMIN_PHONE, Role.admin)
     admin.role = Role.admin
     now = utcnow()
-    codes: dict[str, str] = {}
+    codes: dict[str, dict[str, str]] = {}
     for spec in FAKE_BARS:
         bar = db.scalar(select(Bar).where(Bar.slug == spec.slug))
         if bar is None:
@@ -188,6 +189,7 @@ def run(db: Session) -> dict[str, str]:
         bar.capacity = spec.capacity
         bar.timezone = "America/New_York"
         bar.is_active = True
+        bar.counts_exits = spec.counts_exits
         db.flush()
 
         latest = db.scalars(
@@ -206,7 +208,7 @@ def run(db: Session) -> dict[str, str]:
                 )
             )
 
-        # Old unredeemed invites are revoked so each run leaves exactly one live code per bar.
+        # Old unredeemed invites are revoked so each run leaves one live code per level per bar.
         for old in db.scalars(
             select(StaffInvite).where(
                 StaffInvite.bar_id == bar.id,
@@ -215,16 +217,19 @@ def run(db: Session) -> dict[str, str]:
             )
         ):
             old.revoked_at = now
-        code = new_invite_code()
-        db.add(
-            StaffInvite(
-                bar_id=bar.id,
-                code_hash=invite_hash(code),
-                created_by=admin.id,
-                expires_at=now + timedelta(days=7),
+        codes[spec.slug] = {}
+        for level in (StaffLevel.manager, StaffLevel.door):
+            code = new_invite_code()
+            db.add(
+                StaffInvite(
+                    bar_id=bar.id,
+                    level=level,
+                    code_hash=invite_hash(code),
+                    created_by=admin.id,
+                    expires_at=now + timedelta(days=7),
+                )
             )
-        )
-        codes[spec.slug] = code
+            codes[spec.slug][level.value] = code
 
         db.execute(delete(BarSpecial).where(BarSpecial.bar_id == bar.id))
         for kind, title, details, days, start, end, cents, all_day, items in SPECIALS.get(
@@ -262,10 +267,10 @@ def main() -> None:
         price = (
             "no pass" if spec.pass_price_cents is None else f"${spec.pass_price_cents / 100:.0f}"
         )
-        print(
-            f"  {spec.name:22} cap {spec.capacity:3}  pass {price:8}  "
-            f"staff invite {codes[spec.slug]}"
-        )
+        mode = "counts in and out" if spec.counts_exits else "counts in only"
+        print(f"  {spec.name:22} cap {spec.capacity:3}  pass {price:8}  {mode}")
+        print(f"    manager invite {codes[spec.slug]['manager']}")
+        print(f"    door invite    {codes[spec.slug]['door']}")
     print()
     print(f"FAKE admin phone: {ADMIN_PHONE}")
     print("Log in (dev builds return the code in the response):")

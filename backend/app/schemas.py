@@ -15,10 +15,12 @@ from app.models import (
     DealCategory,
     DistanceBucket,
     DoorDirection,
+    DrinkWait,
     LineSize,
     Role,
     SessionStatus,
     SpecialKind,
+    StaffLevel,
 )
 
 E164 = re.compile(r"^\+[1-9][0-9]{7,14}$", re.ASCII)
@@ -77,6 +79,9 @@ class MeOut(Strict):
     role: Role
     wait_threshold_min: int
     staff_bar_id: uuid.UUID | None
+    staff_level: StaffLevel | None = Field(
+        default=None, description="door or manager. Null if the user is not staff"
+    )
     phone_hint: str | None
     created_at: datetime
 
@@ -103,6 +108,7 @@ class BasisOut(Strict):
     timers: int
     door_events: int
     staff_line_updates: int
+    inside_updates: int = 0
 
 
 class LiveOut(Strict):
@@ -113,6 +119,8 @@ class LiveOut(Strict):
     crowd_level: CrowdLevel | None
     headcount: int | None
     capacity_ratio: float | None
+    drink_wait: DrinkWait | None = None
+    drink_wait_label: str | None = None
     confidence: Literal["none", "low", "medium", "high"]
     basis: BasisOut
     flags: list[str]
@@ -337,12 +345,13 @@ class ReportCreate(Strict):
     bar_id: uuid.UUID
     crowd_level: CrowdLevel | None = None
     line_size: LineSize | None = None
+    drink_wait: DrinkWait | None = None
     location: LocationIn | None = None
 
     @model_validator(mode="after")
     def _something(self) -> ReportCreate:
-        if self.crowd_level is None and self.line_size is None:
-            raise ValueError("report needs crowd_level or line_size")
+        if self.crowd_level is None and self.line_size is None and self.drink_wait is None:
+            raise ValueError("report needs crowd_level, line_size or drink_wait")
         return self
 
 
@@ -393,6 +402,27 @@ class LineSizeIn(Strict):
     line_size: LineSize
 
 
+class InsideIn(Strict):
+    crowd_level: CrowdLevel | None = None
+    drink_wait: DrinkWait | None = None
+
+    @model_validator(mode="after")
+    def _something(self) -> InsideIn:
+        if self.crowd_level is None and self.drink_wait is None:
+            raise ValueError("report needs crowd_level or drink_wait")
+        return self
+
+
+class BarSettingsIn(Strict):
+    counts_exits: bool
+
+
+class InsideStatusOut(Strict):
+    crowd_level: CrowdLevel | None
+    drink_wait: DrinkWait | None
+    updated_at: datetime
+
+
 class StaffState(Strict):
     bar_id: uuid.UUID
     bar_name: str
@@ -402,6 +432,8 @@ class StaffState(Strict):
     exits_tonight: int
     line_size: LineSize | None
     line_updated_at: datetime | None
+    counts_exits: bool = True
+    inside: InsideStatusOut | None = None
     live: LiveOut
 
 
@@ -432,6 +464,7 @@ class BarUpdate(Strict):
     address: Annotated[str, Field(max_length=200)] | None = None
     capacity: Annotated[int, Field(ge=1, le=10000)] | None = None
     is_active: bool | None = None
+    counts_exits: bool | None = None
 
 
 class BarAdminOut(Strict):
@@ -444,6 +477,7 @@ class BarAdminOut(Strict):
     capacity: int
     timezone: str
     is_active: bool
+    counts_exits: bool
 
 
 class PassPriceIn(Strict):
@@ -459,9 +493,14 @@ class PassPriceOut(Strict):
     created_at: datetime
 
 
+class InviteCreate(Strict):
+    level: StaffLevel = StaffLevel.door
+
+
 class StaffMemberOut(Strict):
     user_id: uuid.UUID
     bar_id: uuid.UUID
+    level: StaffLevel = StaffLevel.door
     phone_hint: str | None
     created_at: datetime
 
@@ -469,6 +508,7 @@ class StaffMemberOut(Strict):
 class InviteOut(Strict):
     id: uuid.UUID
     bar_id: uuid.UUID
+    level: StaffLevel = StaffLevel.door
     code: str = Field(description="Shown once. Only a hash is stored.")
     expires_at: datetime
 

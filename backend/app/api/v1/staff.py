@@ -7,15 +7,28 @@ from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.config import get_settings
 from app.core.audit import audit
-from app.core.deps import DB, CurrentUser, StaffBar, ip_key
+from app.core.deps import DB, CurrentUser, ManagerBar, StaffBar, ip_key
 from app.core.ratelimit import hit
 from app.core.security import normalize_invite_code, pepper_hash
-from app.models import Bar, BarStaff, DoorDirection, DoorEvent, OutsideLineStatus, Role, StaffInvite
+from app.models import (
+    Bar,
+    BarStaff,
+    DoorDirection,
+    DoorEvent,
+    InsideStatus,
+    OutsideLineStatus,
+    Role,
+    StaffInvite,
+)
 from app.schemas import (
+    BarSettingsIn,
     CountSyncIn,
     DoorCodeOut,
     DoorIn,
+    InsideIn,
+    InsideStatusOut,
     LineSampleEndIn,
     LineSampleOut,
     LineSizeIn,
@@ -48,6 +61,12 @@ def staff_state(db: DB, bar: Bar) -> StaffState:
         .order_by(OutsideLineStatus.ts.desc())
         .limit(1)
     ).first()
+    inside = db.execute(
+        select(InsideStatus.crowd_level, InsideStatus.drink_wait, InsideStatus.ts)
+        .where(InsideStatus.bar_id == bar.id, InsideStatus.ts >= live.tonight_start(bar, now))
+        .order_by(InsideStatus.ts.desc())
+        .limit(1)
+    ).first()
     return StaffState(
         bar_id=bar.id,
         bar_name=bar.name,
@@ -57,6 +76,12 @@ def staff_state(db: DB, bar: Bar) -> StaffState:
         exits_tonight=outs,
         line_size=latest[0] if latest else None,
         line_updated_at=latest[1] if latest else None,
+        counts_exits=bar.counts_exits,
+        inside=(
+            InsideStatusOut(crowd_level=inside[0], drink_wait=inside[1], updated_at=inside[2])
+            if inside
+            else None
+        ),
         live=live.live_out(live.compute(db, bar, now)),
     )
 
@@ -82,7 +107,7 @@ def redeem_invite(body: RedeemInviteIn, request: Request, user: CurrentUser, db:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="already_staff")
     invite.redeemed_at = now
     invite.redeemed_by = user.id
-    db.add(BarStaff(bar_id=invite.bar_id, user_id=user.id, invite_id=invite.id))
+    db.add(BarStaff(bar_id=invite.bar_id, user_id=user.id, invite_id=invite.id, level=invite.level))
     user.role = Role.staff
     try:
         db.flush()
@@ -149,6 +174,56 @@ def line(
     return staff_state(db, bar)
 
 
+@router.post("/bars/{bar_id}/inside", response_model=StaffState)
+def inside(
+    body: InsideIn, bar: StaffBar, user: CurrentUser, request: Request, db: DB
+) -> StaffState:
+    """Conditions inside: how busy it is and how long a drink takes. Door level may post."""
+    db.add(
+        InsideStatus(
+            bar_id=bar.id,
+            staff_user_id=user.id,
+            crowd_level=body.crowd_level,
+            drink_wait=body.drink_wait,
+        )
+    )
+    audit(
+        db,
+        user,
+        "inside.set",
+        target_type="bar",
+        target_id=bar.id,
+        bar_id=bar.id,
+        ip_hash=ip_key(request),
+        details={
+            "crowd_level": body.crowd_level.value if body.crowd_level else None,
+            "drink_wait": body.drink_wait.value if body.drink_wait else None,
+        },
+    )
+    db.commit()
+    return staff_state(db, bar)
+
+
+@router.patch("/bars/{bar_id}/settings", response_model=StaffState)
+def update_settings(
+    body: BarSettingsIn, bar: ManagerBar, user: CurrentUser, request: Request, db: DB
+) -> StaffState:
+    """Bar settings a manager may change. Managers and admins only."""
+    bar.counts_exits = body.counts_exits
+    audit(
+        db,
+        user,
+        "bar.settings",
+        target_type="bar",
+        target_id=bar.id,
+        bar_id=bar.id,
+        ip_hash=ip_key(request),
+        details={"counts_exits": body.counts_exits},
+    )
+    db.commit()
+    return staff_state(db, bar)
+
+
 @router.post("/bars/{bar_id}/count-sync", response_model=StaffState)
 def count_sync(
     body: CountSyncIn, bar: StaffBar, user: CurrentUser, request: Request, db: DB
@@ -187,7 +262,9 @@ def count_sync(
 
 @router.get("/bars/{bar_id}/door-code", response_model=DoorCodeOut)
 def get_door_code(bar: StaffBar) -> DoorCodeOut:
-    # Not audited on purpose. The staff screen reads this every few seconds.
+    # Off by default (D-030). Not audited on purpose. The staff screen reads this every few seconds.
+    if not get_settings().door_code_enabled:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="door_code_disabled")
     code, expires_in = door_svc.current_code(bar.id)
     return DoorCodeOut(code=code, expires_in=expires_in)
 
