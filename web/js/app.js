@@ -173,14 +173,14 @@
     return lv.has_recent_data ? "No line data" : "No recent data";
   }
 
-  function barRow(b, refresh) {
+  function barRow(b) {
     var lv = b.live;
-    var specialLine = ui.specialsLine(b);
+    var deal = ui.dealsLine(b);
     var hasWait = lv.has_recent_data && lv.wait_min !== null;
     var crowdLabel = lv.crowd_level ? ui.CROWD_LABEL[lv.crowd_level] : "Crowd unknown";
     var label = b.name + ". " + (lv.crowd_level ? "Crowd " + crowdLabel + ". " : "Crowd unknown. ") +
-      waitLabel(lv) + ". " + (lv.has_recent_data ? lv.basis.text + ". " : "") + ui.verdictShort(b.verdict) + "." +
-      (specialLine ? " " + specialLine + "." : "");
+      waitLabel(lv) + ". " + (lv.has_recent_data ? lv.basis.text + "." : "Nobody has reported in the last 30 min.") +
+      (deal ? " " + ui.dealsLineText(deal) + "." : "");
     var right = hasWait
       ? h("span", { class: "row-wait" }, h("span", { class: "num row-wait__num", text: String(lv.wait_min) }), h("span", { class: "row-wait__unit", text: "min" }))
       : h("span", { class: "row-wait row-wait--none", text: lv.has_recent_data ? "No line data" : "No data" });
@@ -203,26 +203,16 @@
           h("span", { class: "bar-row__name", text: b.name }),
           h("span", { class: "bar-row__crowd" }, lv.crowd_level ? ui.crowd(lv.crowd_level) : h("span", { class: "faint", text: "Crowd unknown" })),
           h("span", { class: "bar-row__basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min" }),
-          specialLine ? h("span", { class: "bar-row__special", text: specialLine }) : null
+          deal
+            ? h(
+                "span",
+                { class: "bar-row__deal", "aria-hidden": "true" },
+                h("span", { class: "bar-row__deal-text" }, deal.head ? h("span", { class: "bar-row__deal-head", text: deal.head + " " }) : null, deal.text),
+                deal.plus ? h("span", { class: "bar-row__deal-plus", text: deal.plus }) : null
+              )
+            : null
         ),
         right
-      ),
-      h(
-        "div",
-        { class: "bar-row__foot" },
-        ui.verdictLine(b.verdict),
-        h(
-          "button",
-          {
-            class: "chip-btn",
-            type: "button",
-            "aria-label": "Report crowd at " + b.name,
-            onclick: function () {
-              openReport(b, refresh);
-            }
-          },
-          "Report"
-        )
       )
     );
   }
@@ -245,7 +235,7 @@
     );
   }
 
-  // Report sheet. Used from Tonight rows and Bar detail. onSent runs after a successful send.
+  // Report sheet. Used from the bar page. onSent runs after a successful send.
   function openReport(b, onSent) {
     var crowdSeg = ui.segmented({
       label: "Crowd inside",
@@ -352,7 +342,7 @@
             list.appendChild(h("li", { class: "empty", text: "No bars yet. Check back soon." }));
           }
           bars.forEach(function (b) {
-            list.appendChild(barRow(b, refresh));
+            list.appendChild(barRow(b));
           });
           ui.clear(bannerSlot);
           ui.append(bannerSlot, staffBanner());
@@ -448,77 +438,73 @@
     return "Wait by hour. " + parts.join(". ");
   }
 
-  // ---------- Specials on the bar detail ----------
-  function specialItem(sp, opts) {
-    opts = opts || {};
-    var price = ui.fmtPrice(sp.price_cents);
-    var when = ui.fmtWindow(sp) + (price ? " \u00b7 " + price : "");
+  // ---------- Deals on the bar detail ----------
+  function dealGroupEl(g, tag) {
     return h(
-      "li",
-      { class: "special" },
+      "div",
+      { class: "deal-group" },
       h(
-        "p",
-        { class: "special__kind" },
-        ui.kindLabel(sp.kind),
-        opts.showNow && sp.is_now ? h("span", { class: "tag", text: "Now" }) : null
+        "div",
+        { class: "deal-group__head" },
+        h(tag || "h3", { class: "deal-group__title", text: g.title }),
+        g.now || g.status
+          ? h("span", { class: "deal-group__status" }, g.now ? h("span", { class: "tag", text: "Now" }) : null, g.status ? h("span", { text: g.status }) : null)
+          : null
       ),
-      h("p", { class: "special__title", text: sp.title }),
-      sp.details ? h("p", { class: "special__details", text: sp.details }) : null,
-      h("p", { class: "special__when", text: when }),
       h(
-        "p",
-        { class: "special__meta", text: (sp.posted_by === "admin" ? "Posted by Crowded" : "Posted by the bar") + " \u00b7 Updated " + ui.fmtAgo(sp.updated_at) }
-      )
+        "ul",
+        { class: "deal-rows" },
+        g.items.map(function (r) {
+          return h(
+            "li",
+            { class: "deal-row" },
+            h(
+              "div",
+              { class: "deal-row__line" },
+              h("span", { class: "deal-row__name", text: r.name }),
+              r.price ? h("span", { class: "deal-row__lead", "aria-hidden": "true" }) : null,
+              r.price ? h("span", { class: "deal-row__price", text: r.price }) : null
+            ),
+            r.note ? h("p", { class: "deal-row__note", text: r.note }) : null
+          );
+        })
+      ),
+      h("p", { class: "deal-group__meta", text: ui.postedBy(g.meta) })
     );
   }
 
-  function specialsTonight(b) {
-    var list = b.specials_tonight || [];
+  function dealsTonight(b) {
+    var groups = ui.dealGroups(b.specials_tonight || [], true);
     return h(
       "section",
-      { class: "specials", "aria-labelledby": "specials-tonight-h" },
-      h("h2", { class: "section-title", id: "specials-tonight-h", text: "Tonight" }),
-      list.length
-        ? h(
-            "ul",
-            { class: "special-list" },
-            list.map(function (sp) {
-              return specialItem(sp, { showNow: true });
-            })
-          )
-        : h("p", { class: "special-empty", text: "No specials posted." })
+      { class: "deals", "aria-labelledby": "deals-tonight-h" },
+      h("h2", { class: "section-title", id: "deals-tonight-h", text: "Deals tonight" }),
+      groups.length
+        ? groups.map(function (g) {
+            return dealGroupEl(g);
+          })
+        : h("p", { class: "special-empty", text: "No deals posted." })
     );
   }
 
-  function specialsWeek(b) {
+  function dealsWeek(b) {
     var week = b.specials_week || [];
-    var groups = [];
+    var days = [];
     for (var d = 0; d < 7; d++) {
-      var items = week.filter(function (sp) {
+      var sps = week.filter(function (sp) {
         return sp.days.indexOf(d) !== -1;
       });
-      if (items.length) {
-        groups.push(
-          h(
-            "div",
-            { class: "week__day" },
-            h("h3", { class: "week__name", text: ui.DAY_LONG[d] }),
-            h(
-              "ul",
-              { class: "special-list" },
-              items.map(function (sp) {
-                return specialItem(sp);
-              })
-            )
-          )
-        );
+      if (sps.length) {
+        days.push(h("div", { class: "week__day" }, h("h3", { class: "week__name", text: ui.DAY_LONG[d] }), ui.dealGroups(sps, false).map(function (g) {
+          return dealGroupEl(g, "h4");
+        })));
       }
     }
     return h(
       "details",
       { class: "week" },
       h("summary", { class: "week__summary", text: "This week" }),
-      groups.length ? groups : h("p", { class: "special-empty", text: "No specials posted." })
+      days.length ? days : h("p", { class: "special-empty", text: "No deals posted." })
     );
   }
 
@@ -645,8 +631,6 @@
         h("p", { class: "detail__addr", text: b.address }),
         hero,
         basis,
-        specialsTonight(b),
-        specialsWeek(b),
         h("h2", { class: "section-title", text: "Wait by hour" }),
         chart(b.wait_by_hour || []),
         h(
@@ -655,6 +639,8 @@
           h("span", null, h("i", { class: "sw-typ" }), "Typical"),
           h("span", null, h("i", { class: "sw-now" }), "Tonight")
         ),
+        dealsTonight(b),
+        dealsWeek(b),
         h("h2", { class: "section-title", text: "Line skip pass" }),
         pass,
         h("h2", { class: "section-title", text: "About" }),

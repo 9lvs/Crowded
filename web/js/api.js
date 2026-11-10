@@ -19,8 +19,9 @@
   var access = null;
   var refreshing = null;
 
-  function ApiError(status, detail) {
+  function ApiError(status, detail, errors) {
     this.status = status;
+    this.errors = errors || null;
     this.detail = detail || "Something went wrong";
     this.message = this.detail;
   }
@@ -108,7 +109,7 @@
         throw new ApiError(429, "Slow down a sec");
       }
       if (r.status >= 200 && r.status < 300) return r.body;
-      throw new ApiError(r.status, detailText(r.body));
+      throw new ApiError(r.status, detailText(r.body), r.body && Array.isArray(r.body.errors) ? r.body.errors : null);
     });
   }
 

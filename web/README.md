@@ -59,7 +59,7 @@ buttons with a small radius, and the numbers as the hero.
 
 - Crowd first: every bar leads with crowd level (word plus 3 segment meter) and the line wait,
   then what the numbers are based on, then the pass call as quiet secondary text.
-- "Report" is on every Tonight row and "Report crowd" is the primary button on a bar.
+- Tonight rows are clean and tappable: name, crowd, wait, basis and one quiet deal line. "Report crowd", "I'm in line" and the pass call live on the bar page.
 - Fonts: DM Sans for all text, Bricolage Grotesque only for big numbers (tabular figures).
 - Wordmark is plain type ("Crowded", or "Crowded for staff").
 - Crowd level never relies on color. Destructive actions are bold, not red.
@@ -69,7 +69,7 @@ Every visual value lives in `css/tokens.css`. You should rarely need to touch `c
 
 | I want to change | Edit in `css/tokens.css` |
 |---|---|
-| Bring color back | Set `--accent` and `--accent-ink` (they equal the text color today). Then, where you want color, point a rule at `var(--accent)`: good first candidates are `.verdict-line--strong`, `.ring__prog` (timer ring) and `.door__btn--in`. For colored crowd levels, give `.meter[data-level="easy"]` etc. their own `--meter-on`. Set values in the light block and both dark blocks. |
+| Bring color back | Set `--accent` and `--accent-ink` (they equal the text color today). Then, where you want color, point a rule at `var(--accent)`: good first candidates are `.ring__prog` (timer ring) and `.door__btn--in`. For colored crowd levels, give `.meter[data-level="easy"]` etc. their own `--meter-on`. Set values in the light block and both dark blocks. |
 | Fonts | `--font-display` (headings), `--font-body` (text), `--font-num` (big numbers). To add a self hosted font, drop the woff2 in `fonts/` and add an `@font-face` in `fonts/fonts.css`. |
 | Corner roundness | `--radius-scale`. 0 is square, 1 is default (6 to 12px). |
 | Density | `--density`. 0.9 is tighter, 1 is default, 1.15 is airier. |

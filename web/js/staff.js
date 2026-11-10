@@ -159,11 +159,39 @@
     "start and end must differ": "Start and end times must differ.",
     "days must be unique": "Pick each day once.",
     "time must be HH:MM, 24 hour": "Use a real time, like 9:00 PM.",
-    "control characters are not allowed": "Remove special characters from the text."
+    "control characters are not allowed": "Remove special characters from the text.",
+    times_required: "Set a start and end time, or turn on All night.",
+    too_many_items: "Add at most 20 items.",
+    item_incomplete: "Each item needs a name and a price."
   };
+  var MAX_ITEMS = 20;
+
+  // FastAPI 422s look like {detail: "validation_error", errors: [{loc, msg}]}. Say it in plain words.
+  function validationText(errors) {
+    var out = null;
+    (errors || []).some(function (er) {
+      var msg = String((er && er.msg) || "").replace(/^Value error, /, "");
+      var loc = (er && er.loc ? er.loc : []).join(".");
+      var inItems = loc.indexOf("items") !== -1;
+      if (msg.indexOf("times_required") !== -1) out = SPECIAL_ERRORS.times_required;
+      else if (msg.indexOf("at most 20 items") !== -1) out = SPECIAL_ERRORS.too_many_items;
+      else if (inItems && loc.indexOf("name") !== -1 && msg.indexOf("at most") !== -1) out = "An item name can be 60 letters at most.";
+      else if (inItems && loc.indexOf("price_label") !== -1 && msg.indexOf("at most") !== -1) out = "An item price can be 20 letters at most.";
+      else if (inItems && loc.indexOf("note") !== -1 && msg.indexOf("at most") !== -1) out = "An item note can be 40 letters at most.";
+      else if (inItems && msg.indexOf("at least 1 character") !== -1) out = SPECIAL_ERRORS.item_incomplete;
+      else if (inItems && loc.indexOf("category") !== -1) out = "Pick a category for each item.";
+      else if (SPECIAL_ERRORS[msg]) out = SPECIAL_ERRORS[msg];
+      return !!out;
+    });
+    return out;
+  }
 
   function specialError(e) {
     var d = e && e.detail;
+    if (e && e.status === 422 && e.errors && e.errors.length) {
+      var plain = validationText(e.errors);
+      return plain || "Check the form. " + String(e.errors[0].msg || "").replace(/^Value error, /, "");
+    }
     if (d && SPECIAL_ERRORS[d]) return SPECIAL_ERRORS[d];
     if (e && e.status === 403) return "This phone is not staff for that bar.";
     if (e && e.status === 422) return d ? "Check the form. " + d : "Check the form and try again.";
@@ -234,7 +262,9 @@
       var ul = h("ul", { class: "special-list" });
       list.forEach(function (sp) {
         var price = ui.fmtPrice(sp.price_cents);
-        var sub = ui.kindLabel(sp.kind) + " · " + daysText(sp.days) + " · " + ui.fmtWindow(sp) + (price ? " · " + price : "");
+        var count = sp.items ? sp.items.length : 0;
+        var sub = ui.kindLabel(sp.kind) + " · " + daysText(sp.days) + " · " + (sp.all_day ? "All night" : ui.fmtWindow(sp)) +
+          (price ? " · " + price : "") + (count ? " · " + count + (count === 1 ? " item" : " items") : "");
         var actions;
         if (confirmId === sp.id) {
           actions = h(
@@ -305,14 +335,101 @@
       var start = h("input", { class: "input", id: "sp-start", type: "time", value: "17:00" });
       var end = h("input", { class: "input", id: "sp-end", type: "time", value: "20:00" });
       var price = h("input", { class: "input", id: "sp-price", type: "text", inputmode: "decimal", autocomplete: "off", placeholder: "Optional, like 5 or 7.50" });
+      var allDay = h("input", { class: "sp-check__box", id: "sp-allday", type: "checkbox" });
+      var timesBlock = h(
+        "div",
+        { class: "sp-timesblock" },
+        h(
+          "div",
+          { class: "sp-times" },
+          h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-start", text: "Starts" }), start),
+          h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-end", text: "Ends" }), end)
+        ),
+        h("p", { class: "field__hint", text: "An end time before the start runs past midnight." })
+      );
+      var items = [];
       if (sp) {
         kind.value = sp.kind;
         title.value = sp.title;
         details.value = sp.details || "";
-        start.value = sp.start_local;
-        end.value = sp.end_local;
+        if (sp.all_day) allDay.checked = true;
+        else {
+          start.value = sp.start_local;
+          end.value = sp.end_local;
+        }
         price.value = centsToDollars(sp.price_cents);
+        items = (sp.items || []).map(function (i) {
+          return { name: i.name, price_label: i.price_label, category: i.category, note: i.note || "" };
+        });
       }
+      timesBlock.hidden = allDay.checked;
+      allDay.addEventListener("change", function () {
+        timesBlock.hidden = allDay.checked;
+      });
+      var itemsEl = h("div", { class: "sp-items" });
+      var itemsHint = h("p", { class: "field__hint" });
+      var addItem = h(
+        "button",
+        {
+          class: "btn btn--secondary",
+          type: "button",
+          onclick: function () {
+            if (items.length >= MAX_ITEMS) return;
+            items.push({ name: "", price_label: "", category: "beer", note: "" });
+            drawItems();
+            var names = itemsEl.querySelectorAll("input[data-f='name']");
+            if (names.length) names[names.length - 1].focus();
+          }
+        },
+        "Add item"
+      );
+      function itemField(label, id, control) {
+        return h("div", { class: "field" }, h("label", { class: "field__label", for: id, text: label }), control);
+      }
+      function drawItems() {
+        ui.clear(itemsEl);
+        items.forEach(function (it, i) {
+          var n = i + 1;
+          var pre = "sp-item-" + n + "-";
+          var name = h("input", { class: "input", id: pre + "name", "data-f": "name", type: "text", maxlength: "60", autocomplete: "off", placeholder: "Lager drafts", value: it.name });
+          var pl = h("input", { class: "input", id: pre + "price", type: "text", maxlength: "20", autocomplete: "off", placeholder: "$3 or 2 for 1", value: it.price_label });
+          var cat = h("select", { class: "input", id: pre + "cat" });
+          ui.DEAL_CATEGORIES.forEach(function (c) {
+            cat.appendChild(h("option", { value: c.value, text: c.label }));
+          });
+          cat.value = it.category;
+          var note = h("input", { class: "input", id: pre + "note", type: "text", maxlength: "40", autocomplete: "off", placeholder: "Dine in only", value: it.note });
+          name.addEventListener("input", function () { it.name = name.value; });
+          pl.addEventListener("input", function () { it.price_label = pl.value; });
+          cat.addEventListener("change", function () { it.category = cat.value; });
+          note.addEventListener("input", function () { it.note = note.value; });
+          itemsEl.appendChild(
+            h(
+              "div",
+              { class: "sp-item-row", role: "group", "aria-label": "Item " + n },
+              itemField("Name", pre + "name", name),
+              h("div", { class: "sp-times" }, itemField("Price", pre + "price", pl), itemField("Category", pre + "cat", cat)),
+              itemField("Note (optional)", pre + "note", note),
+              h(
+                "button",
+                {
+                  class: "btn btn--outline",
+                  type: "button",
+                  "aria-label": "Remove item " + n,
+                  onclick: function () {
+                    items.splice(i, 1);
+                    drawItems();
+                  }
+                },
+                "Remove"
+              )
+            )
+          );
+        });
+        addItem.disabled = items.length >= MAX_ITEMS;
+        itemsHint.textContent = items.length >= MAX_ITEMS ? "That is the most items one special can hold." : items.length + " of " + MAX_ITEMS + " items.";
+      }
+      drawItems();
       var err = h("p", { class: "small form-error", role: "alert" });
       var save = h("button", { class: "btn btn--primary", type: "submit" }, sp ? "Save changes" : "Add special");
       var dayBtns = ui.DAY_SHORT.map(function (label, i) {
@@ -343,19 +460,35 @@
             var t = title.value.trim();
             if (!t) return void (err.textContent = SPECIAL_ERRORS.title_required);
             if (!days.length) return void (err.textContent = SPECIAL_ERRORS.days_required);
-            if (!start.value || !end.value) return void (err.textContent = "Set a start and end time.");
-            if (start.value === end.value) return void (err.textContent = SPECIAL_ERRORS.start_equals_end);
+            if (!allDay.checked) {
+              if (!start.value || !end.value) return void (err.textContent = SPECIAL_ERRORS.times_required);
+              if (start.value === end.value) return void (err.textContent = SPECIAL_ERRORS.start_equals_end);
+            }
             var pr = dollarsToCents(price.value);
             if (pr.error) return void (err.textContent = pr.error);
+            var cleanItems = [];
+            for (var k = 0; k < items.length; k++) {
+              var it = items[k];
+              var nm = it.name.trim();
+              var pl2 = it.price_label.trim();
+              var nt = it.note.trim();
+              if (!nm && !pl2 && !nt) continue;
+              if (!nm || !pl2) return void (err.textContent = "Item " + (k + 1) + " needs a name and a price.");
+              cleanItems.push({ name: nm, price_label: pl2, category: it.category, note: nt });
+            }
             var body = {
               kind: kind.value,
               title: t,
               details: details.value.trim(),
               days: days.slice().sort(),
-              start_local: start.value,
-              end_local: end.value,
-              price_cents: pr.cents
+              price_cents: pr.cents,
+              all_day: allDay.checked,
+              items: cleanItems
             };
+            if (!allDay.checked) {
+              body.start_local = start.value;
+              body.end_local = end.value;
+            }
             save.disabled = true;
             var p = sp ? api.updateSpecial(barId, sp.id, body) : api.addSpecial(barId, body);
             p.then(function () {
@@ -373,14 +506,18 @@
         h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-title", text: "Title" }), title),
         h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-details", text: "Details" }), details),
         h("div", { class: "field" }, h("span", { class: "field__label", id: "sp-days-l", text: "Days" }), h("div", { class: "sp-days", role: "group", "aria-labelledby": "sp-days-l" }, dayBtns)),
+        h("label", { class: "sp-check", for: "sp-allday" }, allDay, h("span", { text: "All night" })),
+        timesBlock,
+        h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-price", text: "Price in dollars" }), price),
         h(
           "div",
-          { class: "sp-times" },
-          h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-start", text: "Starts" }), start),
-          h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-end", text: "Ends" }), end)
+          { class: "sp-itemsblock" },
+          h("h4", { class: "sp-form__sub", text: "Menu items" }),
+          h("p", { class: "field__hint", text: "Students see these as a price list. Optional." }),
+          itemsEl,
+          itemsHint,
+          addItem
         ),
-        h("p", { class: "field__hint", text: "An end time before the start runs past midnight." }),
-        h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-price", text: "Price in dollars" }), price),
         err,
         h(
           "div",
