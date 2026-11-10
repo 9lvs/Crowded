@@ -17,11 +17,13 @@ struct LastTap: Equatable, Sendable {
 /// A line size or timing reminder shown as a banner while the door tab is open.
 enum DoorReminder: Equatable, Sendable {
     case updateLine
+    case updateInside
     case timeLine
 
     var text: String {
         switch self {
         case .updateLine: return "Update the line size"
+        case .updateInside: return "Update inside"
         case .timeLine: return "Time the line"
         }
     }
@@ -35,6 +37,7 @@ enum DoorReminder: Equatable, Sendable {
 final class StaffViewModel {
     static let undoWindow: TimeInterval = 30
     static let lineReminderInterval: TimeInterval = 15 * 60
+    static let insideReminderInterval: TimeInterval = 15 * 60
     static let sampleReminderInterval: TimeInterval = 20 * 60
     static let maxActiveSamples = 2
 
@@ -43,6 +46,10 @@ final class StaffViewModel {
     var isRedeeming: Bool = false
     var errorMessage: String?
     var pendingDelta: Int = 0
+
+    /// Door or manager. Set by the view from the signed in user. Anything but manager gets the
+    /// door view, so an unknown level is treated as door.
+    var staffLevel: StaffLevel?
 
     /// Taps not yet saved. Shown as "Saving when back online".
     private(set) var queue: [QueuedTap] = []
@@ -53,15 +60,11 @@ final class StaffViewModel {
     private(set) var lastCheck: LineSample?
     var sampleError: String?
 
-    // Door code
-    private(set) var doorCode: DoorCode?
-    private(set) var doorCodeFetchedAt: Date?
-    @ObservationIgnored private var doorCodeLastAttempt: Date?
-
     // Reminders
     var reminder: DoorReminder?
     @ObservationIgnored private var openedAt: Date
     @ObservationIgnored private var lastLineReminderAt: Date?
+    @ObservationIgnored private var lastInsideReminderAt: Date?
     @ObservationIgnored private var lastSampleReminderAt: Date?
 
     /// Tests replace this to move time without waiting.
@@ -85,6 +88,25 @@ final class StaffViewModel {
 
     var displayedHeadcount: Int {
         return max(0, (state?.headcount ?? 0) + pendingDelta)
+    }
+
+    /// Only managers see the Manage section and the specials editor.
+    var canManage: Bool {
+        return staffLevel == .manager
+    }
+
+    /// False for bars that only count people in. Older servers omit it, which reads as true.
+    var countsExits: Bool {
+        return state?.countsExits ?? true
+    }
+
+    /// Entries tonight with taps that are still saving. At a bar that counts entries only, the
+    /// only OUT events are Undo taps, so entries net of undone taps is the same as the count.
+    var displayedEntries: Int {
+        if !countsExits {
+            return displayedHeadcount
+        }
+        return max(0, (state?.entriesTonight ?? 0) + pendingDelta)
     }
 
     var capacityPercent: Int {
@@ -142,6 +164,7 @@ final class StaffViewModel {
     func doorOpened() {
         openedAt = clock()
         lastLineReminderAt = nil
+        lastInsideReminderAt = nil
         lastSampleReminderAt = nil
         reminder = nil
     }
@@ -161,6 +184,10 @@ final class StaffViewModel {
 
     /// Counts one tap or a group. Moves the number now, saves in the background.
     func count(barId: String, direction: DoorDirection, by amount: Int = 1, recordUndo: Bool = true) async {
+        // Out taps are ignored at bars that count entries only. Undo of an entry still goes through.
+        if direction == .exit && recordUndo && !countsExits {
+            return
+        }
         let delta = direction == .entry ? amount : -amount
         if direction == .exit && displayedHeadcount - amount < 0 {
             errorMessage = APIError.http(status: 409, detail: "headcount_below_zero").errorDescription
@@ -339,59 +366,83 @@ final class StaffViewModel {
         return "Last line check: \(Int(wait.rounded())) min, \(ago) min ago"
     }
 
-    // MARK: Door code
+    // MARK: Inside conditions and settings
 
-    func loadDoorCode(barId: String) async {
-        doorCodeLastAttempt = clock()
+    /// One tap on "How busy inside?" or "How long for a drink?". Sends only the field tapped.
+    func postInside(barId: String, crowd: CrowdLevel? = nil, drinkWait: DrinkWait? = nil) async {
+        if crowd == nil && drinkWait == nil { return }
         do {
-            doorCode = try await api.doorCode(barId: barId)
-            doorCodeFetchedAt = clock()
+            state = try await api.postInside(barId: barId, crowd: crowd, drinkWait: drinkWait)
+            errorMessage = nil
+            reminder = reminder == .updateInside ? nil : reminder
         } catch {
-            // Keep showing the old code until it expires. Do not show a stale one after that.
+            errorMessage = APIError.wrap(error).errorDescription
         }
     }
 
-    func doorCodeSecondsLeft(at date: Date) -> Int {
-        guard let doorCode, let fetched = doorCodeFetchedAt else { return 0 }
-        let used = date.timeIntervalSince(fetched)
-        return max(0, Int((Double(doorCode.expiresIn) - used).rounded(.up)))
+    /// "Updated 4 min ago", or nil before the first inside update.
+    func insideUpdatedText(at date: Date) -> String? {
+        guard let updated = state?.inside?.updatedAt else { return nil }
+        let minutes = max(0, Int((date.timeIntervalSince(updated) / 60).rounded(.down)))
+        if minutes < 1 {
+            return "Updated just now"
+        }
+        return "Updated \(minutes) min ago"
     }
 
-    /// Refresh when the code ran out or is about to.
-    func refreshDoorCodeIfNeeded(barId: String) async {
-        let current = clock()
-        if let last = doorCodeLastAttempt, current.timeIntervalSince(last) < 5 {
+    /// Manager only. Turns exit counting on or off for the bar.
+    func setCountsExits(barId: String, value: Bool) async {
+        if !canManage {
+            errorMessage = APIError.http(status: 403, detail: "manager_only").errorDescription
             return
         }
-        if doorCode == nil || doorCodeSecondsLeft(at: current) <= 1 {
-            await loadDoorCode(barId: barId)
+        do {
+            state = try await api.setCountsExits(barId: barId, value: value)
+            errorMessage = nil
+        } catch {
+            errorMessage = APIError.wrap(error).errorDescription
         }
     }
 
     // MARK: Reminders
 
-    /// Checks the 15 and 20 minute reminders. Returns true when a new one appeared, so the view
-    /// can fire a haptic. In app only, no push.
+    /// Checks the 15 minute line and inside reminders and the 20 minute timing reminder. Returns
+    /// true when a new one appeared, so the view can fire a haptic. In app only, no push. If
+    /// several are due at once, the banner shows the first of line, inside, timing.
     @discardableResult
     func evaluateReminders() -> Bool {
         let current = clock()
+        var due: [DoorReminder] = []
+
         let lineRef = state?.lineUpdatedAt ?? openedAt
         let lineSince = current.timeIntervalSince(max(lineRef, openedAt))
         let lineLast = lastLineReminderAt.map { current.timeIntervalSince($0) } ?? .infinity
         if lineSince >= Self.lineReminderInterval && lineLast >= Self.lineReminderInterval {
             lastLineReminderAt = current
-            reminder = .updateLine
-            return true
+            due.append(.updateLine)
         }
+
+        let insideRef = state?.inside?.updatedAt ?? openedAt
+        let insideSince = current.timeIntervalSince(max(insideRef, openedAt))
+        let insideLast = lastInsideReminderAt.map { current.timeIntervalSince($0) } ?? .infinity
+        if insideSince >= Self.insideReminderInterval && insideLast >= Self.insideReminderInterval {
+            lastInsideReminderAt = current
+            due.append(.updateInside)
+        }
+
         if samples.isEmpty {
             let sampleRef = lastCheck?.endedAt ?? openedAt
             let sampleSince = current.timeIntervalSince(max(sampleRef, openedAt))
             let sampleLast = lastSampleReminderAt.map { current.timeIntervalSince($0) } ?? .infinity
             if sampleSince >= Self.sampleReminderInterval && sampleLast >= Self.sampleReminderInterval {
                 lastSampleReminderAt = current
-                reminder = .timeLine
-                return true
+                due.append(.timeLine)
             }
+        }
+
+        if let first = due.first {
+            reminder = first
+            return true
         }
         return false
     }

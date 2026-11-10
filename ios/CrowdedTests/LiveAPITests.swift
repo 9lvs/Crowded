@@ -236,4 +236,114 @@ final class LiveAPITests: XCTestCase {
         XCTAssertEqual(ended.status, .completed)
         XCTAssertEqual(ended.actualWaitMin, 14.0)
     }
+
+    func testStaffStateDecodesCountsExitsAndInside() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "GET", "/v1/staff/bars/b1",
+            json: """
+            {"bar_id":"b1","bar_name":"FAKE Owl","capacity":220,"headcount":0,
+             "entries_tonight":42,"exits_tonight":0,"line_size":"long",
+             "line_updated_at":"2026-11-14T03:30:00Z","counts_exits":false,
+             "inside":{"crowd_level":"busy","drink_wait":"10_to_20","updated_at":"2026-11-14T03:31:00Z"},
+             "live":\(Fixtures.live)}
+            """
+        )
+        let state = try await api.staffState(barId: "b1")
+        XCTAssertFalse(state.countsExits)
+        XCTAssertEqual(state.entriesTonight, 42)
+        XCTAssertEqual(state.inside?.crowdLevel, .busy)
+        XCTAssertEqual(state.inside?.drinkWait, .tenToTwenty)
+        XCTAssertNotNil(state.inside?.updatedAt)
+    }
+
+    func testStaffStateWithoutNewFieldsStillDecodes() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "GET", "/v1/staff/bars/b2",
+            json: """
+            {"bar_id":"b2","bar_name":"FAKE Heron","capacity":300,"headcount":10,
+             "entries_tonight":12,"exits_tonight":2,"live":\(Fixtures.noDataLive)}
+            """
+        )
+        let state = try await api.staffState(barId: "b2")
+        XCTAssertTrue(state.countsExits)
+        XCTAssertNil(state.inside)
+        XCTAssertNil(state.live.drinkWait)
+    }
+
+    func testLiveDecodesDrinkWait() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "GET", "/v1/bars",
+            json: """
+            [{"id":"b1","slug":"fake-owl","name":"FAKE Owl","address":"1 Fake St","capacity":220,
+              "pass_price_cents":1500,
+              "live":{"has_recent_data":true,"wait_min":31,"wait_low_min":23,"wait_high_min":40,
+                      "crowd_level":"packed","headcount":205,"capacity_ratio":0.932,
+                      "drink_wait":"over_20","drink_wait_label":"Over 20 min",
+                      "confidence":"high",
+                      "basis":{"text":"Based on 2 inside updates","window_min":30,"reports":0,
+                               "timers":0,"door_events":0,"staff_line_updates":0,
+                               "inside_updates":2},
+                      "flags":[],"updated_at":"2026-11-14T03:30:00Z"},
+              "verdict":{"recommendation":"buy_pass","text":"Get the pass.","threshold_min":20,
+                         "pass_price_cents":1500,"minutes_saved":31}}]
+            """
+        )
+        let bars = try await api.bars()
+        XCTAssertEqual(bars[0].live.drinkWait, .over20)
+        XCTAssertEqual(bars[0].live.drinkWaitLabel, "Over 20 min")
+        XCTAssertEqual(bars[0].live.drinkText, "Over 20 min")
+        XCTAssertEqual(bars[0].live.basis.insideUpdates, 2)
+    }
+
+    func testMeDecodesStaffLevel() async throws {
+        StubURLProtocol.stub(
+            "POST", "/v1/auth/verify-code",
+            json: """
+            {"access_token":"access-1","refresh_token":"refresh-1","token_type":"bearer",
+             "expires_in":900,
+             "user":{"id":"u1","role":"staff","wait_threshold_min":20,"staff_bar_id":"b1",
+                     "staff_level":"door","phone_hint":"ending in 34",
+                     "created_at":"2026-11-09T04:25:07Z"}}
+            """
+        )
+        let me = try await api.verifyCode(phone: "+15550001234", code: "123456", ageAttested: true)
+        XCTAssertEqual(me.staffLevel, .door)
+        XCTAssertTrue(me.isStaff)
+        XCTAssertFalse(me.isManager)
+    }
+
+    func testPostInsideAndSettingsDecodeStaffState() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "POST", "/v1/staff/bars/b1/inside",
+            json: """
+            {"bar_id":"b1","bar_name":"FAKE Owl","capacity":220,"headcount":5,
+             "entries_tonight":5,"exits_tonight":0,"counts_exits":true,
+             "inside":{"crowd_level":"easy","updated_at":"2026-11-14T03:31:00Z"},
+             "live":\(Fixtures.live)}
+            """
+        )
+        let state = try await api.postInside(barId: "b1", crowd: .easy, drinkWait: nil)
+        XCTAssertEqual(state.inside?.crowdLevel, .easy)
+        XCTAssertNil(state.inside?.drinkWait)
+        let request = StubURLProtocol.requests.last { $0.url?.path == "/v1/staff/bars/b1/inside" }
+        XCTAssertEqual(request?.httpMethod, "POST")
+    }
+
+    func testManagerOnlyErrorMapsToPlainLanguage() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "PATCH", "/v1/staff/bars/b1/settings", status: 403,
+            json: "{\"detail\":\"manager_only\"}")
+        do {
+            _ = try await api.setCountsExits(barId: "b1", value: false)
+            XCTFail("expected an error")
+        } catch let error as APIError {
+            XCTAssertEqual(error.status, 403)
+            XCTAssertEqual(error.errorDescription, "Only managers can change this.")
+        }
+    }
 }

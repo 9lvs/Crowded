@@ -311,58 +311,209 @@ final class DoorModeTests: XCTestCase {
         XCTAssertEqual(vm.reminder, .timeLine)
     }
 
-    func testDoorCodeChangesEveryTwoMinutes() async throws {
+    func testDoorCodeRouteIsOffByDefault() async {
         let api = MockAPI(signedIn: true, role: .staff)
-        let first = try await api.doorCode(barId: owl)
-        XCTAssertEqual(first.code.count, 4)
-        XCTAssertTrue(first.expiresIn > 0 && first.expiresIn <= 120)
-        await api.advanceClock(seconds: 120)
-        let second = try await api.doorCode(barId: owl)
-        XCTAssertNotEqual(first.code, second.code)
+        do {
+            _ = try await api.doorCode(barId: owl)
+            XCTFail("expected the door code to be off")
+        } catch let error as APIError {
+            XCTAssertEqual(error.status, 404)
+            XCTAssertEqual(error.detail, "door_code_disabled")
+        } catch {
+            XCTFail("unexpected error")
+        }
+    }
+
+    func testInsideReminderTextAndPriority() async {
+        XCTAssertEqual(DoorReminder.updateInside.text, "Update inside")
+        let api = MockAPI(signedIn: true, role: .staff)
+        let vm = await makeVM(api)
+        let start = Date()
+        var current = start
+        vm.clock = { current }
+        vm.doorOpened()
+        current = start.addingTimeInterval(16 * 60)
+        XCTAssertTrue(vm.evaluateReminders())
+        // Line and inside are both due. The banner shows the line one first.
+        XCTAssertEqual(vm.reminder, .updateLine)
+        XCTAssertFalse(vm.evaluateReminders())
     }
 }
 
 @MainActor
-final class DoorCodeStudentTests: XCTestCase {
+final class DoorCodeOffTests: XCTestCase {
     private let owl = "00000000-0000-4000-8000-000000000001"
 
-    func testRightCodeVerifiesAndPaysMore() async throws {
-        let api = MockAPI(signedIn: true, role: .staff)
-        let session = try await api.startSession(barId: owl, location: Coordinate(latitude: 0, longitude: 0))
-        await api.advanceClock(seconds: 12 * 60)
-        let code = try await api.doorCode(barId: owl).code
-        let vm = LineTimerViewModel(api: api, session: session)
-        vm.doorCodeInput = code
-        await vm.end(.inside, doorCode: vm.validDoorCode)
-        XCTAssertTrue(vm.isVerified)
-        XCTAssertEqual(vm.finished?.pointsAwarded, 20)
-        XCTAssertFalse(vm.codeDidNotMatch)
-    }
-
-    func testWrongCodeStillEndsUnverified() async throws {
-        let api = MockAPI(signedIn: true, role: .staff)
-        let session = try await api.startSession(barId: owl, location: Coordinate(latitude: 0, longitude: 0))
-        await api.advanceClock(seconds: 12 * 60)
-        let real = try await api.doorCode(barId: owl).code
-        let wrong = real == "0000" ? "1111" : "0000"
-        let vm = LineTimerViewModel(api: api, session: session)
-        await vm.end(.inside, doorCode: wrong)
-        XCTAssertEqual(vm.resultKind, .inside)
-        XCTAssertFalse(vm.isVerified)
-        XCTAssertTrue(vm.codeDidNotMatch)
-        XCTAssertEqual(vm.finished?.pointsAwarded, 10)
-    }
-
-    func testSkippingTheCodeEndsNormally() async throws {
+    func testInsideEndsDirectlyAndIsNotVerified() async throws {
         let api = MockAPI(signedIn: true)
         let session = try await api.startSession(barId: owl, location: Coordinate(latitude: 0, longitude: 0))
         await api.advanceClock(seconds: 12 * 60)
         let vm = LineTimerViewModel(api: api, session: session)
-        vm.doorCodeInput = "12"
-        XCTAssertNil(vm.validDoorCode)
-        await vm.end(.inside, doorCode: vm.validDoorCode)
+        await vm.end(.inside)
         XCTAssertEqual(vm.resultKind, .inside)
-        XCTAssertFalse(vm.isVerified)
-        XCTAssertFalse(vm.codeDidNotMatch)
+        XCTAssertEqual(vm.finished?.verified, false)
+        XCTAssertEqual(vm.finished?.pointsAwarded, 10)
+    }
+}
+
+@MainActor
+final class StaffLevelTests: XCTestCase {
+    private let owl = "00000000-0000-4000-8000-000000000001"
+
+    func testDoorStaffHaveNoSpecialsAccess() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .door)
+        let me = try? await api.me()
+        XCTAssertEqual(me?.staffLevel, .door)
+        XCTAssertEqual(me?.isManager, false)
+        let vm = StaffViewModel(api: api)
+        vm.staffLevel = me?.staffLevel
+        XCTAssertFalse(vm.canManage)
+        let specials = StaffSpecialsViewModel(api: api, barId: owl)
+        await specials.load()
+        XCTAssertTrue(specials.specials.isEmpty)
+        XCTAssertEqual(specials.errorMessage, "Only managers can change this.")
+    }
+
+    func testManagerHasSpecialsAccess() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .manager)
+        let me = try? await api.me()
+        XCTAssertEqual(me?.isManager, true)
+        let vm = StaffViewModel(api: api)
+        vm.staffLevel = me?.staffLevel
+        XCTAssertTrue(vm.canManage)
+        let specials = StaffSpecialsViewModel(api: api, barId: owl)
+        await specials.load()
+        XCTAssertEqual(specials.specials.count, 5)
+        XCTAssertNil(specials.errorMessage)
+    }
+
+    func testMockStaffLevelCanSwitch() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .manager)
+        await api.setStaffLevel(.door)
+        let me = try? await api.me()
+        XCTAssertEqual(me?.staffLevel, .door)
+    }
+
+    func testInsideTapsPostAndShowUpdatedText() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .door)
+        let vm = StaffViewModel(api: api, pollInterval: 60, retryDelays: [0.01])
+        await vm.load(barId: owl)
+        XCTAssertNil(vm.state?.inside)
+        XCTAssertNil(vm.insideUpdatedText(at: Date()))
+        await vm.postInside(barId: owl, crowd: .busy)
+        await vm.postInside(barId: owl, drinkWait: .over20)
+        XCTAssertEqual(vm.state?.inside?.crowdLevel, .busy)
+        XCTAssertEqual(vm.state?.inside?.drinkWait, .over20)
+        XCTAssertEqual(vm.state?.live.drinkWaitLabel, "Over 20 min")
+        XCTAssertEqual(vm.insideUpdatedText(at: Date()), "Updated just now")
+        XCTAssertEqual(vm.insideUpdatedText(at: Date().addingTimeInterval(4 * 60 + 5)), "Updated 4 min ago")
+        XCTAssertNil(vm.errorMessage)
+    }
+
+    func testPostingInsideClearsTheInsideReminder() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .door)
+        let vm = StaffViewModel(api: api, pollInterval: 60, retryDelays: [0.01])
+        await vm.load(barId: owl)
+        vm.reminder = .updateInside
+        await vm.postInside(barId: owl, crowd: .easy)
+        XCTAssertNil(vm.reminder)
+    }
+
+    func testDoorStaffCannotChangeCountsExits() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .door)
+        let vm = StaffViewModel(api: api, pollInterval: 60, retryDelays: [0.01])
+        vm.staffLevel = .door
+        await vm.load(barId: owl)
+        await vm.setCountsExits(barId: owl, value: false)
+        XCTAssertTrue(vm.countsExits)
+        XCTAssertEqual(vm.errorMessage, "Only managers can change this.")
+    }
+
+    func testServerRefusesCountsExitsForDoorStaff() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .door)
+        do {
+            _ = try await api.setCountsExits(barId: owl, value: false)
+            XCTFail("expected manager_only")
+        } catch let error as APIError {
+            XCTAssertEqual(error.status, 403)
+            XCTAssertEqual(error.detail, "manager_only")
+        } catch {
+            XCTFail("unexpected error")
+        }
+    }
+
+    func testCountInOnlyBarIgnoresOutAndShowsEntries() async {
+        let api = MockAPI(signedIn: true, role: .staff, staffLevel: .manager)
+        let vm = StaffViewModel(api: api, pollInterval: 60, retryDelays: [0.01])
+        vm.staffLevel = .manager
+        await vm.load(barId: owl)
+        XCTAssertTrue(vm.countsExits)
+        await vm.setCountsExits(barId: owl, value: false)
+        XCTAssertFalse(vm.countsExits)
+        XCTAssertEqual(vm.state?.countsExits, false)
+        let entries = vm.displayedEntries
+        let headcount = vm.displayedHeadcount
+        await vm.count(barId: owl, direction: .exit)
+        XCTAssertEqual(vm.displayedHeadcount, headcount)
+        XCTAssertEqual(vm.displayedEntries, entries)
+        await vm.count(barId: owl, direction: .entry, by: 2)
+        XCTAssertEqual(vm.displayedEntries, entries + 2)
+        // Undo of an entry still works.
+        await vm.undo(barId: owl)
+        XCTAssertEqual(vm.displayedEntries, entries)
+        XCTAssertNil(vm.errorMessage)
+    }
+
+    func testManagerOnlyErrorText() {
+        let error = APIError.http(status: 403, detail: "manager_only")
+        XCTAssertEqual(error.errorDescription, "Only managers can change this.")
+    }
+}
+
+@MainActor
+final class DrinkWaitTests: XCTestCase {
+    private let owl = "00000000-0000-4000-8000-000000000001"
+    private let heron = "00000000-0000-4000-8000-000000000003"
+
+    func testBarDetailShowsDrinkWaitLabelOrNoData() async {
+        let api = MockAPI(signedIn: true)
+        let owlVM = BarDetailViewModel(api: api, barId: owl)
+        await owlVM.load()
+        XCTAssertEqual(owlVM.detail?.bar.live.drinkWaitLabel, "10 to 20 min")
+        XCTAssertEqual(owlVM.detail?.bar.live.drinkText, "10 to 20 min")
+        let heronVM = BarDetailViewModel(api: api, barId: heron)
+        await heronVM.load()
+        XCTAssertNil(heronVM.detail?.bar.live.drinkWaitLabel)
+        XCTAssertEqual(heronVM.detail?.bar.live.drinkText, "No recent data")
+    }
+
+    func testReportCanBeJustADrinkWait() async {
+        let api = MockAPI(signedIn: true)
+        let vm = ReportViewModel(api: api, barId: owl, barName: "FAKE The Tipsy Owl")
+        XCTAssertFalse(vm.canSend)
+        vm.drinkWait = .fiveToTen
+        XCTAssertTrue(vm.canSend)
+    }
+
+    func testReportIncludesDrinkWait() async throws {
+        let api = MockAPI(signedIn: true)
+        let vm = ReportViewModel(api: api, barId: owl, barName: "FAKE The Tipsy Owl")
+        vm.drinkWait = .over20
+        await vm.send(location: FixedLocation(nil))
+        XCTAssertNotNil(vm.result)
+        XCTAssertNil(vm.errorMessage)
+        let detail = try await api.bar(id: owl)
+        XCTAssertEqual(detail.bar.live.drinkWait, .over20)
+        XCTAssertEqual(detail.bar.live.drinkWaitLabel, "Over 20 min")
+    }
+
+    func testDrinkWaitLabelsAndRawValues() {
+        XCTAssertEqual(DrinkWait.allCases.count, 4)
+        XCTAssertEqual(DrinkWait.under5.rawValue, "under_5")
+        XCTAssertEqual(DrinkWait.fiveToTen.rawValue, "5_to_10")
+        XCTAssertEqual(DrinkWait.tenToTwenty.rawValue, "10_to_20")
+        XCTAssertEqual(DrinkWait.over20.rawValue, "over_20")
+        XCTAssertEqual(DrinkWait.tenToTwenty.label, "10 to 20")
+        XCTAssertNil(DrinkWait(api: "some_future_value"))
     }
 }

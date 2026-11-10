@@ -77,6 +77,27 @@ struct ReportSheet: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("How long for a drink?")
+                    .font(.crowdedLabel)
+                    .foregroundStyle(Colors.text2)
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: Spacing.s2)],
+                    spacing: Spacing.s2
+                ) {
+                    ForEach(DrinkWait.allCases) { wait in
+                        OptionButton(
+                            title: wait.label,
+                            isSelected: vm.drinkWait == wait
+                        ) {
+                            vm.drinkWait = (vm.drinkWait == wait) ? nil : wait
+                        }
+                        .accessibilityLabel(wait.fullLabel)
+                        .accessibilityIdentifier("drink-\(wait.rawValue)")
+                    }
+                }
+            }
+
             if let error = vm.errorMessage {
                 Text(error).font(.crowdedSmall)
             }
