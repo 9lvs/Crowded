@@ -207,3 +207,162 @@ final class StaffViewModelTests: XCTestCase {
         XCTAssertNotNil(vm.errorMessage)
     }
 }
+
+@MainActor
+final class DoorModeTests: XCTestCase {
+    private let owl = "00000000-0000-4000-8000-000000000001"
+
+    private func makeVM(_ api: MockAPI) async -> StaffViewModel {
+        let vm = StaffViewModel(api: api, pollInterval: 60, retryDelays: [0.01])
+        await vm.load(barId: owl)
+        return vm
+    }
+
+    func testTapThenUndoRestoresCount() async {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let vm = await makeVM(api)
+        let before = vm.displayedHeadcount
+        await vm.count(barId: owl, direction: .entry, by: 3)
+        XCTAssertEqual(vm.displayedHeadcount, before + 3)
+        XCTAssertTrue(vm.canUndo(at: vm.clock()))
+        await vm.undo(barId: owl)
+        XCTAssertEqual(vm.displayedHeadcount, before)
+        XCTAssertFalse(vm.canUndo(at: vm.clock()))
+    }
+
+    func testUndoExpiresAfterThirtySeconds() async {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let vm = await makeVM(api)
+        let start = Date()
+        var current = start
+        vm.clock = { current }
+        await vm.count(barId: owl, direction: .entry)
+        current = start.addingTimeInterval(31)
+        XCTAssertFalse(vm.canUndo(at: vm.clock()))
+        let before = vm.displayedHeadcount
+        await vm.undo(barId: owl)
+        XCTAssertEqual(vm.displayedHeadcount, before)
+    }
+
+    func testOfflineTapsQueueThenRetry() async {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let vm = await makeVM(api)
+        let before = vm.displayedHeadcount
+        await api.setOffline(true)
+        await vm.count(barId: owl, direction: .entry)
+        await vm.count(barId: owl, direction: .entry, by: 2)
+        XCTAssertEqual(vm.queue.count, 2)
+        XCTAssertTrue(vm.isSavingOffline)
+        XCTAssertEqual(vm.displayedHeadcount, before + 3)
+        await api.setOffline(false)
+        await vm.flushQueue(barId: owl)
+        XCTAssertTrue(vm.queue.isEmpty)
+        XCTAssertFalse(vm.isSavingOffline)
+        XCTAssertEqual(vm.state?.headcount, before + 3)
+        XCTAssertEqual(vm.displayedHeadcount, before + 3)
+        vm.stopPolling()
+    }
+
+    func testCountSyncSetsInsideNow() async {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let vm = await makeVM(api)
+        let ok = await vm.syncCount(barId: owl, insideNow: 123)
+        XCTAssertTrue(ok)
+        XCTAssertEqual(vm.displayedHeadcount, 123)
+        let bad = await vm.syncCount(barId: owl, insideNow: 9000)
+        XCTAssertFalse(bad)
+        XCTAssertEqual(vm.displayedHeadcount, 123)
+    }
+
+    func testLineSampleStartEndAndLimit() async {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let vm = await makeVM(api)
+        await vm.startSample(barId: owl)
+        await vm.startSample(barId: owl)
+        XCTAssertEqual(vm.samples.count, 2)
+        XCTAssertFalse(vm.canStartSample)
+        await vm.startSample(barId: owl)
+        XCTAssertEqual(vm.samples.count, 2)
+        XCTAssertNotNil(vm.sampleError)
+        let first = vm.samples[0]
+        let second = vm.samples[1]
+        await api.advanceClock(seconds: 14 * 60)
+        await vm.endSample(barId: owl, sampleId: first.id, outcome: .inside)
+        XCTAssertEqual(vm.samples.count, 1)
+        XCTAssertTrue(vm.lastCheckText(at: Date().addingTimeInterval(14 * 60 + 360))?.hasPrefix("Last line check: 14 min, 6 min ago") == true)
+        await vm.endSample(barId: owl, sampleId: second.id, outcome: .cancel)
+        XCTAssertTrue(vm.samples.isEmpty)
+    }
+
+    func testRemindersFireAtFifteenAndTwentyMinutes() async {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let vm = await makeVM(api)
+        let start = Date()
+        var current = start
+        vm.clock = { current }
+        vm.doorOpened()
+        XCTAssertFalse(vm.evaluateReminders())
+        current = start.addingTimeInterval(16 * 60)
+        XCTAssertTrue(vm.evaluateReminders())
+        XCTAssertEqual(vm.reminder, .updateLine)
+        XCTAssertFalse(vm.evaluateReminders())
+        current = start.addingTimeInterval(21 * 60)
+        XCTAssertTrue(vm.evaluateReminders())
+        XCTAssertEqual(vm.reminder, .timeLine)
+    }
+
+    func testDoorCodeChangesEveryTwoMinutes() async throws {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let first = try await api.doorCode(barId: owl)
+        XCTAssertEqual(first.code.count, 4)
+        XCTAssertTrue(first.expiresIn > 0 && first.expiresIn <= 120)
+        await api.advanceClock(seconds: 120)
+        let second = try await api.doorCode(barId: owl)
+        XCTAssertNotEqual(first.code, second.code)
+    }
+}
+
+@MainActor
+final class DoorCodeStudentTests: XCTestCase {
+    private let owl = "00000000-0000-4000-8000-000000000001"
+
+    func testRightCodeVerifiesAndPaysMore() async throws {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let session = try await api.startSession(barId: owl, location: Coordinate(latitude: 0, longitude: 0))
+        await api.advanceClock(seconds: 12 * 60)
+        let code = try await api.doorCode(barId: owl).code
+        let vm = LineTimerViewModel(api: api, session: session)
+        vm.doorCodeInput = code
+        await vm.end(.inside, doorCode: vm.validDoorCode)
+        XCTAssertTrue(vm.isVerified)
+        XCTAssertEqual(vm.finished?.pointsAwarded, 20)
+        XCTAssertFalse(vm.codeDidNotMatch)
+    }
+
+    func testWrongCodeStillEndsUnverified() async throws {
+        let api = MockAPI(signedIn: true, role: .staff)
+        let session = try await api.startSession(barId: owl, location: Coordinate(latitude: 0, longitude: 0))
+        await api.advanceClock(seconds: 12 * 60)
+        let real = try await api.doorCode(barId: owl).code
+        let wrong = real == "0000" ? "1111" : "0000"
+        let vm = LineTimerViewModel(api: api, session: session)
+        await vm.end(.inside, doorCode: wrong)
+        XCTAssertEqual(vm.resultKind, .inside)
+        XCTAssertFalse(vm.isVerified)
+        XCTAssertTrue(vm.codeDidNotMatch)
+        XCTAssertEqual(vm.finished?.pointsAwarded, 10)
+    }
+
+    func testSkippingTheCodeEndsNormally() async throws {
+        let api = MockAPI(signedIn: true)
+        let session = try await api.startSession(barId: owl, location: Coordinate(latitude: 0, longitude: 0))
+        await api.advanceClock(seconds: 12 * 60)
+        let vm = LineTimerViewModel(api: api, session: session)
+        vm.doorCodeInput = "12"
+        XCTAssertNil(vm.validDoorCode)
+        await vm.end(.inside, doorCode: vm.validDoorCode)
+        XCTAssertEqual(vm.resultKind, .inside)
+        XCTAssertFalse(vm.isVerified)
+        XCTAssertFalse(vm.codeDidNotMatch)
+    }
+}

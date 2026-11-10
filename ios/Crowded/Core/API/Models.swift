@@ -250,6 +250,31 @@ struct LineSession: Sendable, Equatable, Identifiable {
     var actualWaitMin: Double?
     var nearBar: Bool
     var pointsAwarded: Int
+    /// True when the student typed the right door code. Defaults to false for older servers.
+    var verified: Bool = false
+}
+
+/// How a staff line sample ends. Raw values match the API.
+enum SampleOutcome: String, Sendable, Equatable {
+    case inside
+    case cancel
+}
+
+/// A staff timed line sample: someone at the back of the line, timed to the door.
+struct LineSample: Sendable, Equatable, Identifiable {
+    var id: String
+    var barId: String
+    var status: SessionStatus
+    var startedAt: Date
+    var endedAt: Date?
+    var actualWaitMin: Double?
+}
+
+/// The 4 digit door code. It changes every 2 minutes.
+struct DoorCode: Sendable, Equatable {
+    var code: String
+    /// Seconds left when the server answered.
+    var expiresIn: Int
 }
 
 struct ReportResult: Sendable, Equatable {

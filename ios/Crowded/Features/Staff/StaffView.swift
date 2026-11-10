@@ -7,6 +7,7 @@ struct StaffView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var scenePhase
     @State private var vm: StaffViewModel
+    @State private var showSync = false
 
     init(api: CrowdedAPI) {
         _vm = State(initialValue: StaffViewModel(api: api))
@@ -34,7 +35,34 @@ struct StaffView: View {
                 vm.startPolling(barId: barId)
             }
         }
-        .onDisappear { vm.stopPolling() }
+        .task(id: app.me?.staffBarId) {
+            guard let barId = app.me?.staffBarId else { return }
+            await vm.loadSamples(barId: barId)
+            while !Task.isCancelled {
+                await vm.refreshDoorCodeIfNeeded(barId: barId)
+                if vm.evaluateReminders() {
+                    UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+        .onAppear {
+            vm.doorOpened()
+            // The door stays awake while this tab is visible.
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
+        .onDisappear {
+            vm.stopPolling()
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+        .sheet(isPresented: $showSync) {
+            if let barId = app.me?.staffBarId {
+                CountSyncSheet(currentCount: vm.displayedHeadcount) { total in
+                    await vm.syncCount(barId: barId, insideNow: total)
+                }
+                .presentationDetents([.medium])
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             guard let barId = app.me?.staffBarId else { return }
             if phase == .active {
@@ -86,44 +114,8 @@ struct StaffView: View {
                 Text(state.barName)
                     .font(.crowdedSection)
 
-                VStack(spacing: Spacing.s2) {
-                    Text("Inside now")
-                        .font(.crowdedSmall)
-                        .foregroundStyle(Colors.text2)
-                    Text("\(vm.displayedHeadcount)")
-                        .font(.crowdedNumber(96))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                        .accessibilityIdentifier("staffHeadcount")
-                    Text(capacityLine(state))
-                        .font(.crowdedSmall)
-                        .foregroundStyle(Colors.text2)
-                    ProgressView(value: min(1, Double(vm.displayedHeadcount) / Double(max(1, state.capacity))))
-                        .tint(Colors.text)
-                        .accessibilityHidden(true)
-                }
-                .frame(maxWidth: .infinity)
-
-                HStack(spacing: Spacing.s3) {
-                    doorButton(title: "Out", symbol: "minus", filled: false) {
-                        await vm.count(barId: barId, direction: .exit)
-                    }
-                    doorButton(title: "In", symbol: "plus", filled: true) {
-                        await vm.count(barId: barId, direction: .entry)
-                    }
-                }
-                HStack(spacing: Spacing.s3) {
-                    Button("-5 out") {
-                        Task { await vm.count(barId: barId, direction: .exit, by: 5) }
-                    }
-                    .buttonStyle(ChipButtonStyle())
-                    .frame(maxWidth: .infinity)
-                    Button("+5 in") {
-                        Task { await vm.count(barId: barId, direction: .entry, by: 5) }
-                    }
-                    .buttonStyle(ChipButtonStyle())
-                    .frame(maxWidth: .infinity)
+                DoorCounterSection(vm: vm, barId: barId, state: state) {
+                    showSync = true
                 }
 
                 if let error = vm.errorMessage {
@@ -149,6 +141,10 @@ struct StaffView: View {
                             .foregroundStyle(Colors.text2)
                     }
                 }
+
+                LineSamplePanel(vm: vm, barId: barId)
+
+                DoorCodePanel(vm: vm)
 
                 NavigationLink {
                     StaffSpecialsView(api: app.api, barId: barId)
@@ -187,34 +183,6 @@ struct StaffView: View {
         } else {
             ProgressView().frame(maxWidth: .infinity)
         }
-    }
-
-    private func capacityLine(_ state: StaffState) -> String {
-        let percent = Int((Double(vm.displayedHeadcount) / Double(max(1, state.capacity)) * 100).rounded())
-        return "of \(state.capacity) capacity, \(percent)%"
-    }
-
-    private func doorButton(title: String, symbol: String, filled: Bool, action: @escaping () async -> Void) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            Task { await action() }
-        } label: {
-            VStack(spacing: Spacing.s2) {
-                Image(systemName: symbol)
-                    .font(.system(size: 34, weight: .bold))
-                Text(title)
-                    .font(.crowdedButton)
-            }
-            .frame(maxWidth: .infinity, minHeight: 128)
-            .foregroundStyle(filled ? Colors.primaryInk : Colors.text)
-            .background(
-                RoundedRectangle(cornerRadius: Radius.lg)
-                    .fill(filled ? Colors.primary : Colors.surface)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title == "In" ? "Count one person in" : "Count one person out")
     }
 }
 

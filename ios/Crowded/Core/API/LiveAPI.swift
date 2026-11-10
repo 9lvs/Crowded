@@ -162,11 +162,15 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
         }
     }
 
-    func endSession(id: String, outcome: EndOutcome) async throws -> LineSession {
+    func endSession(id: String, outcome: EndOutcome, doorCode: String?) async throws -> LineSession {
         return try await run {
+            let input = Components.Schemas.LineSessionEndIn(
+                door_code: doorCode,
+                outcome: outcome.rawValue
+            )
             let output = try await client.end_line_session_v1_line_sessions__session_id__end_post(
                 path: .init(session_id: id),
-                body: .json(Components.Schemas.LineSessionEndIn(outcome: outcome.rawValue))
+                body: .json(input)
             )
             return Self.mapSession(try output.ok.body.json)
         }
@@ -223,6 +227,57 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             let output = try await client.line_v1_staff_bars__bar_id__line_post(
                 path: .init(bar_id: barId),
                 body: .json(Components.Schemas.LineSizeIn(line_size: size.rawValue))
+            )
+            return Self.mapStaff(try output.ok.body.json)
+        }
+    }
+
+    // MARK: Staff line samples, door code, clicker sync
+
+    func startLineSample(barId: String) async throws -> LineSample {
+        return try await run {
+            let output = try await client.start_line_sample_v1_staff_bars__bar_id__line_samples_post(
+                path: .init(bar_id: barId)
+            )
+            return Self.mapSample(try output.created.body.json)
+        }
+    }
+
+    func endLineSample(barId: String, sampleId: String, outcome: SampleOutcome) async throws -> LineSample {
+        return try await run {
+            let output = try await client.end_line_sample_v1_staff_bars__bar_id__line_samples__sample_id__end_post(
+                path: .init(sample_id: sampleId, bar_id: barId),
+                body: .json(Components.Schemas.LineSampleEndIn(outcome: outcome.rawValue))
+            )
+            return Self.mapSample(try output.ok.body.json)
+        }
+    }
+
+    func activeLineSamples(barId: String) async throws -> [LineSample] {
+        return try await run {
+            let output = try await client.list_active_line_samples_v1_staff_bars__bar_id__line_samples_active_get(
+                path: .init(bar_id: barId)
+            )
+            let rows = try output.ok.body.json
+            return rows.map { Self.mapSample($0) }
+        }
+    }
+
+    func doorCode(barId: String) async throws -> DoorCode {
+        return try await run {
+            let output = try await client.get_door_code_v1_staff_bars__bar_id__door_code_get(
+                path: .init(bar_id: barId)
+            )
+            let value = try output.ok.body.json
+            return DoorCode(code: value.code, expiresIn: value.expires_in)
+        }
+    }
+
+    func countSync(barId: String, insideNow: Int) async throws -> StaffState {
+        return try await run {
+            let output = try await client.count_sync_v1_staff_bars__bar_id__count_sync_post(
+                path: .init(bar_id: barId),
+                body: .json(Components.Schemas.CountSyncIn(inside_now: insideNow))
             )
             return Self.mapStaff(try output.ok.body.json)
         }
@@ -429,7 +484,19 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             predictedWaitMin: s.predicted_wait_min,
             actualWaitMin: s.actual_wait_min,
             nearBar: s.near_bar,
-            pointsAwarded: s.points_awarded ?? 0
+            pointsAwarded: s.points_awarded ?? 0,
+            verified: s.verified ?? false
+        )
+    }
+
+    private static func mapSample(_ s: Components.Schemas.LineSampleOut) -> LineSample {
+        return LineSample(
+            id: s.id,
+            barId: s.bar_id,
+            status: SessionStatus(api: s.status),
+            startedAt: APIDate.parse(s.started_at) ?? Date(),
+            endedAt: APIDate.parse(s.ended_at),
+            actualWaitMin: s.actual_wait_min
         )
     }
 

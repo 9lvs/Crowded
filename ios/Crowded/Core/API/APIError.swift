@@ -38,6 +38,8 @@ enum APIError: Error, Equatable, LocalizedError {
         case "not_authenticated", "invalid_refresh": return "Please sign in again."
         case "network": return "You're offline or the server is unreachable."
         case "validation_error": return "Something in that request wasn't valid."
+        case "too_many_active_samples": return "Two line checks are already running. Finish one first."
+        case "sample_not_active": return "That line check already ended."
         case "too_many_specials": return "This bar has too many specials. Delete one first."
         case "start_equals_end": return "Start and end times must be different."
         default:

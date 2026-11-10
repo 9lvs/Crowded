@@ -155,4 +155,53 @@ final class LiveAPITests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.count("POST", "/v1/auth/logout"), 1)
         XCTAssertNil(store.read(TokenStore.refreshKey))
     }
+
+    func testEndSessionDecodesVerifiedTrue() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "POST", "/v1/line-sessions/s1/end",
+            json: """
+            {"id":"s1","bar_id":"b1","status":"completed","started_at":"2026-11-14T03:30:00Z",
+             "ended_at":"2026-11-14T03:42:00Z","predicted_wait_min":31,"actual_wait_min":12.0,
+             "near_bar":true,"points_awarded":20,"verified":true}
+            """
+        )
+        let done = try await api.endSession(id: "s1", outcome: .inside, doorCode: "1234")
+        XCTAssertTrue(done.verified)
+        XCTAssertEqual(done.pointsAwarded, 20)
+        XCTAssertEqual(done.status, .completed)
+    }
+
+    func testSessionWithoutVerifiedFieldIsNotVerified() async throws {
+        try await signIn()
+        StubURLProtocol.stub("GET", "/v1/line-sessions/active", json: Fixtures.session)
+        let session = try await api.activeSession()
+        XCTAssertEqual(session?.verified, false)
+    }
+
+    func testDoorCodeDecodes() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "GET", "/v1/staff/bars/b1/door-code", json: "{\"code\":\"4821\",\"expires_in\":97}")
+        let code = try await api.doorCode(barId: "b1")
+        XCTAssertEqual(code.code, "4821")
+        XCTAssertEqual(code.expiresIn, 97)
+    }
+
+    func testStartAndEndLineSample() async throws {
+        try await signIn()
+        StubURLProtocol.stub(
+            "POST", "/v1/staff/bars/b1/line-samples", status: 201,
+            json: "{\"id\":\"x1\",\"bar_id\":\"b1\",\"status\":\"active\",\"started_at\":\"2026-11-14T03:30:00Z\"}"
+        )
+        let started = try await api.startLineSample(barId: "b1")
+        XCTAssertEqual(started.status, .active)
+        StubURLProtocol.stub(
+            "POST", "/v1/staff/bars/b1/line-samples/x1/end",
+            json: "{\"id\":\"x1\",\"bar_id\":\"b1\",\"status\":\"completed\",\"started_at\":\"2026-11-14T03:30:00Z\",\"ended_at\":\"2026-11-14T03:44:00Z\",\"actual_wait_min\":14.0}"
+        )
+        let ended = try await api.endLineSample(barId: "b1", sampleId: "x1", outcome: .inside)
+        XCTAssertEqual(ended.status, .completed)
+        XCTAssertEqual(ended.actualWaitMin, 14.0)
+    }
 }

@@ -51,6 +51,9 @@ actor MockAPI: CrowdedAPI {
     private var specials: [String: [Special]]
     /// Lets tests make a timer look old without waiting.
     private var clockOffset: TimeInterval = 0
+    private var offline: Bool = false
+    private var samples: [String: [LineSample]] = [:]
+    private var wrongCodes: Int = 0
 
     init(signedIn: Bool = false, role: Role = .user) {
         self.signedIn = signedIn
@@ -66,6 +69,28 @@ actor MockAPI: CrowdedAPI {
 
     func advanceClock(seconds: TimeInterval) {
         clockOffset += seconds
+    }
+
+    /// Lets tests simulate a dead connection. Staff calls then throw APIError.network.
+    func setOffline(_ value: Bool) {
+        offline = value
+    }
+
+    private func requireOnline() throws {
+        if offline {
+            throw APIError.network
+        }
+    }
+
+    /// FAKE door code. Changes every 2 minutes. Not a real HMAC.
+    private func code(barId: String, bucket: Int) -> String {
+        let seed = barId.unicodeScalars.reduce(0) { ($0 &+ Int($1.value)) % 9973 }
+        let value = (bucket &* 7919 &+ seed &* 31) % 10000
+        return String(format: "%04d", value)
+    }
+
+    private var currentBucket: Int {
+        return Int(now.timeIntervalSince1970) / 120
     }
 
     private func requireSignedIn() throws {
@@ -315,7 +340,7 @@ actor MockAPI: CrowdedAPI {
         return started
     }
 
-    func endSession(id: String, outcome: EndOutcome) async throws -> LineSession {
+    func endSession(id: String, outcome: EndOutcome, doorCode: String?) async throws -> LineSession {
         try requireSignedIn()
         guard var current = session, current.id == id else {
             throw APIError.http(status: 404, detail: "not_found")
@@ -326,7 +351,20 @@ actor MockAPI: CrowdedAPI {
         if outcome == .inside && minutes >= 0.5 {
             current.status = .completed
             current.actualWaitMin = (minutes * 10).rounded() / 10
-            current.pointsAwarded = current.nearBar ? 10 : 0
+            var verified = false
+            if let entered = doorCode, wrongCodes < 5 {
+                let good = [
+                    code(barId: current.barId, bucket: currentBucket),
+                    code(barId: current.barId, bucket: currentBucket - 1),
+                ]
+                if good.contains(entered) {
+                    verified = true
+                } else {
+                    wrongCodes += 1
+                }
+            }
+            current.verified = verified
+            current.pointsAwarded = current.nearBar ? (verified ? 20 : 10) : 0
         } else {
             current.status = .abandoned
             current.pointsAwarded = 0
@@ -382,11 +420,13 @@ actor MockAPI: CrowdedAPI {
     }
 
     func staffState(barId: String) async throws -> StaffState {
+        try requireOnline()
         let bar = try requireStaff(barId)
         return staffStateFor(bar)
     }
 
     func door(barId: String, direction: DoorDirection, count: Int) async throws -> StaffState {
+        try requireOnline()
         let bar = try requireStaff(barId)
         var counts = staffCounts[bar.id] ?? (ins: Int(Double(bar.capacity) * bar.baseFill), outs: 0)
         switch direction {
@@ -405,6 +445,75 @@ actor MockAPI: CrowdedAPI {
     func setLine(barId: String, size: LineSize) async throws -> StaffState {
         let bar = try requireStaff(barId)
         staffLine[bar.id] = size
+        return staffStateFor(bar)
+    }
+
+    // MARK: Staff line samples, door code, clicker sync
+
+    func startLineSample(barId: String) async throws -> LineSample {
+        try requireOnline()
+        let bar = try requireStaff(barId)
+        var list = samples[bar.id] ?? []
+        if list.count >= 2 {
+            throw APIError.http(status: 409, detail: "too_many_active_samples")
+        }
+        let sample = LineSample(
+            id: UUID().uuidString, barId: bar.id, status: .active, startedAt: now,
+            endedAt: nil, actualWaitMin: nil
+        )
+        list.append(sample)
+        samples[bar.id] = list
+        return sample
+    }
+
+    func endLineSample(barId: String, sampleId: String, outcome: SampleOutcome) async throws -> LineSample {
+        try requireOnline()
+        let bar = try requireStaff(barId)
+        var list = samples[bar.id] ?? []
+        guard let index = list.firstIndex(where: { $0.id == sampleId }) else {
+            throw APIError.http(status: 409, detail: "sample_not_active")
+        }
+        var sample = list.remove(at: index)
+        samples[bar.id] = list
+        let ended = now
+        let minutes = ended.timeIntervalSince(sample.startedAt) / 60
+        sample.endedAt = ended
+        if outcome == .inside && minutes >= 0.5 {
+            sample.status = .completed
+            sample.actualWaitMin = (minutes * 10).rounded() / 10
+        } else {
+            sample.status = .abandoned
+        }
+        return sample
+    }
+
+    func activeLineSamples(barId: String) async throws -> [LineSample] {
+        try requireOnline()
+        let bar = try requireStaff(barId)
+        return samples[bar.id] ?? []
+    }
+
+    func doorCode(barId: String) async throws -> DoorCode {
+        try requireOnline()
+        let bar = try requireStaff(barId)
+        let remaining = 120 - (Int(now.timeIntervalSince1970) % 120)
+        return DoorCode(code: code(barId: bar.id, bucket: currentBucket), expiresIn: remaining)
+    }
+
+    func countSync(barId: String, insideNow: Int) async throws -> StaffState {
+        try requireOnline()
+        let bar = try requireStaff(barId)
+        if insideNow < 0 || insideNow > 5000 {
+            throw APIError.http(status: 422, detail: "validation_error")
+        }
+        var counts = staffCounts[bar.id] ?? (ins: Int(Double(bar.capacity) * bar.baseFill), outs: 0)
+        let delta = insideNow - (counts.ins - counts.outs)
+        if delta > 0 {
+            counts.ins += delta
+        } else if delta < 0 {
+            counts.outs += -delta
+        }
+        staffCounts[bar.id] = counts
         return staffStateFor(bar)
     }
 

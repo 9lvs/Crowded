@@ -21,7 +21,8 @@ protocol CrowdedAPI: AnyObject, Sendable {
     // Sourcing: line timers and crowd reports
     func activeSession() async throws -> LineSession?
     func startSession(barId: String, location: Coordinate?) async throws -> LineSession
-    func endSession(id: String, outcome: EndOutcome) async throws -> LineSession
+    /// `doorCode` is the optional 4 digit code from the door. A wrong code never fails the call.
+    func endSession(id: String, outcome: EndOutcome, doorCode: String?) async throws -> LineSession
     func report(
         barId: String, crowd: CrowdLevel?, line: LineSize?, location: Coordinate?
     ) async throws -> ReportResult
@@ -31,6 +32,13 @@ protocol CrowdedAPI: AnyObject, Sendable {
     func staffState(barId: String) async throws -> StaffState
     func door(barId: String, direction: DoorDirection, count: Int) async throws -> StaffState
     func setLine(barId: String, size: LineSize) async throws -> StaffState
+
+    // Staff: line samples, door code, clicker sync
+    func startLineSample(barId: String) async throws -> LineSample
+    func endLineSample(barId: String, sampleId: String, outcome: SampleOutcome) async throws -> LineSample
+    func activeLineSamples(barId: String) async throws -> [LineSample]
+    func doorCode(barId: String) async throws -> DoorCode
+    func countSync(barId: String, insideNow: Int) async throws -> StaffState
 
     // Staff: specials
     func listSpecials(barID: String) async throws -> [Special]

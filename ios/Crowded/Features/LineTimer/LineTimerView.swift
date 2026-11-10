@@ -4,6 +4,7 @@ struct LineTimerView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var vm: LineTimerViewModel
+    @State private var askCode = false
 
     init(api: CrowdedAPI, session: LineSession) {
         _vm = State(initialValue: LineTimerViewModel(api: api, session: session))
@@ -33,8 +34,26 @@ struct LineTimerView: View {
         .padding(.horizontal, Spacing.gutter)
         .padding(.top, Spacing.s2)
         .crowdedScreen()
+        .sheet(isPresented: $askCode) {
+            DoorCodeEntrySheet(
+                code: $vm.doorCodeInput,
+                onSkip: { finishInside(code: nil) },
+                onDone: { finishInside(code: vm.validDoorCode) }
+            )
+            .presentationDetents([.medium])
+        }
         .onAppear { vm.startTicking() }
         .onDisappear { vm.stopTicking() }
+    }
+
+    private func finishInside(code: String?) {
+        askCode = false
+        Task {
+            await vm.end(.inside, doorCode: code)
+            if vm.finished != nil {
+                app.sessionEnded()
+            }
+        }
     }
 
     private var running: some View {
@@ -53,12 +72,7 @@ struct LineTimerView: View {
             }
             VStack(spacing: Spacing.s3) {
                 PrimaryButton(title: "I'm inside", isBusy: vm.isSaving) {
-                    Task {
-                        await vm.end(.inside)
-                        if vm.finished != nil {
-                            app.sessionEnded()
-                        }
-                    }
+                    askCode = true
                 }
                 .accessibilityIdentifier("imInsideButton")
                 SecondaryButton(title: "Left the line") {
@@ -103,6 +117,21 @@ struct LineTimerView: View {
                         .foregroundStyle(Colors.text2)
                 }
             }
+            if vm.isVerified {
+                HStack(spacing: Spacing.s2) {
+                    Image(systemName: "checkmark.seal")
+                        .accessibilityHidden(true)
+                    Text("Verified at the door")
+                        .font(.crowdedBodyStrong)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("verifiedBadge")
+            } else if vm.codeDidNotMatch {
+                Text("That door code didn't match. Your time still counts.")
+                    .font(.crowdedSmall)
+                    .foregroundStyle(Colors.text2)
+                    .multilineTextAlignment(.center)
+            }
             if let points = vm.finished?.pointsAwarded, points > 0 {
                 Text("+\(points) points")
                     .font(.crowdedBodyStrong)
@@ -121,6 +150,45 @@ struct LineTimerView: View {
 
     private var barName: String {
         return app.activeBarName ?? "the bar"
+    }
+}
+
+/// Optional 4 digit door code. Skip always works.
+struct DoorCodeEntrySheet: View {
+    @Binding var code: String
+    let onSkip: () -> Void
+    let onDone: () -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("Door code")
+                .font(.crowdedTitle)
+            Text("The door staff have a 4 digit code. Enter it to verify your wait. You can skip this.")
+                .font(.crowdedBody)
+                .foregroundStyle(Colors.text2)
+            TextField("0000", text: $code)
+                .keyboardType(.numberPad)
+                .focused($focused)
+                .font(.crowdedNumber(CrowdedFont.hero))
+                .monospacedDigit()
+                .padding(.horizontal, Spacing.s4)
+                .frame(minHeight: 72)
+                .background(RoundedRectangle(cornerRadius: Radius.md).fill(Colors.surface))
+                .onChange(of: code) { _, newValue in
+                    let digits = String(newValue.filter { $0.isNumber }.prefix(4))
+                    if digits != newValue { code = digits }
+                }
+                .accessibilityLabel("Door code, 4 digits")
+                .accessibilityIdentifier("doorCodeField")
+            PrimaryButton(title: "Done", action: onDone)
+                .accessibilityIdentifier("doorCodeDone")
+            SecondaryButton(title: "Skip", action: onSkip)
+                .accessibilityIdentifier("doorCodeSkip")
+        }
+        .padding(Spacing.gutter)
+        .crowdedScreen()
+        .onAppear { focused = true }
     }
 }
 

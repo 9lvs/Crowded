@@ -16,6 +16,11 @@ final class LineTimerViewModel {
     var lastOutcome: EndOutcome?
     var isSaving: Bool = false
     var errorMessage: String?
+    /// What the student typed in the door code field. Digits only, at most 4.
+    var doorCodeInput: String = ""
+
+    /// True when a code was sent with the end request.
+    private(set) var sentDoorCode: Bool = false
 
     private let api: CrowdedAPI
     @ObservationIgnored private var ticker: Task<Void, Never>?
@@ -44,12 +49,20 @@ final class LineTimerViewModel {
         ticker = nil
     }
 
-    func end(_ outcome: EndOutcome) async {
+    /// Only a full 4 digit code is sent. Anything else counts as skipped.
+    var validDoorCode: String? {
+        let digits = doorCodeInput.filter { $0.isNumber }
+        return digits.count == 4 ? String(digits) : nil
+    }
+
+    /// Ends the timer. The door code is optional and never blocks ending.
+    func end(_ outcome: EndOutcome, doorCode: String? = nil) async {
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
         do {
-            finished = try await api.endSession(id: session.id, outcome: outcome)
+            finished = try await api.endSession(id: session.id, outcome: outcome, doorCode: doorCode)
+            sentDoorCode = doorCode != nil
             lastOutcome = outcome
             stopTicking()
         } catch {
@@ -76,6 +89,15 @@ final class LineTimerViewModel {
         case .some(.leftLine): return "Line left"
         case .none: return ""
         }
+    }
+
+    var isVerified: Bool {
+        return finished?.verified == true
+    }
+
+    /// The student typed a code but the server did not verify it.
+    var codeDidNotMatch: Bool {
+        return sentDoorCode && finished?.status == .completed && !isVerified
     }
 
     var resultNote: String {
