@@ -185,10 +185,11 @@ final class SpecialsFormattingTests: XCTestCase {
 
     func testMenuKeepsNoteAndRendersItemlessSpecialAsOneRow() {
         let food = special(
-            .food, title: "FAKE Wings", start: "17:00", end: "23:00", details: "Ten for six.",
+            .food, title: "FAKE Wings", start: "17:00", end: "23:00",
             items: [
                 DealItem(name: "Ten wings", priceLabel: "$6", category: .food, note: "Dine in only")
-            ])
+            ],
+            details: "Ten for six.")
         let plain = special(
             .drink, title: "FAKE Wells", start: "22:00", end: "23:30", details: "Cheap.")
         let groups = DealMenu.tonight(

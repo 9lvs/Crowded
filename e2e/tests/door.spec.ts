@@ -40,8 +40,13 @@ test("door mode: tap zones, clicker keys, undo, offline queue, count sync, line 
   test.setTimeout(120_000);
   const errors = collectErrors(page);
 
-  // A student timer starts now so it is long enough to count by the next test.
-  const started = await request.post("/v1/line-sessions", { headers: auth(student), data: { bar_id: barId } });
+  // A student timer starts now, at the bar, so it is long enough to count by the next test.
+  // Door codes only verify timers that started near the bar (security review M-2).
+  const bar = await (await request.get(`/v1/bars/${barId}`, { headers: auth(student) })).json();
+  const started = await request.post("/v1/line-sessions", {
+    headers: auth(student),
+    data: { bar_id: barId, location: { latitude: bar.latitude, longitude: bar.longitude } },
+  });
   expect(started.status(), await started.text()).toBe(201);
   timerStartedAt = Date.now();
 
