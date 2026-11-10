@@ -280,6 +280,8 @@ class LineSessionStartIn(Strict):
 
 class LineSessionEndIn(Strict):
     outcome: Literal["inside", "gave_up"] = "inside"
+    # Rotating 4 digit code shown at the door. Optional. A wrong code never fails the request.
+    door_code: Annotated[str, Field(pattern=r"^[0-9]{4}$")] | None = None
 
 
 class LineSessionOut(Strict):
@@ -291,6 +293,7 @@ class LineSessionOut(Strict):
     predicted_wait_min: int | None
     actual_wait_min: float | None
     near_bar: bool
+    verified: bool = False
     points_awarded: int = 0
 
 
@@ -325,6 +328,29 @@ class RedeemInviteIn(Strict):
 class DoorIn(Strict):
     direction: DoorDirection
     count: Annotated[int, Field(ge=1, le=20)] = 1
+
+
+class CountSyncIn(Strict):
+    inside_now: Annotated[int, Field(ge=0, le=5000)]
+
+
+class DoorCodeOut(Strict):
+    code: Annotated[str, Field(pattern=r"^[0-9]{4}$")]
+    expires_in: int
+
+
+class LineSampleEndIn(Strict):
+    outcome: Literal["inside", "cancel"]
+
+
+class LineSampleOut(Strict):
+    id: uuid.UUID
+    bar_id: uuid.UUID
+    status: SessionStatus
+    started_at: datetime
+    ended_at: datetime | None
+    predicted_wait_min: int | None
+    actual_wait_min: float | None
 
 
 class LineSizeIn(Strict):

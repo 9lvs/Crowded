@@ -230,6 +230,8 @@ class LineSession(Base):
     entry_rate_at_start: Mapped[float | None] = mapped_column(Float)
     actual_wait_min: Mapped[float | None] = mapped_column(Float)
     near_bar: Mapped[bool] = mapped_column(Boolean, default=False)
+    # True when the student typed the rotating door code at the door (docs/SOURCING.md).
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     distance_bucket: Mapped[DistanceBucket] = mapped_column(
         _enum(DistanceBucket, "distance_bucket"), default=DistanceBucket.unknown
     )
@@ -268,11 +270,39 @@ class DoorEvent(Base):
     ts: Mapped[datetime] = mapped_column(TS, default=utcnow)
     direction: Mapped[DoorDirection] = mapped_column(_enum(DoorDirection, "door_direction"))
     count: Mapped[int] = mapped_column(Integer, default=1)
+    # "tap" is one staff tap. "sync" is a clicker total entered as a difference.
+    source: Mapped[str] = mapped_column(String(8), default="tap", server_default="tap")
 
     __table_args__ = (
         Index("ix_door_events_bar_ts", "bar_id", "ts"),
-        CheckConstraint("count BETWEEN 1 AND 20", name="door_count_range"),
+        CheckConstraint(
+            "(source = 'tap' AND count BETWEEN 1 AND 20)"
+            " OR (source = 'sync' AND count BETWEEN 1 AND 5000)",
+            name="door_count_range",
+        ),
     )
+
+
+class LineSample(Base):
+    """A door staff member times a real person from the back of the line to the door."""
+
+    __tablename__ = "line_samples"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_uuid)
+    bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"))
+    staff_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    started_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(TS)
+    status: Mapped[SessionStatus] = mapped_column(
+        _enum(SessionStatus, "session_status"), default=SessionStatus.active
+    )
+    predicted_wait_min: Mapped[float | None] = mapped_column(Float)
+    formula_wait_min: Mapped[float | None] = mapped_column(Float)
+    entry_rate_at_start: Mapped[float | None] = mapped_column(Float)
+
+    __table_args__ = (Index("ix_line_samples_bar_started", "bar_id", "started_at"),)
 
 
 class OutsideLineStatus(Base):

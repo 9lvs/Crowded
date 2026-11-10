@@ -407,6 +407,19 @@
         "title": "BasisOut",
         "type": "object"
       },
+      "CountSyncIn": {
+        "properties": {
+          "inside_now": {
+            "title": "Inside Now",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "inside_now"
+        ],
+        "title": "CountSyncIn",
+        "type": "object"
+      },
       "CrowdLevel": {
         "title": "CrowdLevel",
         "type": "string"
@@ -414,6 +427,25 @@
       "DistanceBucket": {
         "title": "DistanceBucket",
         "type": "string"
+      },
+      "DoorCodeOut": {
+        "properties": {
+          "code": {
+            "pattern": "^[0-9]{4}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "expires_in"
+        ],
+        "title": "DoorCodeOut",
+        "type": "object"
       },
       "DoorDirection": {
         "title": "DoorDirection",
@@ -499,8 +531,65 @@
         "title": "InviteOut",
         "type": "object"
       },
+      "LineSampleEndIn": {
+        "properties": {
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "LineSampleEndIn",
+        "type": "object"
+      },
+      "LineSampleOut": {
+        "properties": {
+          "actual_wait_min": {
+            "title": "Actual Wait Min",
+            "type": "number"
+          },
+          "bar_id": {
+            "title": "Bar Id",
+            "type": "string"
+          },
+          "ended_at": {
+            "title": "Ended At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "predicted_wait_min": {
+            "title": "Predicted Wait Min",
+            "type": "integer"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          }
+        },
+        "required": [
+          "id",
+          "bar_id",
+          "status",
+          "started_at"
+        ],
+        "title": "LineSampleOut",
+        "type": "object"
+      },
       "LineSessionEndIn": {
         "properties": {
+          "door_code": {
+            "pattern": "^[0-9]{4}$",
+            "title": "Door Code",
+            "type": "string"
+          },
           "outcome": {
             "default": "inside",
             "title": "Outcome",
@@ -547,6 +636,11 @@
           },
           "status": {
             "$ref": "#/components/schemas/SessionStatus"
+          },
+          "verified": {
+            "default": false,
+            "title": "Verified",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2760,6 +2854,64 @@
         ]
       }
     },
+    "/v1/staff/bars/{bar_id}/count-sync": {
+      "post": {
+        "description": "Set tonight's headcount from a clicker total. One event holds the difference.",
+        "operationId": "count_sync_v1_staff_bars__bar_id__count_sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountSyncIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Count Sync",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
     "/v1/staff/bars/{bar_id}/door": {
       "post": {
         "operationId": "door_v1_staff_bars__bar_id__door_post",
@@ -2817,6 +2969,53 @@
         ]
       }
     },
+    "/v1/staff/bars/{bar_id}/door-code": {
+      "get": {
+        "operationId": "get_door_code_v1_staff_bars__bar_id__door_code_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorCodeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Door Code",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
     "/v1/staff/bars/{bar_id}/line": {
       "post": {
         "operationId": "line_v1_staff_bars__bar_id__line_post",
@@ -2869,6 +3068,170 @@
           }
         ],
         "summary": "Line",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/line-samples": {
+      "post": {
+        "operationId": "start_line_sample_v1_staff_bars__bar_id__line_samples_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineSampleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Line Sample",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/line-samples/active": {
+      "get": {
+        "operationId": "list_active_line_samples_v1_staff_bars__bar_id__line_samples_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LineSampleOut"
+                  },
+                  "title": "Response List Active Line Samples V1 Staff Bars  Bar Id  Line Samples Active Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Active Line Samples",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/line-samples/{sample_id}/end": {
+      "post": {
+        "operationId": "end_line_sample_v1_staff_bars__bar_id__line_samples__sample_id__end_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sample_id",
+            "required": true,
+            "schema": {
+              "title": "Sample Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LineSampleEndIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineSampleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "End Line Sample",
         "tags": [
           "staff"
         ]

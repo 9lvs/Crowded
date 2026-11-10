@@ -36,6 +36,15 @@ Code: `backend/app/estimation/` (pure functions, contract in `types.py`).
   max(pred, 5)`. Target = 1 when e is 0, falling linearly to 0 at e = 1. Move 20 percent of the
   way toward the target. Clamp to [0.05, 1].
 
+## Verified timers and sync events
+A timer is verified when a student typed the door code or when door staff timed the person. A
+verified timer weighs `verified_timer_weight` (2.0) times as much in the timer median. Verified
+timers also count as near the bar.
+
+Door events carry a source. `tap` is one staff tap. `sync` is a clicker total entered as a
+difference. Headcount uses every event. Entry and exit rates use only `tap` events. A night with
+only sync events has a headcount but no known rate, so the default rate is used.
+
 ## Confidence and "no recent data"
 - No reports, timers, staff line updates or door events in the window means `has_recent_data =
   False`, `confidence = none`, and every number is None. The UI shows "No recent data".

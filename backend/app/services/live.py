@@ -20,6 +20,7 @@ from app.models import (
     DoorDirection,
     DoorEvent,
     EstimateError,
+    LineSample,
     LineSession,
     OutsideLineStatus,
     PassPrice,
@@ -43,6 +44,7 @@ CHART_HOURS = [18, 19, 20, 21, 22, 23, 0, 1, 2, 3]
 SNAPSHOT_EVERY = timedelta(minutes=2)
 HISTORY_DAYS = 28
 ACTIVE_SESSION_MAX = timedelta(hours=4)
+SAMPLE_ACTIVE_MAX = timedelta(hours=3)
 
 
 def utcnow() -> datetime:
@@ -96,7 +98,7 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
     night = tonight_start(bar, now)
 
     doors = db.execute(
-        select(DoorEvent.ts, DoorEvent.direction, DoorEvent.count).where(
+        select(DoorEvent.ts, DoorEvent.direction, DoorEvent.count, DoorEvent.source).where(
             DoorEvent.bar_id == bar.id, DoorEvent.ts >= night, DoorEvent.ts <= now
         )
     ).all()
@@ -112,10 +114,27 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
             LineSession.ended_at,
             LineSession.near_bar,
             LineSession.status,
+            LineSession.verified,
         ).where(
             LineSession.bar_id == bar.id,
             LineSession.status != SessionStatus.abandoned,
             LineSession.started_at >= now - ACTIVE_SESSION_MAX,
+        )
+    ).all()
+    samples = db.execute(
+        select(
+            LineSample.staff_user_id,
+            LineSample.started_at,
+            LineSample.ended_at,
+            LineSample.status,
+        ).where(
+            LineSample.bar_id == bar.id,
+            LineSample.started_at >= now - ACTIVE_SESSION_MAX,
+            (LineSample.status == SessionStatus.completed)
+            | (
+                (LineSample.status == SessionStatus.active)
+                & (LineSample.started_at >= now - SAMPLE_ACTIVE_MAX)
+            ),
         )
     ).all()
     reports = db.execute(
@@ -132,26 +151,40 @@ def build_input(db: Session, bar: Bar, now: datetime) -> est.EstimateInput:
         {r.user_id for r in sessions}
         | {r.user_id for r in reports}
         | {ln.staff_user_id for ln in lines if ln.staff_user_id is not None}
+        | {sm.staff_user_id for sm in samples if sm.staff_user_id is not None}
     )
     reliability: dict[str, float] = {}
     if user_ids:
         for uid, rel in db.execute(select(User.id, User.reliability).where(User.id.in_(user_ids))):
             reliability[str(uid)] = rel
+            reliability[f"staff:{uid}"] = rel
 
     timers = [
         est.TimerIn(
             user_id=str(s.user_id),
             started_at=s.started_at,
             ended_at=s.ended_at if s.status == SessionStatus.completed else None,
-            near_bar=s.near_bar,
+            near_bar=s.near_bar or s.verified,
+            verified=s.verified,
         )
         for s in sessions
+    ]
+    timers += [
+        est.TimerIn(
+            user_id=f"staff:{sm.staff_user_id}",
+            started_at=sm.started_at,
+            ended_at=sm.ended_at if sm.status == SessionStatus.completed else None,
+            near_bar=True,
+            verified=True,
+        )
+        for sm in samples
     ]
     return est.EstimateInput(
         now=now,
         capacity=bar.capacity,
         door_events=[
-            est.DoorEventIn(ts=ts, direction=direction.value, count=n) for ts, direction, n in doors
+            est.DoorEventIn(ts=ts, direction=direction.value, count=n, source=src)
+            for ts, direction, n, src in doors
         ],
         line_statuses=[
             est.LineStatusIn(

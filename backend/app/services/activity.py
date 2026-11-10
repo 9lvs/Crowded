@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app import estimation as est
 from app.core.location import bucket_for, haversine_m
+from app.core.ratelimit import door_code_allowed, door_code_miss
 from app.models import (
     Bar,
     CrowdReport,
@@ -23,9 +24,11 @@ from app.models import (
     User,
 )
 from app.schemas import LineSessionOut, LocationIn, ReportCreate, ReportOut
+from app.services import door as door_svc
 from app.services import live
 
 POINTS_TIMER = 10
+POINTS_TIMER_VERIFIED = 20
 POINTS_REPORT = 2
 MIN_VALID_WAIT_MIN = 0.5
 MAX_VALID_WAIT_MIN = 240.0
@@ -48,6 +51,7 @@ def session_out(s: LineSession, points: int = 0) -> LineSessionOut:
         predicted_wait_min=None if s.predicted_wait_min is None else round(s.predicted_wait_min),
         actual_wait_min=None if s.actual_wait_min is None else round(s.actual_wait_min, 1),
         near_bar=s.near_bar,
+        verified=s.verified,
         points_awarded=points,
     )
 
@@ -97,7 +101,23 @@ def start_session(db: Session, user: User, bar: Bar, loc: LocationIn | None) -> 
     return session_out(s)
 
 
-def end_session(db: Session, user: User, session_id: uuid.UUID, outcome: str) -> LineSessionOut:
+def _door_code_ok(user: User, bar_id: uuid.UUID, code: str | None) -> bool:
+    """Check a typed door code. Wrong codes are counted. Over the limit, codes are ignored."""
+    if code is None or not door_code_allowed(str(user.id)):
+        return False
+    if door_svc.code_matches(bar_id, code):
+        return True
+    door_code_miss(str(user.id))
+    return False
+
+
+def end_session(
+    db: Session,
+    user: User,
+    session_id: uuid.UUID,
+    outcome: str,
+    door_code: str | None = None,
+) -> LineSessionOut:
     s = db.get(LineSession, session_id)
     # Same 404 for "missing" and "not yours" (no object enumeration).
     if s is None or s.user_id != user.id:
@@ -111,24 +131,19 @@ def end_session(db: Session, user: User, session_id: uuid.UUID, outcome: str) ->
     if outcome == "inside" and MIN_VALID_WAIT_MIN <= actual <= MAX_VALID_WAIT_MIN:
         s.status = SessionStatus.completed
         s.actual_wait_min = actual
+        s.verified = _door_code_ok(user, s.bar_id, door_code)
+        trusted = s.near_bar or s.verified
         if s.predicted_wait_min is not None:
-            db.add(
-                EstimateError(
-                    bar_id=s.bar_id,
-                    created_at=now,
-                    predicted_min=s.predicted_wait_min,
-                    formula_min=s.formula_wait_min,
-                    actual_min=actual,
-                    abs_error_min=abs(s.predicted_wait_min - actual),
-                )
-            )
-            if s.near_bar:
+            record_error(db, s.bar_id, now, s.predicted_wait_min, s.formula_wait_min, actual)
+            if trusted:
                 user.reliability = est.update_reliability(
                     user.reliability, s.predicted_wait_min, actual
                 )
-        if s.near_bar:
-            points = POINTS_TIMER
-            _score_line_sources(db, s, actual)
+        if trusted:
+            points = POINTS_TIMER_VERIFIED if s.verified else POINTS_TIMER
+            score_line_sources(
+                db, s.bar_id, s.started_at, s.entry_rate_at_start, actual, exclude_user=s.user_id
+            )
     else:
         s.status = SessionStatus.abandoned
     if points:
@@ -140,34 +155,62 @@ def end_session(db: Session, user: User, session_id: uuid.UUID, outcome: str) ->
 LINE_SCORE_LOOKBACK = timedelta(minutes=10)
 
 
-def _score_line_sources(db: Session, s: LineSession, actual_min: float) -> None:
+def record_error(
+    db: Session,
+    bar_id: uuid.UUID,
+    now: datetime,
+    predicted: float,
+    formula: float | None,
+    actual: float,
+) -> None:
+    """Estimate vs actual for a finished timer or staff sample. Feeds calibration."""
+    db.add(
+        EstimateError(
+            bar_id=bar_id,
+            created_at=now,
+            predicted_min=predicted,
+            formula_min=formula,
+            actual_min=actual,
+            abs_error_min=abs(predicted - actual),
+        )
+    )
+
+
+def score_line_sources(
+    db: Session,
+    bar_id: uuid.UUID,
+    started_at: datetime,
+    entry_rate_at_start: float | None,
+    actual_min: float,
+    exclude_user: uuid.UUID | None = None,
+) -> None:
     """Use a finished timer as ground truth for the line reports made when it started.
 
     people really in line ~= actual wait x entry rate at the start. Every staff line reading and
     student line report made just before the timer started is scored against that, and the
     reporter's reliability moves toward how close they were. One honest timer referees both.
     """
-    if not s.entry_rate_at_start:
+    if not entry_rate_at_start:
         return
-    implied = actual_min * s.entry_rate_at_start
-    since = s.started_at - LINE_SCORE_LOOKBACK
+    implied = actual_min * entry_rate_at_start
+    since = started_at - LINE_SCORE_LOOKBACK
     people = est.types.LINE_SIZE_PEOPLE
     staff_rows = db.execute(
         select(OutsideLineStatus.staff_user_id, OutsideLineStatus.line_size).where(
-            OutsideLineStatus.bar_id == s.bar_id,
+            OutsideLineStatus.bar_id == bar_id,
             OutsideLineStatus.ts >= since,
-            OutsideLineStatus.ts <= s.started_at,
+            OutsideLineStatus.ts <= started_at,
             OutsideLineStatus.staff_user_id.is_not(None),
         )
     ).all()
     report_rows = db.execute(
         select(CrowdReport.user_id, CrowdReport.line_size).where(
-            CrowdReport.bar_id == s.bar_id,
+            CrowdReport.bar_id == bar_id,
             CrowdReport.created_at >= since,
-            CrowdReport.created_at <= s.started_at,
+            CrowdReport.created_at <= started_at,
             CrowdReport.line_size.is_not(None),
             CrowdReport.near_bar.is_(True),
-            CrowdReport.user_id != s.user_id,
+            *([CrowdReport.user_id != exclude_user] if exclude_user is not None else []),
         )
     ).all()
     claims: dict[uuid.UUID, float] = {}
@@ -217,4 +260,11 @@ def submit_report(db: Session, user: User, bar: Bar, body: ReportCreate) -> Repo
     db.commit()
     return ReportOut(
         id=r.id, bar_id=bar.id, near_bar=near, distance_bucket=bucket, points_awarded=points
+    )
+
+
+def _score_line_sources(db: Session, s: LineSession, actual_min: float) -> None:
+    """Kept for the simulator. Production code calls score_line_sources."""
+    score_line_sources(
+        db, s.bar_id, s.started_at, s.entry_rate_at_start, actual_min, exclude_user=s.user_id
     )

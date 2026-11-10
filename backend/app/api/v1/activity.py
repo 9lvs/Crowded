@@ -36,7 +36,7 @@ def get_active_session(user: CurrentUser, db: DB) -> LineSessionOut | None:
 def end_line_session(
     session_id: uuid.UUID, body: LineSessionEndIn, user: CurrentUser, db: DB
 ) -> LineSessionOut:
-    return svc.end_session(db, user, session_id, body.outcome)
+    return svc.end_session(db, user, session_id, body.outcome, body.door_code)
 
 
 @router.post("/reports", response_model=ReportOut, status_code=status.HTTP_201_CREATED)

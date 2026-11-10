@@ -43,7 +43,14 @@ def test_route_enumeration_is_not_empty() -> None:
 @pytest.mark.parametrize(("method", "path"), _routes())
 def test_every_route_requires_auth(client: TestClient, method: str, path: str) -> None:
     url = path
-    for param in ("{bar_id}", "{session_id}", "{user_id}", "{invite_id}", "{special_id}"):
+    for param in (
+        "{bar_id}",
+        "{session_id}",
+        "{user_id}",
+        "{invite_id}",
+        "{special_id}",
+        "{sample_id}",
+    ):
         url = url.replace(param, str(uuid.uuid4()))
     assert "{" not in url, f"add a placeholder for {path}"
     r = client.request(method, url, json={})
@@ -95,6 +102,9 @@ STAFF_CALLS = [
     ("POST", "/v1/staff/bars/{bar}/door", {"direction": "in"}),
     ("POST", "/v1/staff/bars/{bar}/line", {"line_size": "short"}),
     ("GET", "/v1/staff/bars/{bar}/specials", None),
+    ("POST", "/v1/staff/bars/{bar}/count-sync", {"inside_now": 3}),
+    ("GET", "/v1/staff/bars/{bar}/door-code", None),
+    ("GET", "/v1/staff/bars/{bar}/line-samples/active", None),
 ]
 
 

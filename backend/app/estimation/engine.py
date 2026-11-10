@@ -128,6 +128,8 @@ def _timer_wait(timers: Sequence[TimerIn], inp: EstimateInput) -> tuple[float, i
             continue
         w = _recency(_age_min(inp.now, t.ended_at), p.half_life_min)
         w *= inp.reliability.get(t.user_id, p.default_reliability)
+        if t.verified:
+            w *= p.verified_timer_weight
         rows.append((duration, w))
     if not rows:
         return None
@@ -186,7 +188,8 @@ def estimate(inp: EstimateInput) -> Estimate:
     active_recent = [t for t in active if in_window(t.started_at, p.window_min)]
     doors_all = [e for e in inp.door_events if _age_min(now, e.ts) >= 0]
     doors_window = [e for e in doors_all if in_window(e.ts, p.window_min)]
-    doors_rate = [e for e in doors_all if in_window(e.ts, p.rate_window_min)]
+    # Sync events are a clicker total, not real arrivals, so they never set a rate.
+    doors_rate = [e for e in doors_all if e.source == "tap" and in_window(e.ts, p.rate_window_min)]
 
     if not (reports or lines or done or active_recent or doors_window):
         return _no_data(inp)
@@ -226,7 +229,7 @@ def estimate(inp: EstimateInput) -> Estimate:
     # Rates.
     capacity_mode = ratio is not None and ratio >= p.capacity_mode_ratio
     entry_rate: float | None = None
-    rate_known = bool(doors_all)
+    rate_known = any(e.source == "tap" for e in doors_all)
     moved = 0
     if rate_known:
         direction = "out" if capacity_mode else "in"

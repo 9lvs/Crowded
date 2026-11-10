@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -10,10 +11,22 @@ from app.core.audit import audit
 from app.core.deps import DB, CurrentUser, StaffBar, ip_key
 from app.core.ratelimit import hit
 from app.core.security import normalize_invite_code, pepper_hash
-from app.models import Bar, BarStaff, DoorEvent, OutsideLineStatus, Role, StaffInvite
-from app.schemas import DoorIn, LineSizeIn, MeOut, RedeemInviteIn, StaffState
+from app.models import Bar, BarStaff, DoorDirection, DoorEvent, OutsideLineStatus, Role, StaffInvite
+from app.schemas import (
+    CountSyncIn,
+    DoorCodeOut,
+    DoorIn,
+    LineSampleEndIn,
+    LineSampleOut,
+    LineSizeIn,
+    MeOut,
+    RedeemInviteIn,
+    StaffState,
+)
 from app.services import auth as auth_svc
+from app.services import door as door_svc
 from app.services import live
+from app.services import samples as samples_svc
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
@@ -132,3 +145,90 @@ def line(
     )
     db.commit()
     return staff_state(db, bar)
+
+
+@router.post("/bars/{bar_id}/count-sync", response_model=StaffState)
+def count_sync(
+    body: CountSyncIn, bar: StaffBar, user: CurrentUser, request: Request, db: DB
+) -> StaffState:
+    """Set tonight's headcount from a clicker total. One event holds the difference."""
+    ins, outs = live.door_totals(db, bar, live.utcnow())
+    delta = body.inside_now - (ins - outs)
+    if delta != 0:
+        db.add(
+            DoorEvent(
+                bar_id=bar.id,
+                staff_user_id=user.id,
+                direction=DoorDirection.in_ if delta > 0 else DoorDirection.out,
+                count=abs(delta),
+                source="sync",
+            )
+        )
+    audit(
+        db,
+        user,
+        "door.count_sync",
+        target_type="bar",
+        target_id=bar.id,
+        bar_id=bar.id,
+        ip_hash=ip_key(request),
+        details={"inside_now": body.inside_now, "delta": delta},
+    )
+    db.commit()
+    return staff_state(db, bar)
+
+
+@router.get("/bars/{bar_id}/door-code", response_model=DoorCodeOut)
+def get_door_code(bar: StaffBar) -> DoorCodeOut:
+    # Not audited on purpose. The staff screen reads this every few seconds.
+    code, expires_in = door_svc.current_code(bar.id)
+    return DoorCodeOut(code=code, expires_in=expires_in)
+
+
+@router.post(
+    "/bars/{bar_id}/line-samples",
+    response_model=LineSampleOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def start_line_sample(bar: StaffBar, user: CurrentUser, request: Request, db: DB) -> LineSampleOut:
+    sample = samples_svc.start_sample(db, user, bar)
+    audit(
+        db,
+        user,
+        "line_sample.start",
+        target_type="line_sample",
+        target_id=sample.id,
+        bar_id=bar.id,
+        ip_hash=ip_key(request),
+    )
+    db.commit()
+    return samples_svc.sample_out(sample)
+
+
+@router.get("/bars/{bar_id}/line-samples/active", response_model=list[LineSampleOut])
+def list_active_line_samples(bar: StaffBar, db: DB) -> list[LineSampleOut]:
+    return [samples_svc.sample_out(x) for x in samples_svc.active_samples(db, bar)]
+
+
+@router.post("/bars/{bar_id}/line-samples/{sample_id}/end", response_model=LineSampleOut)
+def end_line_sample(
+    sample_id: uuid.UUID,
+    body: LineSampleEndIn,
+    bar: StaffBar,
+    user: CurrentUser,
+    request: Request,
+    db: DB,
+) -> LineSampleOut:
+    sample = samples_svc.end_sample(db, bar, sample_id, body.outcome)
+    audit(
+        db,
+        user,
+        "line_sample.end",
+        target_type="line_sample",
+        target_id=sample.id,
+        bar_id=bar.id,
+        ip_hash=ip_key(request),
+        details={"outcome": body.outcome, "status": sample.status.value},
+    )
+    db.commit()
+    return samples_svc.sample_out(sample)

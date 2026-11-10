@@ -49,6 +49,7 @@ class DoorEventIn:
     ts: datetime
     direction: str  # "in" or "out"
     count: int = 1
+    source: str = "tap"  # "tap" or "sync". Sync events move headcount but never the rates.
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class TimerIn:
     started_at: datetime
     ended_at: datetime | None = None
     near_bar: bool = True
+    verified: bool = False  # door code typed at the door, or a staff sample
 
 
 @dataclass(frozen=True)
@@ -116,6 +118,8 @@ class Params:
     # (about one average, recent, near-bar report) before we turn them into a wait. Stops a
     # single far, stale or low-trust report from producing a big made up number.
     min_report_line_weight: float = 0.5
+    # A verified timer (door code or staff sample) counts this many times as much.
+    verified_timer_weight: float = 2.0
 
 
 @dataclass(frozen=True)
