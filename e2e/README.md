@@ -8,8 +8,10 @@ FAKE (seeded bars, +1555 phone numbers).
 | `tests/student.spec.ts` | real backend | 21+ gate (UI and API), Tonight with basis lines, bar detail, crowd report, line timer, settings, sign out, account deletion |
 | `tests/staff.spec.ts` | real backend | staff sign in, invite, door counter, line size, staff banner in the student app, user versus staff API separation |
 | `tests/specials.spec.ts` | real backend, plus mock | Tonight specials line, bar detail Tonight and This week, staff add and delete a special, mock mode specials with zero console errors |
-| `tests/door.spec.ts` | real backend, plus mock | door mode taps, clicker keys, undo, offline queue, count sync, line check, door code panel, student Verified at the door, mock smoke with reminders |
+| `tests/door.spec.ts` | real backend, plus mock | door mode taps, clicker keys, undo, offline queue, count sync, line check, mock smoke with reminders |
 | `tests/mock.spec.ts` | any server on localhost | mock mode student and staff flows with zero console errors, mock storage isolation |
+| `tests/levels.spec.ts` | real backend | door staff tabs and Inside tab, Drinks on the student bar page, manager Count exits too, count in only bar, admin bar picker |
+| `tests/mock-staff.spec.ts` | any server on localhost | mock staff levels, count in only bar, manager, student drink wait, zero console errors |
 | `tests/a11y.spec.ts` | any server on localhost | accessible names, labels, alt text, 44px targets, crowd level not color only |
 
 ## Run locally

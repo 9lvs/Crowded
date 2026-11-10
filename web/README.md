@@ -6,7 +6,7 @@ No build step. Plain HTML, CSS and classic JavaScript. The backend serves this f
 | Who | URL | What they get |
 |---|---|---|
 | Students | `/` (`index.html`) | Tonight list, bar detail, crowd reports, line timer, settings |
-| Door staff | `/staff.html` | Staff sign in, invite code, door mode, line checks, door code, outside line picker, specials |
+| Door staff | `/staff.html` | Staff sign in, invite code, door counter, line checks, inside conditions. Managers also get specials and settings |
 
 - Both use the same phone code sign in and the 21+ attestation.
 - The student welcome screen has a "Work at a bar? Staff sign in" link. The staff page links
@@ -17,23 +17,30 @@ No build step. Plain HTML, CSS and classic JavaScript. The backend serves this f
   refuses staff routes for anyone who is not staff at that bar.
 
 ## Door mode (staff)
-Bottom tabs: Door, Line, Code, Specials. Door mode is the default and stays uncluttered.
-- Two big tap zones: OUT on the left third, IN on the right two thirds. Each tap vibrates (15 ms)
-  and flashes. Group buttons +2, +3, +4 and Undo (30 seconds) sit under the zones.
+Door staff do fast door work only: count people in, report the line, report inside conditions.
+Staff level comes from the admin invite (`door` by default, or `manager`). `me.staff_level` says which.
+- Door staff tabs: Door, Line, Inside. Managers add Manage. Admins with no bar pick one first
+  (`GET /v1/admin/bars`) and get the manager view.
+- Door tab: one huge IN zone, +2 +3 +4 group buttons and Undo (30 seconds). OUT is a smaller button
+  and shows only when `counts_exits` is true. Otherwise a quiet note says "This bar counts entries
+  only." and the count reads "Entries tonight". Headcount, capacity and "Clicker total" also need
+  `counts_exits`. Each tap vibrates (15 ms).
 - Clicker keys: ArrowRight, PageDown, Space, Enter and "." count In. ArrowLeft, PageUp and ","
-  count Out. Key repeats are ignored. Keys only work on the Door tab with no sheet open.
+  count Out (they do nothing in count in only mode). Key repeats are ignored. Keys only work on the
+  Door tab with no sheet open.
 - Offline queue: a tap that fails on the network stays in an in memory queue (backup in
   localStorage `crowded.door.queue.<bar>`), shows "Saving when back online" and retries with backoff.
-  The count is optimistic and reconciled with the server state.
 - The screen wake lock is requested on the Door tab and again when the page becomes visible.
-- "Clicker total" opens a number pad and calls `POST /v1/staff/bars/{id}/count-sync`.
 - Line tab: outside line size, "Time the line" (up to 2 running, shown as chips at the top of every
   tab), last line check, and what students see.
-- Code tab: the 4 digit door code, large, with a countdown. It refreshes from `GET .../door-code`.
-- Reminders while the page is open: "Update the line size" after 15 minutes and "Time the line"
-  after 20 minutes. Dismissible, with vibration, no browser notifications.
-- Students can type the code when they tap "I'm inside". It is optional and never blocks ending
-  the timer. Mock mode has a FAKE code that changes every 2 minutes.
+- Inside tab: "How busy inside?" (Easy, Busy, Packed) and "How long for a drink?" (Under 5 min,
+  5 to 10, 10 to 20, Over 20). Each tap posts `/inside`. Shows "Updated N min ago" and what students see.
+- Manage tab (managers and admins): the Specials editor, the "Count exits too" switch
+  (`PATCH .../settings`) and a "Tonight so far" block. Door staff get 403 `manager_only` from the API.
+- Reminders while the page is open, every 15 minutes, dismissible, with vibration: "Update inside:
+  how busy and drink wait", "Update the line size" (15 min) and "Time the line" (20 min since the
+  last completed check).
+- The student door code is off (`door_code_disabled`). The page has no code tab and no code step.
 
 ## Run it
 With the backend: open http://localhost:8000/ (students) or http://localhost:8000/staff.html.
@@ -44,7 +51,8 @@ python3 -m http.server 8765 --directory web
 ```
 Then open http://localhost:8765/index.html?mock=1. In mock mode any 6 digit code works and
 the code step offers a "Use it" button. On the staff page any invite code of 8 or more
-characters works.
+characters works. A code starting MANAGER makes a manager, ENTRY joins the count in only bar and
+ADMIN makes an admin. Anything else is door staff.
 
 ### Mock mode is local only
 `?mock=1` only works on `localhost`, `127.0.0.1` or a `file:` page. On any other host the
@@ -57,9 +65,9 @@ never reads, writes or removes the real refresh token `crowded.rt`.
 Black and white on purpose. One calm column, hairline dividers instead of cards, flat black
 buttons with a small radius, and the numbers as the hero.
 
-- Crowd first: every bar leads with crowd level (word plus 3 segment meter) and the line wait,
-  then what the numbers are based on, then the pass call as quiet secondary text.
-- Tonight rows are clean and tappable: name, crowd, wait, basis and one quiet deal line. "Report crowd", "I'm in line" and the pass call live on the bar page.
+- Crowd first: every bar leads with crowd level (word plus 3 segment meter), the line wait and the
+  drink wait, then what the numbers are based on, then the pass call as quiet secondary text.
+- Tonight rows are clean and tappable: name, crowd (with "· drinks 10 to 20 min" when known), wait, basis and one quiet deal line. "Report crowd", "I'm in line" and the pass call live on the bar page.
 - Fonts: DM Sans for all text, Bricolage Grotesque only for big numbers (tabular figures).
 - Wordmark is plain type ("Crowded", or "Crowded for staff").
 - Crowd level never relies on color. Destructive actions are bold, not red.
@@ -94,7 +102,7 @@ into `tokens.css`.
 | `js/api.js` | Real or mock API calls, token refresh, 401 and 429 handling, mock gating. |
 | `js/auth.js` | Sign in flow shared by both pages (21+ attestation, phone, code). |
 | `js/app.js` | Student app router and screens, report sheet, staff banner. Polls every 15 s while visible. |
-| `js/staff.js` | Staff app: invite step, door mode (tap zones, clicker keys, offline queue, wake lock), line checks, door code, reminders, and the Specials editor. |
+| `js/staff.js` | Staff app: invite step, door mode (tap zones, clicker keys, offline queue, wake lock), line checks, inside conditions, Manage tab, reminders, and the Specials editor. |
 | `fonts/` | Bricolage Grotesque and DM Sans, latin subset, SIL OFL 1.1 (`OFL.txt`). |
 | `tools/bundle_preview.py` | Inlines everything into one HTML file in mock mode for a shareable preview. |
 

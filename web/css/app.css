@@ -673,7 +673,7 @@ button {
 
 .kpis {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   margin-top: var(--space-8);
   border-block: 1px solid var(--border);
 }
@@ -688,8 +688,13 @@ button {
 
 .kpi + .kpi {
   border-left: 1px solid var(--border);
-  padding-left: var(--space-5);
+  padding-left: var(--space-3);
 }
+
+.kpi:not(:last-child) {
+  padding-right: var(--space-3);
+}
+
 
 .kpi__label {
   font-size: var(--text-sm);
@@ -1872,6 +1877,10 @@ button {
   grid-template-columns: repeat(4, 1fr);
 }
 
+.tabbar__inner--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 button.tab {
   border: 0;
   background: transparent;
@@ -1888,7 +1897,7 @@ button.tab {
 }
 
 .view--door .count__num {
-  font-size: 4.5rem;
+  font-size: 3.5rem;
 }
 
 .view--door .cap {
@@ -1897,9 +1906,9 @@ button.tab {
 
 .zones {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: 1fr;
   gap: var(--space-3);
-  height: clamp(200px, 36dvh, 380px);
+  height: clamp(200px, calc(100dvh - 450px), 520px);
 }
 
 .zone {
@@ -1927,12 +1936,12 @@ button.tab {
 }
 
 .zone--in svg {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
 }
 
 .zone--in {
-  font-size: 3.5rem;
+  font-size: 4.5rem;
 }
 
 .zone:active {
@@ -1976,7 +1985,52 @@ button.tab {
 }
 
 .door__tools {
+  display: grid;
+  gap: var(--space-3);
   margin-top: var(--space-3);
+}
+
+.door__out {
+  gap: var(--space-2);
+}
+
+.door__out svg {
+  width: 20px;
+  height: 20px;
+}
+
+.door__out.is-flash {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.entries-note {
+  margin-top: 0;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-2);
+}
+
+.setting-row__title {
+  font-weight: var(--weight-bold);
+}
+
+.bar-pick {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  list-style: none;
+  padding: 0;
+}
+
+.view--manage .staff__section + .staff__section,
+.view--inside .staff__section + .staff__section {
+  margin-top: var(--space-4);
 }
 
 .clicker-hint {
@@ -2150,24 +2204,6 @@ button.tab {
   font-size: var(--text-sm);
 }
 
-/* ---------- Student door code entry and verified result ---------- */
-.doorcode {
-  display: grid;
-  gap: var(--space-3);
-  width: 100%;
-  text-align: left;
-}
-
-.doorcode .input--code {
-  font-size: 2.5rem;
-}
-
-.doorcode__btns {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: var(--space-3);
-}
-
 .verified svg {
   width: 20px;
   height: 20px;
@@ -2183,4 +2219,24 @@ button.tab {
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-md);
   font-weight: var(--weight-bold);
+}
+
+.view--inside .section-title,
+.view--manage .section-title {
+  padding-block: var(--space-3) var(--space-2);
+}
+
+.kpi__value.kpi__value--sm {
+  font-size: 1.25rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.kpi__value--sm .faint {
+  font-size: var(--text-md);
+}
+
+.bar-row__drinks {
+  margin-left: var(--space-2);
+  color: var(--text-2);
 }

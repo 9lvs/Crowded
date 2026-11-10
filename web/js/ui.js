@@ -82,6 +82,14 @@
     { value: "very_long", label: "Huge", sub: "50+" }
   ];
 
+  var DRINK_WAITS = [
+    { value: "under_5", label: "Under 5 min" },
+    { value: "5_to_10", label: "5 to 10" },
+    { value: "10_to_20", label: "10 to 20" },
+    { value: "over_20", label: "Over 20" }
+  ];
+  var DRINK_LABEL = { under_5: "Under 5 min", "5_to_10": "5 to 10 min", "10_to_20": "10 to 20 min", over_20: "Over 20 min" };
+
   function fmtPrice(cents) {
     if (cents === null || cents === undefined) return null;
     var dollars = cents / 100;
@@ -434,6 +442,7 @@
       role: "radiogroup",
       "aria-label": opts.label
     });
+    if (opts.cols) el.style.setProperty("grid-template-columns", "repeat(" + opts.cols + ", 1fr)");
     opts.options.forEach(function (o) {
       var b = h(
         "button",
@@ -587,6 +596,8 @@
     itemLabel: itemLabel,
     DEAL_CATEGORIES: DEAL_CATEGORIES,
     CROWD_LABEL: CROWD_LABEL,
-    LINE_SIZES: LINE_SIZES
+    LINE_SIZES: LINE_SIZES,
+    DRINK_WAITS: DRINK_WAITS,
+    DRINK_LABEL: DRINK_LABEL
   };
 })();

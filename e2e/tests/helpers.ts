@@ -79,3 +79,34 @@ export async function openAs(page: Page, session: ApiSession, path: string): Pro
   await page.evaluate((rt) => window.localStorage.setItem("crowded.rt", rt), session.refresh);
   await page.goto(path);
 }
+
+export type StaffLevelName = "door" | "manager";
+
+/** The id of a seeded bar, looked up through the admin API. */
+export async function barIdByName(request: APIRequestContext, admin: ApiSession, name: string): Promise<string> {
+  const bars = await request.get("/v1/admin/bars", { headers: auth(admin) });
+  expect(bars.status(), await bars.text()).toBe(200);
+  const bar = (await bars.json()).find((b: { name: string }) => b.name === name);
+  expect(bar, `seeded bar ${name}`).toBeTruthy();
+  return bar.id as string;
+}
+
+/** A fresh account made staff at a bar. One sign in. The level comes from the admin invite. */
+export async function staffAt(
+  request: APIRequestContext,
+  admin: ApiSession,
+  barId: string,
+  level: StaffLevelName,
+): Promise<ApiSession> {
+  const inv = await request.post(`/v1/admin/bars/${barId}/invites`, { headers: auth(admin), data: { level } });
+  expect(inv.status(), await inv.text()).toBe(201);
+  expect((await inv.json()).level).toBe(level);
+  const session = await apiSignIn(request, fakePhone().e164);
+  const redeem = await request.post("/v1/staff/invites/redeem", {
+    headers: auth(session),
+    data: { code: (await inv.json()).code },
+  });
+  expect(redeem.status(), await redeem.text()).toBe(200);
+  expect((await redeem.json()).staff_level).toBe(level);
+  return session;
+}

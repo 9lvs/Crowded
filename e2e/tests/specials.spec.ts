@@ -2,7 +2,7 @@
    Real backend tests use the seeded FAKE specials. Copper Fox has a cover every night, so it
    always has something tonight. Sign ins here: 3 through the API, none through the UI. */
 import { APIRequestContext, expect, Page, test } from "@playwright/test";
-import { ADMIN_PHONE, apiSignIn, ApiSession, auth, collectErrors, fakePhone, adminSignIn } from "./helpers";
+import { apiSignIn, ApiSession, auth, collectErrors, fakePhone, adminSignIn, staffAt } from "./helpers";
 
 const FOX = "FAKE Copper Fox";
 const MOOSE = "FAKE Neon Moose";
@@ -152,17 +152,11 @@ test("staff add a special, students see it, then staff delete it", async ({ page
   const bars = await (await request.get("/v1/admin/bars", { headers: auth(admin) })).json();
   const moose = bars.find((b: { name: string }) => b.name === MOOSE);
   expect(moose).toBeTruthy();
-  const inv = await request.post(`/v1/admin/bars/${moose.id}/invites`, { headers: auth(admin) });
-  expect(inv.status(), await inv.text()).toBe(201);
-  const staff = await apiSignIn(request, fakePhone().e164);
-  const redeem = await request.post("/v1/staff/invites/redeem", {
-    headers: auth(staff),
-    data: { code: (await inv.json()).code },
-  });
-  expect(redeem.status(), await redeem.text()).toBe(200);
+  // Specials are manager only. Door staff get 403 manager_only.
+  const staff = await staffAt(request, admin, moose.id, "manager");
 
   await openAs(page, staff, "/staff.html");
-  await page.getByRole("button", { name: "Specials" }).click();
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
   const section = page.getByRole("region", { name: "Specials" });
   await expect(section).toBeVisible();
 
@@ -195,7 +189,7 @@ test("staff add a special, students see it, then staff delete it", async ({ page
 
   // Back to the staff page: delete asks first.
   await page.goto("/staff.html");
-  await page.getByRole("button", { name: "Specials" }).click();
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
   const item = page.getByRole("region", { name: "Specials" }).getByRole("listitem").filter({ hasText: "FAKE E2E Special" });
   await item.getByRole("button", { name: "Delete FAKE E2E Special" }).click();
   await expect(item).toContainText("Delete this special?");
@@ -215,17 +209,10 @@ test("staff add an all night special with items in the editor, students see it",
   const admin = await adminSignIn(request);
   const bar = await barId(request, admin, MOOSE);
   await removeByTitle(request, admin, bar, "FAKE E2E Night Menu");
-  const inv = await request.post(`/v1/admin/bars/${bar}/invites`, { headers: auth(admin) });
-  expect(inv.status(), await inv.text()).toBe(201);
-  const staff = await apiSignIn(request, fakePhone().e164);
-  const redeem = await request.post("/v1/staff/invites/redeem", {
-    headers: auth(staff),
-    data: { code: (await inv.json()).code },
-  });
-  expect(redeem.status(), await redeem.text()).toBe(200);
+  const staff = await staffAt(request, admin, bar, "manager");
 
   await openAs(page, staff, "/staff.html");
-  await page.getByRole("button", { name: "Specials" }).click();
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
   const section = page.getByRole("region", { name: "Specials" });
   const form = section.getByRole("form", { name: "Add special" });
 
@@ -311,9 +298,9 @@ test("specials UI renders in mock mode with no console errors", async ({ page })
 
   // Staff side in mock mode.
   await page.goto("/staff.html?mock=1");
-  await page.getByLabel("Invite code").fill("FAKE-INVITE");
+  await page.getByLabel("Invite code").fill("MANAGER-INVITE");
   await page.getByRole("button", { name: "Join bar" }).click();
-  await page.getByRole("button", { name: "Specials" }).click();
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
   const section = page.getByRole("region", { name: "Specials" });
   await expect(section.getByRole("listitem").filter({ hasText: "FAKE Wing Night" })).toBeVisible();
   const form = section.getByRole("form", { name: "Add special" });
