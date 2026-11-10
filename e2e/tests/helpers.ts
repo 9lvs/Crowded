@@ -38,6 +38,15 @@ export async function apiSignIn(
   return { access: body.access_token, refresh: body.refresh_token, user: body.user };
 }
 
+let adminSession: Promise<ApiSession> | null = null;
+
+/** The seeded admin, signed in once per worker. The backend allows only 3 code requests per
+    phone per 10 minutes, so tests must share this session instead of signing in again. */
+export function adminSignIn(request: APIRequestContext): Promise<ApiSession> {
+  if (!adminSession) adminSession = apiSignIn(request, ADMIN_PHONE);
+  return adminSession;
+}
+
 export function auth(s: ApiSession): Record<string, string> {
   return { Authorization: `Bearer ${s.access}` };
 }

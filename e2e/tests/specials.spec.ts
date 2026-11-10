@@ -2,7 +2,7 @@
    Real backend tests use the seeded FAKE specials. Copper Fox has a cover every night, so it
    always has something tonight. Sign ins here: 3 through the API, none through the UI. */
 import { expect, Page, test } from "@playwright/test";
-import { ADMIN_PHONE, apiSignIn, ApiSession, auth, collectErrors, fakePhone } from "./helpers";
+import { ADMIN_PHONE, apiSignIn, ApiSession, auth, collectErrors, fakePhone, adminSignIn } from "./helpers";
 
 const FOX = "FAKE Copper Fox";
 const MOOSE = "FAKE Neon Moose";
@@ -14,20 +14,52 @@ async function openAs(page: Page, session: ApiSession, path: string): Promise<vo
   await page.goto(path);
 }
 
+/** Local "HH:MM" in the bar's timezone, offset from now by the given minutes (wraps at midnight). */
+function nyTime(offsetMin: number): string {
+  const d = new Date(Date.now() + offsetMin * 60_000);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${get("hour")}:${get("minute")}`;
+}
+
 test("Tonight shows a specials line, and bar detail shows Tonight and This week", async ({ page, request }) => {
+  // Seeded specials depend on the time of day, so add one that is running right now. CI can run
+  // at any hour.
+  const admin = await adminSignIn(request);
+  const bars = await (await request.get("/v1/admin/bars", { headers: auth(admin) })).json();
+  const fox = bars.find((b: { name: string }) => b.name === FOX);
+  const created = await request.post(`/v1/admin/bars/${fox.id}/specials`, {
+    headers: auth(admin),
+    data: {
+      kind: "cover",
+      title: "FAKE E2E Cover",
+      days: [0, 1, 2, 3, 4, 5, 6],
+      start_local: nyTime(-30),
+      end_local: nyTime(90),
+      price_cents: 300,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const special = await created.json();
+
   const student = await apiSignIn(request, fakePhone().e164);
   await openAs(page, student, "/");
   await expect(page.getByRole("heading", { name: "Tonight" })).toBeVisible();
   const lines = page.locator(".bar-row__special");
   await expect(lines.first()).toBeVisible();
-  const fox = page.getByRole("listitem").filter({ hasText: FOX });
-  await expect(fox.locator(".bar-row__special")).toContainText(/Cover \$3|now until/);
+  const foxRow = page.getByRole("listitem").filter({ hasText: FOX });
+  await expect(foxRow.locator(".bar-row__special")).toContainText(/Cover \$3|now until/);
 
   await page.getByRole("button", { name: new RegExp(`^${FOX}\\.`) }).click();
   await expect(page.getByRole("heading", { level: 1, name: FOX })).toBeVisible();
   const tonight = page.getByRole("region", { name: "Tonight" });
   await expect(tonight).toContainText("Cover");
-  await expect(tonight).toContainText("FAKE Cover");
+  await expect(tonight).toContainText("FAKE E2E Cover");
   await expect(tonight).toContainText(/Posted by (the bar|Crowded)/);
   await expect(tonight).toContainText(/Updated .* ago|Updated just now/);
 
@@ -37,10 +69,12 @@ test("Tonight shows a specials line, and bar detail shows Tonight and This week"
   await expect(week.getByRole("heading", { name: "Monday" })).toBeVisible();
   await expect(week.getByRole("heading", { name: "Sunday" })).toBeVisible();
   await expect(week).toContainText("FAKE Fox Hour");
+
+  await request.delete(`/v1/admin/bars/${fox.id}/specials/${special.id}`, { headers: auth(admin) });
 });
 
 test("staff add a special, students see it, then staff delete it", async ({ page, request }) => {
-  const admin = await apiSignIn(request, ADMIN_PHONE);
+  const admin = await adminSignIn(request);
   const bars = await (await request.get("/v1/admin/bars", { headers: auth(admin) })).json();
   const moose = bars.find((b: { name: string }) => b.name === MOOSE);
   expect(moose).toBeTruthy();

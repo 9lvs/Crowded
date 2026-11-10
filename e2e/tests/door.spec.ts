@@ -3,7 +3,7 @@
    sign ins, none through the UI. Line checks and timers under 30 seconds are not counted by the
    server, so the real test starts them early and waits once. */
 import { APIRequestContext, expect, test } from "@playwright/test";
-import { ADMIN_PHONE, apiSignIn, ApiSession, auth, collectErrors, fakePhone, openAs, SEED_BARS } from "./helpers";
+import { ADMIN_PHONE, apiSignIn, ApiSession, auth, collectErrors, fakePhone, openAs, SEED_BARS, adminSignIn } from "./helpers";
 
 let staff: ApiSession;
 let student: ApiSession;
@@ -17,7 +17,7 @@ async function headcount(request: APIRequestContext): Promise<number> {
 }
 
 test.beforeAll(async ({ request }) => {
-  const admin = await apiSignIn(request, ADMIN_PHONE);
+  const admin = await adminSignIn(request);
   const bars = await request.get("/v1/admin/bars", { headers: auth(admin) });
   const owl = (await bars.json()).find((b: { name: string }) => b.name === SEED_BARS[0]);
   expect(owl).toBeTruthy();

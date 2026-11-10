@@ -1,6 +1,6 @@
 /* Door staff journey and user versus staff separation, against the real backend. */
 import { APIRequestContext, expect, test } from "@playwright/test";
-import { ADMIN_PHONE, apiSignIn, ApiSession, auth, fakePhone, SEED_BARS, uiSignIn } from "./helpers";
+import { ADMIN_PHONE, apiSignIn, ApiSession, auth, fakePhone, SEED_BARS, uiSignIn, adminSignIn } from "./helpers";
 
 let admin: ApiSession;
 let barId: string;
@@ -12,7 +12,7 @@ async function freshInvite(request: APIRequestContext): Promise<string> {
 }
 
 test.beforeAll(async ({ request }) => {
-  admin = await apiSignIn(request, ADMIN_PHONE);
+  admin = await adminSignIn(request);
   expect(admin.user.role, "seed.py makes the FAKE admin").toBe("admin");
   const bars = await request.get("/v1/admin/bars", { headers: auth(admin) });
   const owl = (await bars.json()).find((b: { name: string }) => b.name === SEED_BARS[0]);
