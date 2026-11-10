@@ -43,7 +43,7 @@ def test_route_enumeration_is_not_empty() -> None:
 @pytest.mark.parametrize(("method", "path"), _routes())
 def test_every_route_requires_auth(client: TestClient, method: str, path: str) -> None:
     url = path
-    for param in ("{bar_id}", "{session_id}", "{user_id}", "{invite_id}"):
+    for param in ("{bar_id}", "{session_id}", "{user_id}", "{invite_id}", "{special_id}"):
         url = url.replace(param, str(uuid.uuid4()))
     assert "{" not in url, f"add a placeholder for {path}"
     r = client.request(method, url, json={})
@@ -62,6 +62,20 @@ ADMIN_CALLS = [
     ("POST", "/v1/admin/bars/{bar}/invites", None),
     ("GET", "/v1/admin/metrics/accuracy", None),
     ("GET", "/v1/admin/audit", None),
+    ("GET", "/v1/admin/bars/{bar}/specials", None),
+    (
+        "POST",
+        "/v1/admin/bars/{bar}/specials",
+        {
+            "kind": "cover",
+            "title": "FAKE",
+            "days": [1],
+            "start_local": "21:00",
+            "end_local": "23:00",
+        },
+    ),
+    ("PATCH", "/v1/admin/bars/{bar}/specials/{special}", {"title": "FAKE"}),
+    ("DELETE", "/v1/admin/bars/{bar}/specials/{special}", None),
 ]
 
 
@@ -71,7 +85,8 @@ def test_admin_routes_forbid_user_and_staff(
 ) -> None:
     staff = make_staff(client, admin, str(bar.id))
     for who in (login(client), staff):
-        r = client.request(method, path.replace("{bar}", str(bar.id)), json=body, headers=who.h)
+        url = path.replace("{bar}", str(bar.id)).replace("{special}", str(uuid.uuid4()))
+        r = client.request(method, url, json=body, headers=who.h)
         assert r.status_code == 403, (who, path)
 
 
@@ -79,6 +94,7 @@ STAFF_CALLS = [
     ("GET", "/v1/staff/bars/{bar}", None),
     ("POST", "/v1/staff/bars/{bar}/door", {"direction": "in"}),
     ("POST", "/v1/staff/bars/{bar}/line", {"line_size": "short"}),
+    ("GET", "/v1/staff/bars/{bar}/specials", None),
 ]
 
 

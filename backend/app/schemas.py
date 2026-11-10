@@ -10,7 +10,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models import CrowdLevel, DistanceBucket, DoorDirection, LineSize, Role, SessionStatus
+from app.models import (
+    CrowdLevel,
+    DistanceBucket,
+    DoorDirection,
+    LineSize,
+    Role,
+    SessionStatus,
+    SpecialKind,
+)
 
 E164 = re.compile(r"^\+[1-9][0-9]{7,14}$", re.ASCII)
 
@@ -118,6 +126,104 @@ class VerdictOut(Strict):
     minutes_saved: int | None
 
 
+# ---------- specials ----------
+
+TIME_HHMM = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+
+
+def _clean_text(v: str) -> str:
+    if any(ord(c) < 32 or ord(c) == 127 for c in v):
+        raise ValueError("control characters are not allowed")
+    return v
+
+
+class SpecialIn(Strict):
+    kind: SpecialKind
+    title: Annotated[str, Field(min_length=1, max_length=80)]
+    details: Annotated[str, Field(max_length=200)] = ""
+    days: Annotated[list[Annotated[int, Field(ge=0, le=6)]], Field(min_length=1, max_length=7)]
+    start_local: str
+    end_local: str
+    price_cents: Annotated[int, Field(ge=0, le=100000)] | None = None
+
+    @field_validator("title", "details")
+    @classmethod
+    def _text(cls, v: str) -> str:
+        return _clean_text(v)
+
+    @field_validator("days")
+    @classmethod
+    def _days(cls, v: list[int]) -> list[int]:
+        if len(set(v)) != len(v):
+            raise ValueError("days must be unique")
+        return sorted(v)
+
+    @field_validator("start_local", "end_local")
+    @classmethod
+    def _hhmm(cls, v: str) -> str:
+        if not TIME_HHMM.match(v):
+            raise ValueError("time must be HH:MM, 24 hour")
+        return v
+
+    @model_validator(mode="after")
+    def _distinct(self) -> SpecialIn:
+        if self.start_local == self.end_local:
+            raise ValueError("start and end must differ")
+        return self
+
+
+class SpecialUpdate(Strict):
+    kind: SpecialKind | None = None
+    title: Annotated[str, Field(min_length=1, max_length=80)] | None = None
+    details: Annotated[str, Field(max_length=200)] | None = None
+    days: (
+        Annotated[list[Annotated[int, Field(ge=0, le=6)]], Field(min_length=1, max_length=7)] | None
+    ) = None
+    start_local: str | None = None
+    end_local: str | None = None
+    price_cents: Annotated[int, Field(ge=0, le=100000)] | None = None
+    is_active: bool | None = None
+
+    @field_validator("title", "details")
+    @classmethod
+    def _text(cls, v: str | None) -> str | None:
+        return None if v is None else _clean_text(v)
+
+    @field_validator("days")
+    @classmethod
+    def _days(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return None
+        if len(set(v)) != len(v):
+            raise ValueError("days must be unique")
+        return sorted(v)
+
+    @field_validator("start_local", "end_local")
+    @classmethod
+    def _hhmm(cls, v: str | None) -> str | None:
+        if v is not None and not TIME_HHMM.match(v):
+            raise ValueError("time must be HH:MM, 24 hour")
+        return v
+
+
+class SpecialOut(Strict):
+    id: uuid.UUID
+    kind: SpecialKind
+    title: str
+    details: str
+    days: list[int]
+    start_local: str
+    end_local: str
+    price_cents: int | None
+    is_active: bool
+    posted_by: Literal["staff", "admin"]
+    updated_at: datetime
+
+
+class SpecialTonight(SpecialOut):
+    is_now: bool
+
+
 class BarSummary(Strict):
     id: uuid.UUID
     slug: str
@@ -127,6 +233,10 @@ class BarSummary(Strict):
     pass_price_cents: int | None
     live: LiveOut
     verdict: VerdictOut
+    specials_tonight: list[SpecialTonight] = Field(
+        default_factory=list, description="Posted by the bar. Now first, then by start time"
+    )
+    cover_tonight: SpecialTonight | None = None
 
 
 class HourPoint(Strict):
@@ -140,6 +250,7 @@ class BarDetail(BarSummary):
     longitude: float
     normal_wait_min: int | None = Field(description="Typical wait at this hour on past nights")
     wait_by_hour: list[HourPoint]
+    specials_week: list[SpecialOut] = Field(default_factory=list)
 
 
 class SnapshotOut(Strict):

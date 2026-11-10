@@ -212,6 +212,9 @@
             "title": "Capacity",
             "type": "integer"
           },
+          "cover_tonight": {
+            "$ref": "#/components/schemas/SpecialTonight"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -243,6 +246,21 @@
           "slug": {
             "title": "Slug",
             "type": "string"
+          },
+          "specials_tonight": {
+            "description": "Posted by the bar. Now first, then by start time",
+            "items": {
+              "$ref": "#/components/schemas/SpecialTonight"
+            },
+            "title": "Specials Tonight",
+            "type": "array"
+          },
+          "specials_week": {
+            "items": {
+              "$ref": "#/components/schemas/SpecialOut"
+            },
+            "title": "Specials Week",
+            "type": "array"
           },
           "verdict": {
             "$ref": "#/components/schemas/VerdictOut"
@@ -280,6 +298,9 @@
             "title": "Capacity",
             "type": "integer"
           },
+          "cover_tonight": {
+            "$ref": "#/components/schemas/SpecialTonight"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -298,6 +319,14 @@
           "slug": {
             "title": "Slug",
             "type": "string"
+          },
+          "specials_tonight": {
+            "description": "Posted by the bar. Now first, then by start time",
+            "items": {
+              "$ref": "#/components/schemas/SpecialTonight"
+            },
+            "title": "Specials Tonight",
+            "type": "array"
           },
           "verdict": {
             "$ref": "#/components/schemas/VerdictOut"
@@ -896,6 +925,237 @@
         "title": "SnapshotOut",
         "type": "object"
       },
+      "SpecialIn": {
+        "properties": {
+          "days": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "details": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Details",
+            "type": "string"
+          },
+          "end_local": {
+            "title": "End Local",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpecialKind"
+          },
+          "price_cents": {
+            "title": "Price Cents",
+            "type": "integer"
+          },
+          "start_local": {
+            "title": "Start Local",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "days",
+          "start_local",
+          "end_local"
+        ],
+        "title": "SpecialIn",
+        "type": "object"
+      },
+      "SpecialKind": {
+        "title": "SpecialKind",
+        "type": "string"
+      },
+      "SpecialOut": {
+        "properties": {
+          "days": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "details": {
+            "title": "Details",
+            "type": "string"
+          },
+          "end_local": {
+            "title": "End Local",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpecialKind"
+          },
+          "posted_by": {
+            "title": "Posted By",
+            "type": "string"
+          },
+          "price_cents": {
+            "title": "Price Cents",
+            "type": "integer"
+          },
+          "start_local": {
+            "title": "Start Local",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "details",
+          "days",
+          "start_local",
+          "end_local",
+          "is_active",
+          "posted_by",
+          "updated_at"
+        ],
+        "title": "SpecialOut",
+        "type": "object"
+      },
+      "SpecialTonight": {
+        "properties": {
+          "days": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "details": {
+            "title": "Details",
+            "type": "string"
+          },
+          "end_local": {
+            "title": "End Local",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_now": {
+            "title": "Is Now",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpecialKind"
+          },
+          "posted_by": {
+            "title": "Posted By",
+            "type": "string"
+          },
+          "price_cents": {
+            "title": "Price Cents",
+            "type": "integer"
+          },
+          "start_local": {
+            "title": "Start Local",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "details",
+          "days",
+          "start_local",
+          "end_local",
+          "is_active",
+          "posted_by",
+          "updated_at",
+          "is_now"
+        ],
+        "title": "SpecialTonight",
+        "type": "object"
+      },
+      "SpecialUpdate": {
+        "properties": {
+          "days": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "details": {
+            "maxLength": 200,
+            "title": "Details",
+            "type": "string"
+          },
+          "end_local": {
+            "title": "End Local",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpecialKind"
+          },
+          "price_cents": {
+            "title": "Price Cents",
+            "type": "integer"
+          },
+          "start_local": {
+            "title": "Start Local",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "SpecialUpdate",
+        "type": "object"
+      },
       "StaffMemberOut": {
         "properties": {
           "bar_id": {
@@ -1430,6 +1690,225 @@
           }
         ],
         "summary": "Set Pass Price",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bars/{bar_id}/specials": {
+      "get": {
+        "operationId": "admin_list_v1_admin_bars__bar_id__specials_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpecialOut"
+                  },
+                  "title": "Response Admin List V1 Admin Bars  Bar Id  Specials Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin List",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "admin_create_v1_admin_bars__bar_id__specials_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Create",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/bars/{bar_id}/specials/{special_id}": {
+      "delete": {
+        "operationId": "admin_delete_v1_admin_bars__bar_id__specials__special_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "title": "Special Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Delete",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "admin_update_v1_admin_bars__bar_id__specials__special_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "title": "Special Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Update",
         "tags": [
           "admin"
         ]
@@ -2390,6 +2869,225 @@
           }
         ],
         "summary": "Line",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/specials": {
+      "get": {
+        "operationId": "staff_list_v1_staff_bars__bar_id__specials_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpecialOut"
+                  },
+                  "title": "Response Staff List V1 Staff Bars  Bar Id  Specials Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff List",
+        "tags": [
+          "staff"
+        ]
+      },
+      "post": {
+        "operationId": "staff_create_v1_staff_bars__bar_id__specials_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Create",
+        "tags": [
+          "staff"
+        ]
+      }
+    },
+    "/v1/staff/bars/{bar_id}/specials/{special_id}": {
+      "delete": {
+        "operationId": "staff_delete_v1_staff_bars__bar_id__specials__special_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "title": "Special Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Delete",
+        "tags": [
+          "staff"
+        ]
+      },
+      "patch": {
+        "operationId": "staff_update_v1_staff_bars__bar_id__specials__special_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "special_id",
+            "required": true,
+            "schema": {
+              "title": "Special Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bar_id",
+            "required": true,
+            "schema": {
+              "title": "Bar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecialOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff Update",
         "tags": [
           "staff"
         ]
