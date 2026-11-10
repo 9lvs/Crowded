@@ -117,6 +117,15 @@
     { value: "cover", label: "Cover" },
     { value: "event", label: "Event" }
   ];
+  var DEAL_CATEGORIES = [
+    { value: "beer", label: "Beer" },
+    { value: "pitchers", label: "Pitchers" },
+    { value: "shots", label: "Shots" },
+    { value: "mixers", label: "Mixers" },
+    { value: "wine", label: "Wine" },
+    { value: "food", label: "Food" },
+    { value: "other", label: "Other" }
+  ];
   var DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   var DAY_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -143,31 +152,180 @@
     return s.price_cents === 0 ? "Free cover" : "Cover " + fmtPrice(s.price_cents);
   }
 
-  // One quiet line for a Tonight row. Prefer something happening now, then cover, then a count.
-  // Returns null when the bar has nothing tonight.
-  function specialsLine(bar) {
+  // "21:00" -> "9", "21:30" -> "9:30". No AM or PM, for compact deal headers.
+  function fmtTimeShort(hhmm) {
+    var m = /^(\d{2}):(\d{2})$/.exec(hhmm || "");
+    if (!m) return "";
+    var hr = Number(m[1]) % 12;
+    return (hr === 0 ? 12 : hr) + (m[2] === "00" ? "" : ":" + m[2]);
+  }
+
+  // Lowercase a menu name for a one line summary, but keep ALL CAPS words such as FAKE.
+  function shortName(name) {
+    return String(name || "")
+      .split(" ")
+      .map(function (w) {
+        return w.length > 1 && w === w.toUpperCase() && /[A-Z]/.test(w) ? w : w.toLowerCase();
+      })
+      .join(" ");
+  }
+
+  function itemLabel(item) {
+    return item.price_label + " " + shortName(item.name);
+  }
+
+  var GROUP_TITLE = {
+    happy_hour: "Happy hour",
+    drink: "Drink special",
+    food: "Food",
+    cover: "Cover",
+    event: "Event"
+  };
+
+  function flatItems(list) {
+    var out = [];
+    list.forEach(function (s) {
+      (s.items || []).forEach(function (i) {
+        out.push(i);
+      });
+    });
+    return out;
+  }
+
+  // Minutes since noon, so 2 AM sorts after 9 PM.
+  function nightOrder(hhmm) {
+    var m = /^(\d{2}):(\d{2})$/.exec(hhmm || "");
+    if (!m) return 0;
+    return (Number(m[1]) * 60 + Number(m[2]) - 720 + 1440) % 1440;
+  }
+
+  // One quiet deal line for a Tonight row, built from specials_tonight.
+  // Returns {head, text, plus} or null. The caller truncates text and keeps plus visible.
+  function dealsLine(bar) {
     var list = bar.specials_tonight || [];
     if (!list.length) return null;
-    function name(s) {
-      if (s.kind === "cover") return coverText(s);
-      return s.kind === "happy_hour" ? "Happy hour" : s.title;
+    var deals = list.filter(function (s) {
+      return s.kind !== "cover" && s.kind !== "event";
+    });
+    var withItems = deals.filter(function (s) {
+      return s.items && s.items.length;
+    });
+    var allNight = flatItems(
+      withItems.filter(function (s) {
+        return s.all_day;
+      })
+    );
+    var timed = withItems.filter(function (s) {
+      return !s.all_day;
+    });
+    var nowTimed = timed
+      .filter(function (s) {
+        return s.is_now;
+      })
+      .sort(function (a, b) {
+        return (a.kind === "happy_hour" ? 0 : 1) - (b.kind === "happy_hour" ? 0 : 1);
+      });
+    var later = timed
+      .filter(function (s) {
+        return !s.is_now;
+      })
+      .sort(function (a, b) {
+        return nightOrder(a.start_local) - nightOrder(b.start_local);
+      });
+    var pool;
+    if (nowTimed.length) {
+      pool = flatItems(nowTimed).concat(allNight);
+      return line(GROUP_TITLE[nowTimed[0].kind] + " now:", pool, 2, 0);
     }
-    var i;
-    for (i = 0; i < list.length; i++) {
-      if (list[i].is_now) return name(list[i]) + " now until " + fmtTime12(list[i].end_local);
+    if (later.length) {
+      var first = later[0];
+      var grp = flatItems(
+        later.filter(function (s) {
+          return s.start_local === first.start_local;
+        })
+      );
+      return line(GROUP_TITLE[first.kind] + " at " + fmtTimeShort(first.start_local) + ":", grp, 1, allNight.length);
     }
+    if (allNight.length) return line("All night:", allNight, 2, 0);
+
+    // Older specials without items: use the title.
+    var legacy = deals.filter(function (s) {
+      return !(s.items && s.items.length);
+    });
+    var k;
+    for (k = 0; k < legacy.length; k++) {
+      if (legacy[k].is_now) return { head: "", text: legacy[k].title + " now until " + fmtTime12(legacy[k].end_local), plus: "" };
+    }
+    if (legacy.length) return { head: "", text: legacy[0].title + " from " + fmtTime12(legacy[0].start_local), plus: "" };
+
     var cover = bar.cover_tonight || null;
     if (!cover) {
-      for (i = 0; i < list.length; i++) {
-        if (list[i].kind === "cover") {
-          cover = list[i];
+      for (k = 0; k < list.length; k++) {
+        if (list[k].kind === "cover") {
+          cover = list[k];
           break;
         }
       }
     }
-    if (cover) return coverText(cover) + " from " + fmtTime12(cover.start_local);
-    if (list.length === 1) return list[0].title + " from " + fmtTime12(list[0].start_local);
-    return list.length + " specials tonight";
+    if (cover) return { head: "", text: coverText(cover) + (cover.is_now ? " now" : " from " + fmtTime12(cover.start_local)), plus: "" };
+    var ev = list[0];
+    return { head: "", text: ev.title + (ev.is_now ? " now" : " from " + fmtTime12(ev.start_local)), plus: "" };
+
+    function line(head, items, shown, extra) {
+      var n = items.length - shown + extra;
+      return {
+        head: head,
+        text: items.slice(0, shown).map(itemLabel).join(", "),
+        plus: n > 0 ? "+" + n : ""
+      };
+    }
+  }
+
+  function dealsLineText(d) {
+    return d ? (d.head ? d.head + " " : "") + d.text + (d.plus ? " " + d.plus : "") : "";
+  }
+
+  // Price list groups for the bar page. tonight=true adds Now and Starts at status.
+  // Returns [{key, title, now, status, items:[{name, price, note, plain}], meta}].
+  function dealGroups(specials, tonight) {
+    var groups = [];
+    var allDay = null;
+    specials.forEach(function (s) {
+      var rows = dealRows(s);
+      if (s.all_day) {
+        if (!allDay) {
+          allDay = { key: "all-night", title: "All night", now: !!tonight, status: "", items: [], meta: s, order: -1 };
+          groups.push(allDay);
+        }
+        allDay.items = allDay.items.concat(rows);
+        if (s.updated_at > allDay.meta.updated_at) allDay.meta = s;
+        return;
+      }
+      var title = GROUP_TITLE[s.kind] || "Special";
+      if (s.kind !== "event") title += " " + fmtTimeShort(s.start_local) + " to " + fmtTimeShort(s.end_local);
+      var status = "";
+      if (tonight) status = s.is_now ? "Until " + fmtTimeShort(s.end_local) : "Starts at " + fmtTimeShort(s.start_local);
+      groups.push({ key: s.id, title: title, now: !!(tonight && s.is_now), status: status, items: rows, meta: s, order: nightOrder(s.start_local) });
+    });
+    groups.sort(function (a, b) {
+      return a.order - b.order;
+    });
+    return groups;
+  }
+
+  function dealRows(s) {
+    if (s.items && s.items.length) {
+      return s.items.map(function (i) {
+        return { name: i.name, price: i.price_label, note: i.note || "" };
+      });
+    }
+    if (s.kind === "event") return [{ name: s.title + " from " + fmtTime12(s.start_local), price: "", note: s.details || "", plain: true }];
+    var price = s.price_cents === null || s.price_cents === undefined ? "" : s.price_cents === 0 ? "Free" : fmtPrice(s.price_cents);
+    return [{ name: s.title, price: price, note: s.details || "" }];
+  }
+
+  function postedBy(s) {
+    return (s.posted_by === "admin" ? "Posted by Crowded" : "Posted by the bar") + " \u00b7 Updated " + fmtAgo(s.updated_at);
   }
 
   function fmtHour(hour) {
@@ -195,23 +353,6 @@
     );
     if (opts.large || opts.meterOnly) return m;
     return h("span", { class: "crowd", role: "img", "aria-label": "Crowd: " + label }, m, h("span", { "aria-hidden": "true" }, label));
-  }
-
-  // Short pass verdict for list rows. Secondary information, so it is plain text.
-  function verdictShort(v) {
-    var r = v ? v.recommendation : "no_data";
-    if (r === "buy_pass") {
-      var p = fmtPrice(v.pass_price_cents);
-      return "Pass" + (p ? " " + p : "") + " worth it";
-    }
-    if (r === "wait_it_out") return "Skip the pass";
-    if (r === "no_pass_available") return "No pass sold";
-    return "No pass call yet";
-  }
-
-  function verdictLine(v) {
-    var strong = v && v.recommendation === "buy_pass";
-    return h("span", { class: "verdict-line" + (strong ? " verdict-line--strong" : ""), text: verdictShort(v) });
   }
 
   // Typographic wordmark. Optional small suffix such as "for staff".
@@ -418,8 +559,6 @@
     clear: clear,
     icon: icon,
     crowd: crowd,
-    verdictLine: verdictLine,
-    verdictShort: verdictShort,
     wordmark: wordmark,
     toast: toast,
     sheet: sheet,
@@ -440,7 +579,13 @@
     fmtTime12: fmtTime12,
     fmtWindow: fmtWindow,
     coverText: coverText,
-    specialsLine: specialsLine,
+    dealsLine: dealsLine,
+    dealsLineText: dealsLineText,
+    dealGroups: dealGroups,
+    postedBy: postedBy,
+    fmtTimeShort: fmtTimeShort,
+    itemLabel: itemLabel,
+    DEAL_CATEGORIES: DEAL_CATEGORIES,
     CROWD_LABEL: CROWD_LABEL,
     LINE_SIZES: LINE_SIZES
   };

@@ -313,21 +313,6 @@ button {
   min-height: 0;
 }
 
-.chip-btn {
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  margin-block: 2px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  font-weight: var(--weight-bold);
-  font-size: var(--text-sm);
-}
-
-.chip-btn:active {
-  background: var(--border);
-}
-
 .text-btn {
   min-height: var(--touch);
   padding: 0 var(--space-3);
@@ -533,7 +518,6 @@ button {
 
 .bar-row {
   border-bottom: 1px solid var(--border);
-  padding-block: var(--space-4) var(--space-2);
 }
 
 .bar-row__main {
@@ -542,10 +526,11 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: 0;
+  padding: var(--space-4) 0;
   border: 0;
   background: none;
   text-align: left;
+  color: inherit;
 }
 
 .bar-row__main:active {
@@ -553,6 +538,7 @@ button {
 }
 
 .bar-row__text {
+  flex: 1;
   display: grid;
   gap: var(--space-2);
   min-width: 0;
@@ -575,14 +561,6 @@ button {
   font-size: var(--text-xs);
   color: var(--text-2);
   line-height: 1.4;
-}
-
-.bar-row__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-height: var(--touch);
 }
 
 .row-wait {
@@ -609,16 +587,6 @@ button {
   font-size: var(--text-sm);
   color: var(--text-3);
   padding-top: 2px;
-}
-
-.verdict-line {
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.verdict-line--strong {
-  color: var(--text);
-  font-weight: var(--weight-bold);
 }
 
 /* Crowd: label plus 3 segment meter, never color alone. */
@@ -1567,15 +1535,38 @@ button {
 }
 
 /* ---------- Specials ---------- */
-.bar-row__special {
+.bar-row__deal {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--border);
   font-size: var(--text-sm);
-  color: var(--text);
+  color: var(--text-2);
   line-height: 1.35;
+}
+
+.bar-row__deal-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-row__deal-head {
+  color: var(--text);
+  font-weight: var(--weight-bold);
+}
+
+.bar-row__deal-plus {
+  flex: none;
+  color: var(--text);
+  font-weight: var(--weight-medium);
 }
 
 .tag {
   display: inline-block;
-  margin-left: var(--space-2);
   padding: 1px var(--space-2);
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -1586,41 +1577,83 @@ button {
   vertical-align: 1px;
 }
 
+/* Deals on the bar page: a price list with hairlines and dotted leaders. */
+.deal-group {
+  padding-top: var(--space-4);
+}
+
+.deal-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.deal-group__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.deal-group__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.deal-group__status .tag {
+  color: var(--primary-ink);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.deal-row {
+  padding-top: var(--space-2);
+}
+
+.deal-row__line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+}
+
+.deal-row__name {
+  min-width: 0;
+}
+
+.deal-row__lead {
+  flex: 1;
+  min-width: 12px;
+  border-bottom: 1px dotted var(--text-3);
+  transform: translateY(-4px);
+}
+
+.deal-row__price {
+  flex: none;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.deal-row__note {
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+
+.deal-group__meta {
+  padding-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
 .special-list {
   border-top: 1px solid var(--border);
-}
-
-.special {
-  display: grid;
-  gap: 2px;
-  padding-block: var(--space-3);
-  border-bottom: 1px solid var(--border);
-}
-
-.special__kind {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
-.special__title {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-  letter-spacing: -0.01em;
-  line-height: var(--leading-snug);
-}
-
-.special__details,
-.special__when {
-  font-size: var(--text-sm);
-  color: var(--text);
-}
-
-.special__meta {
-  font-size: var(--text-xs);
-  color: var(--text-2);
 }
 
 .special-empty {
@@ -1673,8 +1706,8 @@ button {
   font-weight: var(--weight-bold);
 }
 
-.week__day:last-child .special:last-child {
-  border-bottom: 0;
+.week__day {
+  padding-bottom: var(--space-2);
 }
 
 /* Staff specials */
@@ -1774,6 +1807,46 @@ button {
   border-color: var(--primary);
   color: var(--primary-ink);
   font-weight: var(--weight-bold);
+}
+
+.sp-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--touch);
+  font-weight: var(--weight-medium);
+}
+
+.sp-check__box {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.sp-timesblock,
+.sp-itemsblock,
+.sp-items {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sp-itemsblock {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.sp-form__sub {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+}
+
+.sp-item-row {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 
 .sp-form__btns {

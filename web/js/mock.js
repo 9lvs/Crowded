@@ -59,15 +59,28 @@
     }
   ];
   // FAKE specials. Days are Monday = 0. Ages are hours since "posted".
+  // Row: kind, title, details, days, start, end, price_cents, posted_by, age, all_day, items.
+  // Item: name, price_label, category, note. Mirrors the backend seed shape.
+  var EVERY = [0, 1, 2, 3, 4, 5, 6];
   var SPECIAL_SEED = {
     "fake-tipsy-owl": [
-      ["happy_hour", "FAKE Happy Hour", "Half price wells and drafts", [0, 1, 2, 3, 4], "17:00", "20:00", null, "staff", 5],
-      ["cover", "FAKE Cover", "Cash or card", [3, 4, 5], "21:00", "02:00", 500, "staff", 30],
-      ["food", "FAKE Wing Night", "Ten wings", [2], "18:00", "22:00", 700, "staff", 52]
+      ["drink", "FAKE All Night Drafts", "Every night", EVERY, "12:00", "04:00", null, "staff", 5, true, [["FAKE Lager drafts", "$3", "beer", ""]]],
+      [
+        "happy_hour", "FAKE Owl Hour", "Every night 9 to 11 PM", EVERY, "21:00", "23:00", null, "staff", 5, false,
+        [
+          ["FAKE Regular drafts", "$3", "beer", ""],
+          ["FAKE House shots", "$3", "shots", ""],
+          ["FAKE House wine", "$3", "wine", ""],
+          ["FAKE 32oz pitchers", "$5", "pitchers", ""]
+        ]
+      ],
+      ["event", "FAKE DJ Night", "DJ on the floor", EVERY, "21:00", "02:00", null, "staff", 8, false, []],
+      ["food", "FAKE Wing Night", "Wednesday dinner", [2], "18:00", "22:00", null, "staff", 52, false, [["FAKE Ten wings", "$7", "food", "Dine in only"]]],
+      ["cover", "FAKE Cover", "Cash or card", [3, 4, 5], "21:00", "02:00", 500, "staff", 30, false, []]
     ],
     "fake-copper-lantern": [
-      ["cover", "FAKE Cover", "Every night", [0, 1, 2, 3, 4, 5, 6], "18:00", "02:00", 300, "admin", 70],
-      ["event", "FAKE Trivia", "Teams of up to six", [1], "20:00", "22:00", null, "staff", 8]
+      ["cover", "FAKE Cover", "Every night", EVERY, "18:00", "02:00", 300, "admin", 70, false, []],
+      ["event", "FAKE Trivia", "Teams of up to six", [1], "20:00", "22:00", null, "staff", 8, false, []]
     ],
     "fake-night-heron": []
   };
@@ -223,6 +236,10 @@
           start_local: r[4],
           end_local: r[5],
           price_cents: r[6],
+          all_day: r[9],
+          items: r[10].map(function (i) {
+            return { name: i[0], price_label: i[1], category: i[2], note: i[3] };
+          }),
           is_active: true,
           posted_by: r[7],
           updated_at: new Date(Date.now() - r[8] * 3600000).toISOString()
@@ -373,6 +390,29 @@
     return res(status, { detail: detail });
   }
 
+  function invalid(msg, loc) {
+    return res(422, { detail: "validation_error", errors: [{ loc: loc || ["body"], msg: msg, type: "value_error" }] });
+  }
+
+  // Items and all_day rules, like the backend. Returns a response or null.
+  function validateDeals(b) {
+    if (b.items !== undefined && b.items !== null) {
+      if (!Array.isArray(b.items)) return invalid("Input should be a valid list", ["body", "items"]);
+      if (b.items.length > 20) return invalid("List should have at most 20 items after validation, not " + b.items.length, ["body", "items"]);
+      for (var i = 0; i < b.items.length; i++) {
+        var it = b.items[i];
+        if (!it.name) return invalid("String should have at least 1 character", ["body", "items", i, "name"]);
+        if (it.name.length > 60) return invalid("String should have at most 60 characters", ["body", "items", i, "name"]);
+        if (!it.price_label) return invalid("String should have at least 1 character", ["body", "items", i, "price_label"]);
+        if (it.price_label.length > 20) return invalid("String should have at most 20 characters", ["body", "items", i, "price_label"]);
+        if (["beer", "pitchers", "shots", "mixers", "wine", "food", "other"].indexOf(it.category) === -1) {
+          return invalid("Input should be a valid category", ["body", "items", i, "category"]);
+        }
+      }
+    }
+    return null;
+  }
+
   function validateSpecial(b, partial) {
     var hhmm = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
     if (!partial || "title" in b) {
@@ -397,6 +437,14 @@
     var i;
     if (method === "GET" && !id) return res(200, sortedSpecials(bar, false));
     if (method === "POST" && !id) {
+      if (body.all_day) {
+        body.start_local = "12:00";
+        body.end_local = "04:00";
+      } else if (!body.start_local || !body.end_local) {
+        return invalid("Value error, times_required");
+      }
+      var badDeals = validateDeals(body);
+      if (badDeals) return badDeals;
       var bad = validateSpecial(body, false);
       if (bad) return err(422, bad);
       if (body.start_local === body.end_local) return err(422, "start and end must differ");
@@ -410,6 +458,10 @@
         start_local: body.start_local,
         end_local: body.end_local,
         price_cents: body.price_cents === undefined ? null : body.price_cents,
+        all_day: !!body.all_day,
+        items: (body.items || []).map(function (i) {
+          return { name: i.name, price_label: i.price_label, category: i.category, note: i.note || "" };
+        }),
         is_active: true,
         posted_by: "staff",
         updated_at: nowIso()
@@ -421,9 +473,15 @@
     for (i = 0; i < list.length; i++) if (list[i].id === id) break;
     if (!id || i === list.length) return err(404, "not_found");
     if (method === "PATCH") {
+      var badDeals2 = validateDeals(body);
+      if (badDeals2) return badDeals2;
       var bad2 = validateSpecial(body, true);
       if (bad2) return err(422, bad2);
       var next = Object.assign({}, list[i], body);
+      if (next.all_day) {
+        next.start_local = "12:00";
+        next.end_local = "04:00";
+      }
       if (next.start_local === next.end_local) return err(422, "start_equals_end");
       next.days = next.days.slice().sort();
       next.updated_at = nowIso();
