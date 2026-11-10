@@ -11,6 +11,8 @@
   var poll = null;
   var agoTimer = null;
   var visibleLoad = null;
+  var cleanups = [];
+  var reminderTick = 0;
 
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible" && poll && visibleLoad) visibleLoad();
@@ -23,6 +25,10 @@
   };
 
   function stopTimers() {
+    cleanups.forEach(function (f) {
+      f();
+    });
+    cleanups = [];
     clearInterval(poll);
     clearInterval(agoTimer);
     poll = null;
@@ -403,13 +409,101 @@
     );
   }
 
+  // ---------- Door mode ----------
+  var IN_KEYS = { ArrowRight: 1, PageDown: 1, " ": 1, Enter: 1, ".": 1 };
+  var OUT_KEYS = { ArrowLeft: 1, PageUp: 1, ",": 1 };
+  var UNDO_MS = 30000;
+  var LINE_REMIND_MS = 15 * 60000;
+  var SAMPLE_REMIND_MS = 20 * 60000;
+
+  function vibrate(pattern) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function reducedMotion() {
+    try {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function readJson(key) {
+    try {
+      var raw = ui.storage(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeJson(key, value) {
+    try {
+      ui.storage(key, value === null ? null : JSON.stringify(value));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
   function counter(barId) {
     stopTimers();
     ui.clear(root);
+    var QKEY = "crowded.door.queue." + barId;
+    var LKEY = "crowded.door.last." + barId;
     var server = null; // last StaffState from the server
     var local = { headcount: 0, line_size: null };
-    var pending = 0;
+    var queue = []; // taps not yet saved: {dir, n, ts}
+    var draining = false;
+    var offline = false;
+    var retryMs = 0;
+    var retryTimer = null;
+    var lastTap = null; // {dir, n, ts} for Undo
+    var undoTimer = null;
+    var tab = "door";
+    var samples = [];
+    var chipTimes = {};
+    var lastCheck = readJson(LKEY); // {min, at}
+    var opened = Date.now();
+    var lineDismissed = 0;
+    var sampleDismissed = 0;
+    var lineLocalSet = 0;
+    var showLineRemind = false;
+    var showSampleRemind = false;
+    var wake = null;
+    var code = { value: null, expiresAt: 0, loading: false, failed: false };
 
+    // ----- persisted queue (backup only) -----
+    var saved = readJson(QKEY);
+    if (Array.isArray(saved)) {
+      saved.forEach(function (it) {
+        if (it && (it.dir === "in" || it.dir === "out") && it.n >= 1 && it.n <= 20 && Date.now() - it.ts < 6 * 3600000) {
+          queue.push({ dir: it.dir, n: it.n, ts: it.ts });
+        }
+      });
+    }
+    function persist() {
+      writeJson(
+        QKEY,
+        queue.length
+          ? queue.map(function (it) {
+              return { dir: it.dir, n: it.n, ts: it.ts };
+            })
+          : null
+      );
+    }
+    function queuedNet() {
+      var net = 0;
+      queue.forEach(function (it) {
+        net += it.dir === "in" ? it.n : -it.n;
+      });
+      return net;
+    }
+
+    // ----- elements -----
     var barName = h("p", { class: "staff__bar", text: "Loading" });
     var num = h("p", { class: "count__num", "aria-live": "polite", text: "0" });
     var capText = h("p", { class: "count__cap", text: "" });
@@ -422,6 +516,18 @@
     var timersVal = h("span", { class: "stat__value num", text: "--" });
     var waitBasis = h("p", { class: "basis", text: "" });
     var tally = h("p", { class: "xs muted", text: "" });
+    var offlineNote = h("p", { class: "offline", role: "status", hidden: true });
+    var remindBox = h("div", { class: "reminders" });
+    var chipBox = h("div", { class: "chips" });
+    var lastCheckEl = h("p", { class: "lastcheck", text: "" });
+    var timeBtn = h("button", { class: "btn btn--primary btn--block btn--lg", type: "button", onclick: startSample }, "Time the line");
+    var undoBtn = h(
+      "button",
+      { class: "btn btn--outline door__undo", type: "button", "aria-label": "Undo last tap", disabled: true, onclick: undo },
+      "Undo"
+    );
+    var codeDigits = h("p", { class: "code__digits", text: "----" });
+    var codeLeft = h("p", { class: "code__left", text: "" });
 
     var lineSeg = ui.segmented({
       label: "Outside line size",
@@ -431,7 +537,10 @@
         if (!v) return;
         ui.haptic();
         local.line_size = v;
-        send(api.lineSize(barId, v), "Line set to " + labelFor(v));
+        lineLocalSet = Date.now();
+        showLineRemind = false;
+        drawReminders();
+        sendLine(v);
       }
     });
 
@@ -440,6 +549,24 @@
       return v;
     }
 
+    function quietError(e) {
+      return e.status === 429 || e.status === 401;
+    }
+
+    function sendLine(v) {
+      api
+        .lineSize(barId, v)
+        .then(function (st) {
+          reconcile(st);
+          ui.toast("Line set to " + labelFor(v));
+        })
+        .catch(function (e) {
+          if (!quietError(e)) ui.toast(e.status === 0 ? "You're offline. Line not saved." : e.detail || "Not saved. Try again.");
+          load();
+        });
+    }
+
+    // ----- painting -----
     function paint() {
       var cap = server ? server.capacity : 0;
       num.textContent = String(local.headcount);
@@ -461,114 +588,684 @@
         waitBasis.textContent = lv.basis.text;
         tally.textContent = server.entries_tonight + " in · " + server.exits_tonight + " out tonight";
       }
+      if (queue.length && offline) {
+        offlineNote.textContent = "Saving when back online (" + queue.length + ")";
+        offlineNote.hidden = false;
+      } else {
+        offlineNote.hidden = true;
+        offlineNote.textContent = "";
+      }
     }
 
     function reconcile(st) {
       server = st;
-      if (pending === 0) {
-        local.headcount = st.headcount;
-        local.line_size = st.line_size;
-      }
+      local.headcount = Math.max(0, st.headcount + queuedNet());
+      local.line_size = st.line_size;
       paint();
     }
 
-    function send(promise, okMsg) {
-      pending++;
-      paint();
-      return promise
+    // ----- door taps and the offline queue -----
+    function scheduleRetry() {
+      clearTimeout(retryTimer);
+      retryMs = retryMs ? Math.min(30000, retryMs * 2) : 2000;
+      retryTimer = setTimeout(drain, retryMs);
+    }
+
+    function drain() {
+      if (draining || !queue.length) return;
+      draining = true;
+      var item = queue[0];
+      item.flying = true;
+      api
+        .door(barId, item.dir, item.n)
         .then(function (st) {
-          pending--;
+          queue.shift();
+          persist();
+          offline = false;
+          retryMs = 0;
+          draining = false;
           reconcile(st);
-          if (okMsg) ui.toast(okMsg);
+          drain();
         })
         .catch(function (e) {
-          pending--;
-          if (e.status !== 429 && e.status !== 401) ui.toast(e.detail || "Not saved. Try again.");
-          load();
+          item.flying = false;
+          draining = false;
+          if (e.status === 0 || e.status === 429) {
+            offline = e.status === 0;
+            paint();
+            scheduleRetry();
+            return;
+          }
+          if (e.status === 401) return;
+          queue.shift();
+          persist();
+          ui.toast(e.detail === "headcount_below_zero" ? "The count cannot go below 0." : e.detail || "Not saved. Try again.");
+          api
+            .staffState(barId)
+            .then(reconcile)
+            .catch(function () {})
+            .then(drain);
         });
     }
 
-    function door(direction, n) {
-      ui.haptic();
-      if (direction === "in") local.headcount += n;
-      else local.headcount = Math.max(0, local.headcount - n);
-      send(api.door(barId, direction, n));
+    function flash(btn) {
+      if (!btn || reducedMotion()) return;
+      btn.classList.add("is-flash");
+      setTimeout(function () {
+        btn.classList.remove("is-flash");
+      }, 140);
+    }
+
+    function enqueue(dir, n) {
+      var tail = queue[queue.length - 1];
+      if (tail && !tail.flying && tail.dir === dir && tail.n + n <= 20) tail.n += n;
+      else queue.push({ dir: dir, n: n, ts: Date.now() });
+      persist();
+      drain();
+    }
+
+    function tap(dir, n, btn) {
+      if (dir === "out" && local.headcount < 1) {
+        ui.toast("The count is already 0.");
+        return;
+      }
+      vibrate(15);
+      flash(btn);
+      local.headcount = dir === "in" ? local.headcount + n : Math.max(0, local.headcount - n);
+      lastTap = { dir: dir, n: n, ts: Date.now() };
+      armUndo();
+      enqueue(dir, n);
+      paint();
+    }
+
+    function armUndo() {
+      undoBtn.disabled = false;
+      clearTimeout(undoTimer);
+      undoTimer = setTimeout(function () {
+        lastTap = null;
+        undoBtn.disabled = true;
+      }, UNDO_MS);
+    }
+
+    function undo() {
+      if (!lastTap || Date.now() - lastTap.ts > UNDO_MS) return;
+      var t = lastTap;
+      var dir = t.dir === "in" ? "out" : "in";
+      lastTap = null;
+      clearTimeout(undoTimer);
+      undoBtn.disabled = true;
+      undoBtn.blur();
+      vibrate(15);
+      local.headcount = dir === "in" ? local.headcount + t.n : Math.max(0, local.headcount - t.n);
+      enqueue(dir, t.n);
+      paint();
+      ui.toast("Undid " + t.n + (t.dir === "in" ? " in" : " out"));
+    }
+
+    function zoneClick(dir, n) {
+      return function (e) {
+        var b = e.currentTarget;
+        tap(dir, n, b);
+        b.blur();
+      };
     }
 
     function load() {
-      if (pending > 0) return Promise.resolve();
+      if (queue.length || draining) return Promise.resolve();
       return api
         .staffState(barId)
         .then(reconcile)
         .catch(function (e) {
           if (e.status === 403) {
             ui.toast("This phone is not staff for that bar");
-          } else if (e.status !== 401 && e.status !== 429) {
+          } else if (!quietError(e) && e.status !== 0) {
             ui.toast(e.detail || "Could not load the counter");
           }
         });
     }
 
-    var outBtn = h(
+    // ----- clicker keys -----
+    function onKey(e) {
+      if (tab !== "door" || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (document.querySelector(".sheet")) return;
+      var key = e.key;
+      var dir = IN_KEYS[key] ? "in" : OUT_KEYS[key] ? "out" : null;
+      if (!dir) return;
+      var t = e.target;
+      var tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+      if (tag === "input" || tag === "textarea" || tag === "select" || (t && t.isContentEditable)) return;
+      // A focused button or link already turns Space and Enter into a click.
+      if ((tag === "button" || tag === "a") && (key === " " || key === "Enter")) return;
+      e.preventDefault();
+      tap(dir, 1, dir === "in" ? inZone : outZone);
+    }
+    document.addEventListener("keydown", onKey);
+    cleanups.push(function () {
+      document.removeEventListener("keydown", onKey);
+    });
+
+    // ----- wake lock -----
+    function wantWake() {
+      if (tab !== "door" || document.visibilityState !== "visible") return;
+      if (wake || !navigator.wakeLock) return;
+      try {
+        navigator.wakeLock
+          .request("screen")
+          .then(function (s) {
+            wake = s;
+            s.addEventListener("release", function () {
+              if (wake === s) wake = null;
+            });
+          })
+          .catch(function () {});
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    function dropWake() {
+      var s = wake;
+      wake = null;
+      try {
+        if (s) s.release().catch(function () {});
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        wantWake();
+        load();
+        drain();
+        if (tab === "code") refreshCode(true);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", drain);
+    cleanups.push(function () {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", drain);
+      clearTimeout(retryTimer);
+      clearTimeout(undoTimer);
+      dropWake();
+    });
+
+    // ----- clicker total sheet -----
+    function clickerSheet() {
+      var digits = "";
+      var shown = h("p", { class: "pad__value", role: "status", "aria-live": "polite", text: "0" });
+      var go = h("button", { class: "btn btn--primary btn--block btn--lg", type: "button", disabled: true }, "Set inside now");
+      function redraw() {
+        shown.textContent = digits || "0";
+        go.disabled = !digits;
+      }
+      function add(d) {
+        if (digits.length >= 4) return;
+        var next = (digits + d).replace(/^0+(?=\d)/, "");
+        if (Number(next) > 5000) return;
+        digits = next;
+        redraw();
+      }
+      function back() {
+        digits = digits.slice(0, -1);
+        redraw();
+      }
+      function key(label, aria, fn, cls) {
+        return h("button", { class: "pad__key" + (cls ? " " + cls : ""), type: "button", "aria-label": aria, onclick: fn }, label);
+      }
+      var keys = [];
+      for (var d = 1; d <= 9; d++) {
+        keys.push(
+          (function (n) {
+            return key(String(n), String(n), function () {
+              add(String(n));
+            });
+          })(d)
+        );
+      }
+      keys.push(
+        key(
+          "Clear",
+          "Clear",
+          function () {
+            digits = "";
+            redraw();
+          },
+          "pad__key--small"
+        )
+      );
+      keys.push(
+        key("0", "0", function () {
+          add("0");
+        })
+      );
+      keys.push(key("Delete", "Delete last digit", back, "pad__key--small"));
+      var sh;
+      function onPadKey(e) {
+        if (/^[0-9]$/.test(e.key)) add(e.key);
+        else if (e.key === "Backspace") back();
+        else if (e.key === "Enter" && digits) go.click();
+      }
+      function sendSync(n, tries) {
+        // Let pending taps save first so the total lands after them.
+        if (queue.length || draining) {
+          if (tries > 40) {
+            go.disabled = false;
+            ui.toast("Taps are still saving. Try again in a moment.");
+            return;
+          }
+          setTimeout(function () {
+            sendSync(n, tries + 1);
+          }, 250);
+          return;
+        }
+        api
+          .countSync(barId, n)
+          .then(function (st) {
+            reconcile(st);
+            sh.close();
+            ui.toast("Inside now set to " + n);
+          })
+          .catch(function (e) {
+            go.disabled = false;
+            if (!quietError(e)) ui.toast(e.status === 0 ? "You're offline. Not saved." : e.detail || "Not saved. Try again.");
+          });
+      }
+      go.addEventListener("click", function () {
+        go.disabled = true;
+        sendSync(Number(digits), 0);
+      });
+      document.addEventListener("keydown", onPadKey);
+      sh = ui.sheet({
+        title: "Clicker total",
+        body: "Type the number on your hand clicker. Inside now will match it.",
+        content: h("div", { class: "pad" }, h("p", { class: "pad__label", text: "Inside now" }), shown, h("div", { class: "pad__grid" }, keys), go),
+        onClose: function () {
+          document.removeEventListener("keydown", onPadKey);
+        }
+      });
+    }
+
+    // ----- line checks -----
+    function lastCheckText() {
+      if (!lastCheck) return "No line check yet tonight.";
+      return "Last line check: " + Math.round(lastCheck.min) + " min, " + ui.fmtAgo(lastCheck.at);
+    }
+
+    function drawChips() {
+      ui.clear(chipBox);
+      chipTimes = {};
+      samples.forEach(function (s, i) {
+        var t = h("span", { class: "chip__time", text: "0:00" });
+        chipTimes[s.id] = { el: t, at: new Date(s.started_at).getTime() };
+        chipBox.appendChild(
+          h(
+            "div",
+            { class: "chip", role: "group", "aria-label": "Line check " + (i + 1) + " running" },
+            h("p", { class: "chip__label" }, h("span", { text: "Line check " + (i + 1) }), t),
+            h(
+              "button",
+              {
+                class: "btn btn--primary chip__btn",
+                type: "button",
+                onclick: function () {
+                  endSample(s, "inside");
+                }
+              },
+              "They're in"
+            ),
+            h(
+              "button",
+              {
+                class: "btn btn--secondary chip__btn",
+                type: "button",
+                onclick: function () {
+                  endSample(s, "cancel");
+                }
+              },
+              "Cancel"
+            )
+          )
+        );
+      });
+      timeBtn.disabled = samples.length >= 2;
+      timeBtn.textContent = samples.length >= 2 ? "2 line checks running" : "Time the line";
+      tickChips();
+    }
+
+    function tickChips() {
+      Object.keys(chipTimes).forEach(function (id) {
+        chipTimes[id].el.textContent = ui.fmtClock((Date.now() - chipTimes[id].at) / 1000);
+      });
+    }
+
+    function loadSamples() {
+      return api
+        .activeSamples(barId)
+        .then(function (rows) {
+          samples = rows;
+          drawChips();
+        })
+        .catch(function () {});
+    }
+
+    function startSample() {
+      if (samples.length >= 2) return;
+      timeBtn.disabled = true;
+      api
+        .startSample(barId)
+        .then(function (s) {
+          vibrate(15);
+          samples.push(s);
+          showSampleRemind = false;
+          drawReminders();
+          drawChips();
+          ui.toast("Timing started");
+        })
+        .catch(function (e) {
+          timeBtn.disabled = false;
+          if (quietError(e)) return;
+          ui.toast(
+            e.status === 409
+              ? "Two line checks are running. Finish one first."
+              : e.status === 0
+                ? "You're offline. Try again."
+                : e.detail || "Could not start"
+          );
+          loadSamples();
+        });
+    }
+
+    function endSample(s, outcome) {
+      samples = samples.filter(function (x) {
+        return x.id !== s.id;
+      });
+      drawChips();
+      api
+        .endSample(barId, s.id, outcome)
+        .then(function (out) {
+          if (outcome === "cancel") return ui.toast("Line check cancelled");
+          if (out.status === "completed" && out.actual_wait_min !== null) {
+            lastCheck = { min: out.actual_wait_min, at: out.ended_at };
+            writeJson(LKEY, lastCheck);
+            lastCheckEl.textContent = lastCheckText();
+            showSampleRemind = false;
+            drawReminders();
+            ui.toast("Line check saved: " + Math.round(out.actual_wait_min) + " min");
+          } else {
+            ui.toast("Too quick to count. Under 30 seconds is skipped.");
+          }
+        })
+        .catch(function (e) {
+          if (!quietError(e)) {
+            ui.toast(
+              e.status === 0 ? "You're offline. Not saved." : e.status === 409 ? "That line check already ended." : e.detail || "Not saved"
+            );
+          }
+          loadSamples();
+        });
+    }
+
+    // ----- reminders -----
+    function drawReminders() {
+      ui.clear(remindBox);
+      function banner(text, actionLabel, dismiss) {
+        remindBox.appendChild(
+          h(
+            "div",
+            { class: "reminder", role: "status" },
+            h("p", { class: "reminder__text", text: text }),
+            h(
+              "button",
+              {
+                class: "btn btn--secondary reminder__btn",
+                type: "button",
+                onclick: function () {
+                  show("line");
+                }
+              },
+              actionLabel
+            ),
+            h("button", { class: "btn btn--outline reminder__btn", type: "button", "aria-label": "Dismiss: " + text, onclick: dismiss }, "Dismiss")
+          )
+        );
+      }
+      if (showLineRemind) {
+        banner("Update the line size", "Update", function () {
+          showLineRemind = false;
+          lineDismissed = Date.now();
+          drawReminders();
+        });
+      }
+      if (showSampleRemind) {
+        banner("Time the line", "Start", function () {
+          showSampleRemind = false;
+          sampleDismissed = Date.now();
+          drawReminders();
+        });
+      }
+    }
+
+    function checkReminders() {
+      var now = Date.now();
+      var lineAt = server && server.line_updated_at ? new Date(server.line_updated_at).getTime() : 0;
+      var changed = false;
+      if (!showLineRemind && now - Math.max(lineAt, lineLocalSet, lineDismissed, opened) >= LINE_REMIND_MS) {
+        showLineRemind = true;
+        lineDismissed = now;
+        changed = true;
+      }
+      var checkAt = lastCheck ? new Date(lastCheck.at).getTime() : 0;
+      if (!showSampleRemind && !samples.length && now - Math.max(checkAt, sampleDismissed, opened) >= SAMPLE_REMIND_MS) {
+        showSampleRemind = true;
+        sampleDismissed = now;
+        changed = true;
+      }
+      if (changed) {
+        vibrate([200, 100, 200]);
+        drawReminders();
+      }
+    }
+
+    // ----- door code -----
+    function paintCode() {
+      if (code.value) {
+        codeDigits.textContent = code.value;
+        var left = Math.max(0, Math.ceil((code.expiresAt - Date.now()) / 1000));
+        codeLeft.textContent = "New code in " + ui.fmtClock(left);
+      } else {
+        codeDigits.textContent = "----";
+        codeLeft.textContent = code.failed ? "Could not load the code. Trying again." : "Loading";
+      }
+    }
+
+    function refreshCode(force) {
+      if (code.loading) return;
+      if (!force && code.value && Date.now() < code.expiresAt - 500) return;
+      code.loading = true;
+      api
+        .doorCode(barId)
+        .then(function (r) {
+          code.value = r.code;
+          code.expiresAt = Date.now() + r.expires_in * 1000;
+          code.failed = false;
+        })
+        .catch(function () {
+          code.failed = true;
+          code.expiresAt = Date.now() + 5000;
+        })
+        .then(function () {
+          code.loading = false;
+          paintCode();
+        });
+    }
+
+    // ----- layout -----
+    var outZone = h(
       "button",
-      { class: "door__btn door__btn--out", type: "button", "aria-label": "One person out", onclick: function () { door("out", 1); } },
+      { class: "zone zone--out", type: "button", "aria-label": "One person out", onclick: zoneClick("out", 1) },
       ui.icon("minus"),
-      "Out"
+      h("span", { text: "OUT" })
     );
-    var inBtn = h(
+    var inZone = h(
       "button",
-      { class: "door__btn door__btn--in", type: "button", "aria-label": "One person in", onclick: function () { door("in", 1); } },
+      { class: "zone zone--in", type: "button", "aria-label": "One person in", onclick: zoneClick("in", 1) },
       ui.icon("plus"),
-      "In"
+      h("span", { text: "IN" })
     );
+    function groupBtn(n, word) {
+      return h("button", { class: "btn btn--secondary door__group", type: "button", "aria-label": word + " people in", onclick: zoneClick("in", n) }, "+" + n);
+    }
+
+    var doorView = h(
+      "div",
+      { class: "view view--door" },
+      h("section", { class: "count", "aria-label": "Headcount" }, h("p", { class: "count__label", text: "Inside now" }), num, capText, capBar),
+      h("div", { class: "zones" }, outZone, inZone),
+      h("div", { class: "door__row" }, groupBtn(2, "Two"), groupBtn(3, "Three"), groupBtn(4, "Four"), undoBtn),
+      h("div", { class: "door__tools" }, h("button", { class: "btn btn--secondary btn--block", type: "button", onclick: clickerSheet }, "Clicker total")),
+      h("p", { class: "clicker-hint", text: "Clicker ready. Right arrow or Page Down is In. Left arrow or Page Up is Out." }),
+      h("div", { class: "staff__foot" }, tally)
+    );
+
+    var lineView = h(
+      "div",
+      { class: "view view--line", hidden: true },
+      h("section", { class: "staff__section", "aria-label": "Outside line" }, h("h2", { class: "section-title", text: "Outside line" }), lineSeg.el, updated),
+      h(
+        "section",
+        { class: "staff__section", "aria-label": "Line check" },
+        h("h2", { class: "section-title", text: "Line check" }),
+        h("p", { class: "basis", text: "Tap when someone joins the back of the line." }),
+        h("div", { class: "line-check__btn" }, timeBtn),
+        lastCheckEl
+      ),
+      h(
+        "section",
+        { class: "staff__section", "aria-label": "What students see" },
+        h("h2", { class: "section-title", text: "What students see" }),
+        h(
+          "ul",
+          { class: "stats" },
+          h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Line wait estimate" }), waitNum),
+          h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Crowd level" }), crowdVal),
+          h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Student reports, last 30 min" }), reportsVal),
+          h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Line timers, last 30 min" }), timersVal)
+        ),
+        waitBasis
+      )
+    );
+
+    var codeView = h(
+      "div",
+      { class: "view view--code", hidden: true },
+      h(
+        "section",
+        { class: "code", "aria-label": "Door code" },
+        h("h2", { class: "section-title", text: "Door code" }),
+        codeDigits,
+        codeLeft,
+        h("p", { class: "code__note", text: "Students in line enter this code when they get to the door. It proves their wait." })
+      )
+    );
+
+    var specialsView = h("div", { class: "view view--specials", hidden: true }, specialsSection(barId));
+
+    var views = { door: doorView, line: lineView, code: codeView, specials: specialsView };
+    var tabBtns = {};
+    function tabButton(name, label, iconName) {
+      var b = h(
+        "button",
+        {
+          class: "tab",
+          type: "button",
+          "aria-current": name === tab ? "page" : null,
+          onclick: function (e) {
+            show(name);
+            e.currentTarget.blur();
+          }
+        },
+        ui.icon(iconName),
+        h("span", { text: label })
+      );
+      tabBtns[name] = b;
+      return b;
+    }
+
+    function show(name) {
+      tab = name;
+      Object.keys(views).forEach(function (k) {
+        views[k].hidden = k !== name;
+        if (k === name) tabBtns[k].setAttribute("aria-current", "page");
+        else tabBtns[k].removeAttribute("aria-current");
+      });
+      if (name === "door") wantWake();
+      else dropWake();
+      if (name === "code") {
+        paintCode();
+        refreshCode(false);
+      }
+      window.scrollTo(0, 0);
+    }
 
     root.appendChild(
       h(
         "main",
-        { class: "staff" },
+        { class: "staff staff--tabs" },
         h(
           "div",
           { class: "staff__top" },
           h("div", null, h("p", { class: "staff__role", text: "Door counter" + (api.isMock ? " · Demo" : "") }), barName),
           signOutBtn()
         ),
-        h("section", { class: "count", "aria-label": "Headcount" }, h("p", { class: "count__label", text: "Inside now" }), num, capText, capBar),
-        h("div", { class: "door" }, outBtn, inBtn),
+        offlineNote,
+        remindBox,
+        chipBox,
+        doorView,
+        lineView,
+        codeView,
+        specialsView
+      )
+    );
+    root.appendChild(
+      h(
+        "nav",
+        { class: "tabbar", "aria-label": "Staff sections" },
         h(
           "div",
-          { class: "door__extra" },
-          h("button", { class: "btn btn--secondary", type: "button", "aria-label": "Five people out", onclick: function () { door("out", 5); } }, "\u22125 out"),
-          h("button", { class: "btn btn--secondary", type: "button", "aria-label": "Five people in", onclick: function () { door("in", 5); } }, "+5 in")
-        ),
-        h("section", { class: "staff__section" }, h("h2", { class: "section-title", text: "Outside line" }), lineSeg.el, updated),
-        h(
-          "section",
-          { class: "staff__section", "aria-label": "What students see" },
-          h("h2", { class: "section-title", text: "What students see" }),
-          h(
-            "ul",
-            { class: "stats" },
-            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Line wait estimate" }), waitNum),
-            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Crowd level" }), crowdVal),
-            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Student reports, last 30 min" }), reportsVal),
-            h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Line timers, last 30 min" }), timersVal)
-          ),
-          waitBasis
-        ),
-        specialsSection(barId),
-        h("div", { class: "staff__foot" }, tally)
+          { class: "tabbar__inner tabbar__inner--4" },
+          tabButton("door", "Door", "plus"),
+          tabButton("line", "Line", "list"),
+          tabButton("code", "Code", "shield"),
+          tabButton("specials", "Specials", "gear")
+        )
       )
     );
 
+    lastCheckEl.textContent = lastCheckText();
+    if (queue.length) local.headcount = Math.max(0, queuedNet());
     paint();
-    load();
+    load().then(drain);
+    drain();
+    loadSamples();
+    wantWake();
     visibleLoad = load;
     poll = setInterval(function () {
-      if (document.visibilityState === "visible") load();
+      if (document.visibilityState === "visible") {
+        load();
+        loadSamples();
+      }
     }, POLL_MS);
     agoTimer = setInterval(function () {
+      tickChips();
+      lastCheckEl.textContent = lastCheckText();
       if (server) updated.textContent = "Line updated " + ui.fmtAgo(server.line_updated_at);
-    }, 10000);
+      if (tab === "code") {
+        paintCode();
+        if (Date.now() >= code.expiresAt) refreshCode(true);
+      }
+      reminderTick += 1;
+      if (reminderTick % 15 === 0) checkReminders();
+    }, 1000);
   }
 
   function boot() {

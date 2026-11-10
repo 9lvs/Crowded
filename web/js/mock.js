@@ -439,6 +439,36 @@
     return err(404, "Not found");
   }
 
+  // ---------- door code and line samples ----------
+  // FAKE rotating code. Changes every 2 minutes. The current and the previous code both work.
+  var CODE_MS = 120000;
+  function codeFor(barId, bucket) {
+    var seed = 0;
+    for (var i = 0; i < barId.length; i++) seed = (seed * 31 + barId.charCodeAt(i)) % 9973;
+    var n = (bucket * 7919 + seed * 131 + 1234) % 10000;
+    return String(n).padStart(4, "0");
+  }
+  function codeMatches(barId, code) {
+    if (!/^\d{4}$/.test(code || "")) return false;
+    var b = Math.floor(Date.now() / CODE_MS);
+    return code === codeFor(barId, b) || code === codeFor(barId, b - 1);
+  }
+  function sampleOut(x) {
+    return {
+      id: x.id,
+      bar_id: x.bar_id,
+      status: x.status,
+      started_at: x.started_at,
+      ended_at: x.ended_at,
+      predicted_wait_min: x.predicted_wait_min,
+      actual_wait_min: x.actual_wait_min
+    };
+  }
+  function samplesFor() {
+    if (!state.samples) state.samples = [];
+    return state.samples;
+  }
+
   // ---------- router ----------
   function route(method, path, body) {
     var p = path.split("?")[0];
@@ -515,6 +545,7 @@
         predicted_wait_min: lvs.wait_min,
         actual_wait_min: null,
         near_bar: !!body.location,
+        verified: false,
         points_awarded: 0
       };
       save();
@@ -528,7 +559,8 @@
       state.session.status = body.outcome === "gave_up" ? "abandoned" : "completed";
       state.session.ended_at = ended.toISOString();
       state.session.actual_wait_min = Math.round(mins * 10) / 10;
-      state.session.points_awarded = state.session.status === "completed" ? 10 : 0;
+      state.session.verified = state.session.status === "completed" && codeMatches(state.session.bar_id, body.door_code);
+      state.session.points_awarded = state.session.status === "completed" ? (state.session.verified ? 20 : 10) : 0;
       state.points += state.session.points_awarded;
       var out = state.session;
       save();
@@ -557,6 +589,62 @@
     if ((m = p.match(/^\/v1\/staff\/bars\/([^/]+)\/specials(?:\/([^/]+))?$/))) {
       if (state.me.role !== "staff" || state.me.staff_bar_id !== m[1]) return err(403, "Forbidden");
       return specialsRoute(method, findBar(m[1]), m[2], body);
+    }
+    if ((m = p.match(/^\/v1\/staff\/bars\/([^/]+)\/(door-code|count-sync|line-samples(?:\/active)?|line-samples\/([^/]+)\/end)$/))) {
+      if (state.me.role !== "staff" || state.me.staff_bar_id !== m[1]) return err(403, "Forbidden");
+      var tb = findBar(m[1]);
+      var tst = staffFor(tb);
+      var list = samplesFor();
+      if (method === "GET" && m[2] === "door-code") {
+        var now = Date.now();
+        return res(200, { code: codeFor(tb.id, Math.floor(now / CODE_MS)), expires_in: Math.max(1, Math.ceil((CODE_MS - (now % CODE_MS)) / 1000)) });
+      }
+      if (method === "POST" && m[2] === "count-sync") {
+        var target = body.inside_now;
+        if (typeof target !== "number" || target < 0 || target > 5000) return err(422, "inside_now must be 0 to 5000");
+        var delta = target - tst.headcount;
+        tst.headcount = target;
+        if (delta > 0) tst.entries += delta;
+        else tst.exits += -delta;
+        tst.touched = true;
+        save();
+        return res(200, staffState(tb));
+      }
+      if (method === "GET" && m[2] === "line-samples/active") {
+        return res(200, list.filter(function (x) { return x.bar_id === tb.id && x.status === "active"; }).map(sampleOut));
+      }
+      if (method === "POST" && m[2] === "line-samples") {
+        var act = list.filter(function (x) { return x.bar_id === tb.id && x.status === "active"; });
+        if (act.length >= 2) return err(409, "too_many_samples");
+        var smp = {
+          id: uuid(),
+          bar_id: tb.id,
+          status: "active",
+          started_at: nowIso(),
+          ended_at: null,
+          predicted_wait_min: live(tb).wait_min,
+          actual_wait_min: null
+        };
+        list.push(smp);
+        save();
+        return res(201, sampleOut(smp));
+      }
+      if (method === "POST" && m[3]) {
+        var found = null;
+        list.forEach(function (x) {
+          if (x.id === m[3] && x.bar_id === tb.id) found = x;
+        });
+        if (!found) return err(404, "not_found");
+        if (found.status !== "active") return err(409, "sample_not_active");
+        var endAt = new Date();
+        var waited = (endAt.getTime() - new Date(found.started_at).getTime()) / 60000;
+        found.ended_at = endAt.toISOString();
+        found.status = body.outcome === "inside" ? "completed" : "abandoned";
+        found.actual_wait_min = found.status === "completed" ? Math.round(waited * 10) / 10 : null;
+        save();
+        return res(200, sampleOut(found));
+      }
+      return err(404, "Not found");
     }
     if ((m = p.match(/^\/v1\/staff\/bars\/([^/]+)(\/door|\/line)?$/))) {
       if (state.me.role !== "staff" || state.me.staff_bar_id !== m[1]) return err(403, "Forbidden");

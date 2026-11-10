@@ -63,3 +63,10 @@ export function collectErrors(page: Page): string[] {
   page.on("pageerror", (e) => errors.push(String(e)));
   return errors;
 }
+
+/** Start a browser session from an API sign in, without going through the sign in screens. */
+export async function openAs(page: Page, session: ApiSession, path: string): Promise<void> {
+  await page.goto("/staff.html");
+  await page.evaluate((rt) => window.localStorage.setItem("crowded.rt", rt), session.refresh);
+  await page.goto(path);
+}

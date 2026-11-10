@@ -1789,3 +1789,325 @@ button {
   font-size: var(--text-xs);
   color: var(--text-2);
 }
+
+/* ---------- Door mode (staff) ---------- */
+[hidden] {
+  display: none !important;
+}
+
+.tabbar__inner--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+button.tab {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: var(--touch);
+}
+
+.staff--tabs {
+  padding-bottom: calc(var(--tabbar-h) + var(--space-6) + env(safe-area-inset-bottom, 0px));
+}
+
+.view--door .count {
+  padding-block: var(--space-3) var(--space-3);
+}
+
+.view--door .count__num {
+  font-size: 4.5rem;
+}
+
+.view--door .cap {
+  margin-top: var(--space-2);
+}
+
+.zones {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-3);
+  height: clamp(200px, 36dvh, 380px);
+}
+
+.zone {
+  display: grid;
+  grid-auto-rows: max-content;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-num);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-display);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.zone svg {
+  width: 36px;
+  height: 36px;
+}
+
+.zone--in svg {
+  width: 48px;
+  height: 48px;
+}
+
+.zone--in {
+  font-size: 3.5rem;
+}
+
+.zone:active {
+  transform: scale(0.98);
+}
+
+.zone--out {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.zone--in {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-color: var(--primary);
+}
+
+.zone--out.is-flash {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.zone--in.is-flash {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.door__row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.door__row .btn {
+  padding: 0;
+  min-height: 52px;
+  font-size: var(--text-lg);
+  touch-action: manipulation;
+}
+
+.door__tools {
+  margin-top: var(--space-3);
+}
+
+.clicker-hint {
+  margin-top: var(--space-3);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+
+.view--door .staff__foot {
+  margin-top: var(--space-3);
+}
+
+.offline {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.reminders,
+.chips {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reminders:not(:empty),
+.chips:not(:empty) {
+  margin-top: var(--space-3);
+}
+
+.reminder {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.reminder__text {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+}
+
+.reminder__btn,
+.chip__btn {
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.chip {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.chip__label {
+  display: grid;
+  font-size: var(--text-xs);
+  color: var(--text-2);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.chip__time {
+  font-family: var(--font-num);
+  font-size: var(--text-xl);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.line-check__btn {
+  margin-top: var(--space-3);
+}
+
+.lastcheck {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.code {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: var(--space-3);
+}
+
+.code .section-title {
+  justify-self: start;
+}
+
+.code__digits {
+  font-family: var(--font-num);
+  font-size: 6.5rem;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  padding-left: 0.08em;
+  line-height: 1;
+  padding-block: var(--space-3);
+}
+
+.code__left {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.code__note {
+  max-width: 30ch;
+  color: var(--text-2);
+}
+
+.pad {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.pad__label {
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.pad__value {
+  font-family: var(--font-num);
+  font-size: 4rem;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1;
+}
+
+.pad__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.pad__key {
+  min-height: 56px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-num);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  touch-action: manipulation;
+}
+
+.pad__key:active {
+  background: var(--border);
+}
+
+.pad__key--small {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+
+/* ---------- Student door code entry and verified result ---------- */
+.doorcode {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+}
+
+.doorcode .input--code {
+  font-size: 2.5rem;
+}
+
+.doorcode__btns {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-3);
+}
+
+.verified svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.verified {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-bold);
+}

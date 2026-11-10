@@ -803,6 +803,7 @@
           h("h1", { class: "head__title", text: title }),
           h("p", { class: "muted", text: inside ? "You waited" : "You were in line for" }),
           h("p", { class: "wait-num result__num" }, String(mins), h("span", { class: "unit", text: mins === 1 ? " min" : " min" })),
+          s.verified ? h("p", { class: "verified" }, ui.icon("shield"), "Verified at the door") : null,
           s.points_awarded ? h("p", { class: "points", text: "+" + s.points_awarded + " points" }) : h("p", { class: "small muted", text: "Thanks. This still helps." }),
           h(
             "p",
@@ -826,12 +827,14 @@
       );
       var inside = h("button", { class: "btn btn--primary btn--block btn--lg", type: "button" }, "I'm inside");
       var left = h("button", { class: "btn btn--secondary btn--block btn--lg", type: "button" }, "Left the line");
-      function end(outcome, btn) {
+      var stack = h("div", { class: "btn-stack" }, inside, left);
+      var hint = h("p", { class: "xs muted", text: "Tap I'm inside the moment you get in. Your time sharpens the estimate for everyone." });
+      function end(outcome, btn, doorCode, onFail) {
         inside.disabled = true;
         left.disabled = true;
-        btn.textContent = "Saving";
+        if (btn) btn.textContent = "Saving";
         api
-          .endSession(s.id, outcome)
+          .endSession(s.id, outcome, doorCode)
           .then(function (out) {
             state.session = null;
             result(out, outcome);
@@ -841,12 +844,63 @@
             left.disabled = false;
             inside.textContent = "I'm inside";
             left.textContent = "Left the line";
+            if (onFail) onFail();
             if (e.status !== 429) ui.toast(e.detail || "Could not save");
           });
       }
-      inside.addEventListener("click", function () {
-        end("inside", inside);
-      });
+      // Optional door code. Never blocks ending the timer.
+      function askCode() {
+        var input = h("input", {
+          class: "input input--code",
+          id: "door-code",
+          type: "text",
+          inputmode: "numeric",
+          pattern: "[0-9]*",
+          maxlength: "4",
+          autocomplete: "off",
+          placeholder: "0000"
+        });
+        var done = h("button", { class: "btn btn--primary btn--lg", type: "button", disabled: true }, "Done");
+        var skip = h("button", { class: "btn btn--secondary btn--lg", type: "button" }, "Skip");
+        function restore() {
+          done.disabled = !/^\d{4}$/.test(input.value);
+          skip.disabled = false;
+          done.textContent = "Done";
+          skip.textContent = "Skip";
+        }
+        function finish(codeValue, btn) {
+          done.disabled = true;
+          skip.disabled = true;
+          end("inside", btn, codeValue, restore);
+        }
+        input.addEventListener("input", function () {
+          input.value = input.value.replace(/\D/g, "").slice(0, 4);
+          done.disabled = input.value.length !== 4;
+        });
+        input.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" && !done.disabled) done.click();
+        });
+        done.addEventListener("click", function () {
+          finish(input.value, done);
+        });
+        skip.addEventListener("click", function () {
+          finish(null, skip);
+        });
+        ui.clear(stack);
+        ui.clear(hint);
+        stack.appendChild(
+          h(
+            "div",
+            { class: "doorcode" },
+            h("label", { class: "field__label", for: "door-code", text: "Door code, shown by staff at the door" }),
+            input,
+            h("div", { class: "doorcode__btns" }, skip, done)
+          )
+        );
+        hint.textContent = "A right code shows you really waited. You earn more points.";
+        input.focus();
+      }
+      inside.addEventListener("click", askCode);
       left.addEventListener("click", function () {
         end("gave_up", left);
       });
@@ -874,8 +928,8 @@
           h("p", { class: "hero__label", text: "You're in line at" }),
           h("h1", { class: "timer__bar", text: barName(s.bar_id) }),
           ring.el,
-          h("div", { class: "btn-stack" }, inside, left),
-          h("p", { class: "xs muted", text: "Tap I'm inside the moment you get in. Your time sharpens the estimate for everyone." })
+          stack,
+          hint
         )
       ]);
     }

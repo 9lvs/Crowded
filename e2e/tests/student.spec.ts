@@ -66,6 +66,9 @@ test.describe.serial("student journey", () => {
     await expect(page.getByText("You're in line at")).toBeVisible();
     await expect(page.getByRole("heading", { name: SEED_BARS[0] })).toBeVisible();
     await page.getByRole("button", { name: "I'm inside" }).click();
+    // The door code is optional. Skip ends the timer.
+    await expect(page.getByLabel("Door code, shown by staff at the door")).toBeVisible();
+    await page.getByRole("button", { name: "Skip" }).click();
     // Under 30 seconds is not counted as a real wait, and the app says so.
     await expect(page.getByRole("heading", { name: "Too quick to count" })).toBeVisible();
     await page.getByRole("link", { name: "Done" }).click();

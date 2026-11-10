@@ -54,6 +54,7 @@ test("staff add a special, students see it, then staff delete it", async ({ page
   expect(redeem.status(), await redeem.text()).toBe(200);
 
   await openAs(page, staff, "/staff.html");
+  await page.getByRole("button", { name: "Specials" }).click();
   const section = page.getByRole("region", { name: "Specials" });
   await expect(section).toBeVisible();
 
@@ -86,6 +87,7 @@ test("staff add a special, students see it, then staff delete it", async ({ page
 
   // Back to the staff page: delete asks first.
   await page.goto("/staff.html");
+  await page.getByRole("button", { name: "Specials" }).click();
   const item = page.getByRole("region", { name: "Specials" }).getByRole("listitem").filter({ hasText: "FAKE E2E Special" });
   await item.getByRole("button", { name: "Delete FAKE E2E Special" }).click();
   await expect(item).toContainText("Delete this special?");
@@ -125,6 +127,7 @@ test("specials UI renders in mock mode with no console errors", async ({ page })
   await page.goto("/staff.html?mock=1");
   await page.getByLabel("Invite code").fill("FAKE-INVITE");
   await page.getByRole("button", { name: "Join bar" }).click();
+  await page.getByRole("button", { name: "Specials" }).click();
   const section = page.getByRole("region", { name: "Specials" });
   await expect(section.getByRole("listitem").filter({ hasText: "FAKE Wing Night" })).toBeVisible();
   const form = section.getByRole("form", { name: "Add special" });
