@@ -35,6 +35,8 @@
 - [x] Sourcing v2: staff and student fusion by learned reliability, timers referee, disagreement
       flag, minimum evidence guard, simulator bias scenarios (docs/SOURCING.md)
 - [x] Instagram launch kit and bar one pager (marketing/), pilot playbook (docs/PILOT.md)
+- [x] Bar specials, happy hours, cover and events: backend, web, staff editing, iOS (green CI)
+- [x] Team briefing deck, business model options (docs/BUSINESS.md)
 
 ## Phase 2: hardening and deploy readiness
 - [ ] Close Phase 1 review findings
