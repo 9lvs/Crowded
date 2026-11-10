@@ -31,4 +31,10 @@ protocol CrowdedAPI: AnyObject, Sendable {
     func staffState(barId: String) async throws -> StaffState
     func door(barId: String, direction: DoorDirection, count: Int) async throws -> StaffState
     func setLine(barId: String, size: LineSize) async throws -> StaffState
+
+    // Staff: specials
+    func listSpecials(barID: String) async throws -> [Special]
+    func createSpecial(barID: String, input: SpecialInput) async throws -> Special
+    func updateSpecial(barID: String, specialID: String, update: SpecialPatch) async throws -> Special
+    func deleteSpecial(barID: String, specialID: String) async throws
 }

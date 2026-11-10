@@ -48,11 +48,13 @@ actor MockAPI: CrowdedAPI {
     private var staffCounts: [String: (ins: Int, outs: Int)] = [:]
     private var staffLine: [String: LineSize] = [:]
     private var tick: Int = 0
+    private var specials: [String: [Special]]
     /// Lets tests make a timer look old without waiting.
     private var clockOffset: TimeInterval = 0
 
     init(signedIn: Bool = false, role: Role = .user) {
         self.signedIn = signedIn
+        self.specials = Self.seedSpecials()
         let staffBar: String? = role == .staff ? "00000000-0000-4000-8000-000000000001" : nil
         self.meValue = Me(
             id: "fake-user", role: role, waitThresholdMin: 20, staffBarId: staffBar,
@@ -195,11 +197,64 @@ actor MockAPI: CrowdedAPI {
 
     private func summary(_ bar: FakeBar) -> Bar {
         let live = liveFor(bar)
+        let tonight = SpecialSchedule.tonight(
+            specials[bar.id] ?? [], now: now, calendar: Calendar.current)
         return Bar(
             id: bar.id, slug: bar.slug, name: bar.name, address: bar.address,
             capacity: bar.capacity, passPriceCents: bar.passPriceCents, live: live,
-            verdict: verdictFor(bar, live: live)
+            verdict: verdictFor(bar, live: live),
+            specialsTonight: tonight, coverTonight: SpecialSchedule.cover(in: tonight)
         )
+    }
+
+    /// FAKE specials. Happy hour 17:00 to 20:00 Mon to Fri, cover from 21:00 Thu to Sat, one bar
+    /// with cover from 18:00 every night, plus a food special and an event.
+    private static func seedSpecials() -> [String: [Special]] {
+        let owl = "00000000-0000-4000-8000-000000000001"
+        let lantern = "00000000-0000-4000-8000-000000000002"
+        let hoursAgo: (Double) -> Date = { Date().addingTimeInterval(-$0 * 3600) }
+        return [
+            owl: [
+                Special(
+                    id: "fake-special-1", kind: .happyHour, title: "FAKE Happy hour",
+                    details: "Half off wells and drafts.", days: [0, 1, 2, 3, 4],
+                    startLocal: "17:00", endLocal: "20:00", priceCents: nil, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(3)
+                ),
+                Special(
+                    id: "fake-special-2", kind: .cover, title: "FAKE Cover",
+                    details: "Cash or card.", days: [3, 4, 5],
+                    startLocal: "21:00", endLocal: "02:00", priceCents: 500, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(26)
+                ),
+                Special(
+                    id: "fake-special-3", kind: .food, title: "FAKE Wing night",
+                    details: "Ten wings for six dollars.", days: [2],
+                    startLocal: "17:00", endLocal: "22:00", priceCents: 600, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(50)
+                ),
+                Special(
+                    id: "fake-special-4", kind: .event, title: "FAKE Trivia night",
+                    details: "Teams of up to six.", days: [1],
+                    startLocal: "20:00", endLocal: "22:00", priceCents: nil, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(72)
+                ),
+            ],
+            lantern: [
+                Special(
+                    id: "fake-special-5", kind: .cover, title: "FAKE Cover",
+                    details: "", days: [0, 1, 2, 3, 4, 5, 6],
+                    startLocal: "18:00", endLocal: "02:00", priceCents: 1000, isActive: true,
+                    postedBy: .crowded, updatedAt: hoursAgo(5)
+                ),
+                Special(
+                    id: "fake-special-6", kind: .drink, title: "FAKE Three dollar wells",
+                    details: "", days: [0, 1, 2, 3, 4],
+                    startLocal: "19:00", endLocal: "22:00", priceCents: 300, isActive: true,
+                    postedBy: .bar, updatedAt: hoursAgo(8)
+                ),
+            ],
+        ]
     }
 
     func bars() async throws -> [Bar] {
@@ -229,9 +284,10 @@ actor MockAPI: CrowdedAPI {
         }
         let normalIndex = Self.hours.firstIndex(of: localHour)
         let normal: Int? = normalIndex.map { bar.typical[$0] }
+        let week = (specials[bar.id] ?? []).filter { $0.isActive }
         return BarDetail(
             bar: summary(bar), latitude: 0, longitude: 0, normalWaitMin: normal,
-            waitByHour: points
+            waitByHour: points, specialsWeek: week
         )
     }
 
@@ -350,5 +406,95 @@ actor MockAPI: CrowdedAPI {
         let bar = try requireStaff(barId)
         staffLine[bar.id] = size
         return staffStateFor(bar)
+    }
+
+    // MARK: Staff specials
+
+    private static func sortedSpecials(_ list: [Special]) -> [Special] {
+        return list.sorted { a, b in
+            let da = a.days.min() ?? 0
+            let db = b.days.min() ?? 0
+            if da != db { return da < db }
+            if a.startLocal != b.startLocal { return a.startLocal < b.startLocal }
+            return a.title < b.title
+        }
+    }
+
+    private func checkSpecial(
+        days: [Int]?, start: String?, end: String?, title: String?
+    ) throws {
+        if let title, title.trimmingCharacters(in: .whitespaces).isEmpty {
+            throw APIError.http(status: 422, detail: "validation_error")
+        }
+        if let days, days.isEmpty || days.contains(where: { $0 < 0 || $0 > 6 }) {
+            throw APIError.http(status: 422, detail: "validation_error")
+        }
+        for time in [start, end] {
+            if let time, SpecialTime.parse(time) == nil {
+                throw APIError.http(status: 422, detail: "validation_error")
+            }
+        }
+    }
+
+    func listSpecials(barID: String) async throws -> [Special] {
+        let bar = try requireStaff(barID)
+        return Self.sortedSpecials(specials[bar.id] ?? [])
+    }
+
+    func createSpecial(barID: String, input: SpecialInput) async throws -> Special {
+        let bar = try requireStaff(barID)
+        try checkSpecial(
+            days: input.days, start: input.startLocal, end: input.endLocal, title: input.title)
+        if input.startLocal == input.endLocal {
+            throw APIError.http(status: 422, detail: "start_equals_end")
+        }
+        var list = specials[bar.id] ?? []
+        if list.count >= 30 {
+            throw APIError.http(status: 409, detail: "too_many_specials")
+        }
+        let created = Special(
+            id: UUID().uuidString, kind: input.kind, title: input.title, details: input.details,
+            days: input.days.sorted(), startLocal: input.startLocal, endLocal: input.endLocal,
+            priceCents: input.priceCents, isActive: true, postedBy: .bar, updatedAt: now
+        )
+        list.append(created)
+        specials[bar.id] = list
+        return created
+    }
+
+    func updateSpecial(barID: String, specialID: String, update: SpecialPatch) async throws -> Special {
+        let bar = try requireStaff(barID)
+        var list = specials[bar.id] ?? []
+        guard let index = list.firstIndex(where: { $0.id == specialID }) else {
+            throw APIError.http(status: 404, detail: "not_found")
+        }
+        try checkSpecial(
+            days: update.days, start: update.startLocal, end: update.endLocal, title: update.title)
+        var item = list[index]
+        if let kind = update.kind { item.kind = kind }
+        if let title = update.title { item.title = title }
+        if let details = update.details { item.details = details }
+        if let days = update.days { item.days = days.sorted() }
+        if let start = update.startLocal { item.startLocal = start }
+        if let end = update.endLocal { item.endLocal = end }
+        if let price = update.priceCents { item.priceCents = price }
+        if let active = update.isActive { item.isActive = active }
+        if item.startLocal == item.endLocal {
+            throw APIError.http(status: 422, detail: "start_equals_end")
+        }
+        item.updatedAt = now
+        list[index] = item
+        specials[bar.id] = list
+        return item
+    }
+
+    func deleteSpecial(barID: String, specialID: String) async throws {
+        let bar = try requireStaff(barID)
+        var list = specials[bar.id] ?? []
+        guard let index = list.firstIndex(where: { $0.id == specialID }) else {
+            throw APIError.http(status: 404, detail: "not_found")
+        }
+        list.remove(at: index)
+        specials[bar.id] = list
     }
 }

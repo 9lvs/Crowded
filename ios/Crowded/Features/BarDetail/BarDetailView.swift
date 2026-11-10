@@ -122,6 +122,8 @@ struct BarDetailView: View {
 
             BasisLine(live: bar.live)
 
+            SpecialsSection(tonight: bar.specialsTonight, week: detail.specialsWeek)
+
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text("Wait by hour")
                     .font(.crowdedSection)

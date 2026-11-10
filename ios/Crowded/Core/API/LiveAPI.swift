@@ -228,7 +228,99 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
         }
     }
 
+    // MARK: Staff specials
+
+    func listSpecials(barID: String) async throws -> [Special] {
+        return try await run {
+            let output = try await client.staff_list_v1_staff_bars__bar_id__specials_get(
+                path: .init(bar_id: barID)
+            )
+            let rows = try output.ok.body.json
+            return rows.map { Self.mapSpecial($0) }
+        }
+    }
+
+    func createSpecial(barID: String, input: SpecialInput) async throws -> Special {
+        return try await run {
+            let body = Components.Schemas.SpecialIn(
+                days: input.days,
+                details: input.details,
+                end_local: input.endLocal,
+                kind: input.kind.rawValue,
+                price_cents: input.priceCents,
+                start_local: input.startLocal,
+                title: input.title
+            )
+            let output = try await client.staff_create_v1_staff_bars__bar_id__specials_post(
+                path: .init(bar_id: barID),
+                body: .json(body)
+            )
+            return Self.mapSpecial(try output.created.body.json)
+        }
+    }
+
+    func updateSpecial(barID: String, specialID: String, update: SpecialPatch) async throws -> Special {
+        return try await run {
+            let body = Components.Schemas.SpecialUpdate(
+                days: update.days,
+                details: update.details,
+                end_local: update.endLocal,
+                is_active: update.isActive,
+                kind: update.kind?.rawValue,
+                price_cents: update.priceCents,
+                start_local: update.startLocal,
+                title: update.title
+            )
+            let output = try await client.staff_update_v1_staff_bars__bar_id__specials__special_id__patch(
+                path: .init(special_id: specialID, bar_id: barID),
+                body: .json(body)
+            )
+            return Self.mapSpecial(try output.ok.body.json)
+        }
+    }
+
+    func deleteSpecial(barID: String, specialID: String) async throws {
+        try await run {
+            _ = try await client.staff_delete_v1_staff_bars__bar_id__specials__special_id__delete(
+                path: .init(special_id: specialID, bar_id: barID)
+            )
+        }
+    }
+
     // MARK: Mapping generated types to domain models
+
+    private static func mapSpecial(_ s: Components.Schemas.SpecialOut) -> Special {
+        return Special(
+            id: s.id,
+            kind: SpecialKind(api: s.kind),
+            title: s.title,
+            details: s.details,
+            days: s.days,
+            startLocal: s.start_local,
+            endLocal: s.end_local,
+            priceCents: s.price_cents,
+            isActive: s.is_active,
+            postedBy: PostedBy(api: s.posted_by),
+            updatedAt: APIDate.parse(s.updated_at) ?? Date()
+        )
+    }
+
+    private static func mapTonight(_ s: Components.Schemas.SpecialTonight) -> SpecialTonight {
+        let special = Special(
+            id: s.id,
+            kind: SpecialKind(api: s.kind),
+            title: s.title,
+            details: s.details,
+            days: s.days,
+            startLocal: s.start_local,
+            endLocal: s.end_local,
+            priceCents: s.price_cents,
+            isActive: s.is_active,
+            postedBy: PostedBy(api: s.posted_by),
+            updatedAt: APIDate.parse(s.updated_at) ?? Date()
+        )
+        return SpecialTonight(special: special, isNow: s.is_now)
+    }
 
     private static func mapLocation(_ c: Coordinate?) -> Components.Schemas.LocationIn? {
         guard let c else { return nil }
@@ -291,7 +383,9 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             capacity: s.capacity,
             passPriceCents: s.pass_price_cents,
             live: mapLive(s.live),
-            verdict: mapVerdict(s.verdict)
+            verdict: mapVerdict(s.verdict),
+            specialsTonight: (s.specials_tonight ?? []).map { Self.mapTonight($0) },
+            coverTonight: s.cover_tonight.map { Self.mapTonight($0) }
         )
     }
 
@@ -304,7 +398,9 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             capacity: s.capacity,
             passPriceCents: s.pass_price_cents,
             live: mapLive(s.live),
-            verdict: mapVerdict(s.verdict)
+            verdict: mapVerdict(s.verdict),
+            specialsTonight: (s.specials_tonight ?? []).map { Self.mapTonight($0) },
+            coverTonight: s.cover_tonight.map { Self.mapTonight($0) }
         )
         let hours: [HourPoint] = s.wait_by_hour.map { point in
             HourPoint(
@@ -318,7 +414,8 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             latitude: s.latitude,
             longitude: s.longitude,
             normalWaitMin: s.normal_wait_min,
-            waitByHour: hours
+            waitByHour: hours,
+            specialsWeek: (s.specials_week ?? []).map { Self.mapSpecial($0) }
         )
     }
 

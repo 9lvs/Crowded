@@ -15,6 +15,7 @@ struct BarRow: View {
                         .multilineTextAlignment(.leading)
                     CrowdMeter(level: bar.live.crowdLevel)
                     BasisLine(live: bar.live)
+                    SpecialsLine(bar: bar)
                 }
                 Spacer(minLength: Spacing.s2)
                 WaitStat(live: bar.live)

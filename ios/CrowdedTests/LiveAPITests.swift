@@ -48,6 +48,34 @@ final class LiveAPITests: XCTestCase {
         XCTAssertEqual(bars[1].verdict.recommendation, .noData)
     }
 
+    func testBarsDecodeSpecialsAndCover() async throws {
+        try await signIn()
+        StubURLProtocol.stub("GET", "/v1/bars", json: Fixtures.barsWithSpecials)
+        let bars = try await api.bars()
+        XCTAssertEqual(bars.count, 2)
+        XCTAssertEqual(bars[0].specialsTonight.count, 2)
+        XCTAssertEqual(bars[0].specialsTonight[0].special.kind, .happyHour)
+        XCTAssertTrue(bars[0].specialsTonight[0].isNow)
+        XCTAssertEqual(bars[0].specialsTonight[0].special.postedBy, .crowded)
+        XCTAssertNil(bars[0].specialsTonight[0].special.priceCents)
+        XCTAssertEqual(bars[0].coverTonight?.special.kind, .cover)
+        XCTAssertEqual(bars[0].coverTonight?.special.priceCents, 500)
+        XCTAssertEqual(bars[0].coverTonight?.special.startLocal, "21:00")
+        XCTAssertEqual(bars[0].coverTonight?.special.postedBy, .bar)
+        XCTAssertEqual(SpecialsText.tonightLine(for: bars[0]), "Happy hour now until 8 PM")
+        XCTAssertTrue(bars[1].specialsTonight.isEmpty)
+        XCTAssertNil(bars[1].coverTonight)
+        XCTAssertNil(SpecialsText.tonightLine(for: bars[1]))
+    }
+
+    func testBarsWithoutSpecialFieldsStillDecode() async throws {
+        try await signIn()
+        StubURLProtocol.stub("GET", "/v1/bars", json: Fixtures.bars)
+        let bars = try await api.bars()
+        XCTAssertTrue(bars[0].specialsTonight.isEmpty)
+        XCTAssertNil(bars[0].coverTonight)
+    }
+
     func testBearerTokenIsSent() async throws {
         try await signIn()
         StubURLProtocol.stub("GET", "/v1/me", json: Fixtures.me)

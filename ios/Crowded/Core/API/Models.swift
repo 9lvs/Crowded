@@ -217,6 +217,8 @@ struct Bar: Sendable, Equatable, Identifiable {
     var passPriceCents: Int?
     var live: Live
     var verdict: Verdict
+    var specialsTonight: [SpecialTonight] = []
+    var coverTonight: SpecialTonight? = nil
 }
 
 struct BarDetail: Sendable, Equatable {
@@ -225,6 +227,7 @@ struct BarDetail: Sendable, Equatable {
     var longitude: Double
     var normalWaitMin: Int?
     var waitByHour: [HourPoint]
+    var specialsWeek: [Special] = []
 }
 
 struct Me: Sendable, Equatable {

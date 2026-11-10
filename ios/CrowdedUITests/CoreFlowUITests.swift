@@ -34,6 +34,9 @@ final class CoreFlowUITests: XCTestCase {
         XCTAssertTrue(owl.waitForExistence(timeout: 5))
         owl.tap()
 
+        // Bar detail: the Tonight specials section is there.
+        XCTAssertTrue(app.staticTexts["tonightSpecialsHeader"].waitForExistence(timeout: 5))
+
         // Bar detail: report the crowd.
         let report = app.buttons["reportCrowdButton"]
         XCTAssertTrue(report.waitForExistence(timeout: 5))

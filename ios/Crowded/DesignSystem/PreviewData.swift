@@ -18,10 +18,49 @@ enum PreviewData {
         thresholdMin: 20, passPriceCents: 1500, minutesSaved: 32
     )
 
+    static let happyHourNow = SpecialTonight(
+        special: Special(
+            id: "fake-s1", kind: .happyHour, title: "FAKE Happy hour", details: "Half off wells.",
+            days: [0, 1, 2, 3, 4], startLocal: "17:00", endLocal: "20:00", priceCents: nil,
+            isActive: true, postedBy: .bar, updatedAt: Date().addingTimeInterval(-3 * 3600)
+        ),
+        isNow: true
+    )
+
+    static let coverLater = SpecialTonight(
+        special: Special(
+            id: "fake-s2", kind: .cover, title: "FAKE Cover", details: "", days: [3, 4, 5],
+            startLocal: "21:00", endLocal: "02:00", priceCents: 500, isActive: true,
+            postedBy: .crowded, updatedAt: Date().addingTimeInterval(-26 * 3600)
+        ),
+        isNow: false
+    )
+
+    static let coverOnly: [SpecialTonight] = [coverLater]
+
+    static let twoSpecials: [SpecialTonight] = [
+        SpecialTonight(
+            special: Special(
+                id: "fake-s3", kind: .food, title: "FAKE Wing night", details: "", days: [2],
+                startLocal: "17:00", endLocal: "22:00", priceCents: 600, isActive: true,
+                postedBy: .bar, updatedAt: Date().addingTimeInterval(-50 * 3600)
+            ),
+            isNow: false
+        ),
+        SpecialTonight(
+            special: Special(
+                id: "fake-s4", kind: .event, title: "FAKE Trivia night", details: "", days: [2],
+                startLocal: "20:00", endLocal: "22:00", priceCents: nil, isActive: true,
+                postedBy: .bar, updatedAt: Date().addingTimeInterval(-72 * 3600)
+            ),
+            isNow: false
+        ),
+    ]
+
     static let owl = Bar(
         id: "fake-1", slug: "fake-tipsy-owl", name: "FAKE The Tipsy Owl",
         address: "101 Fake College Ave", capacity: 220, passPriceCents: 1500, live: packedLive,
-        verdict: buyPass
+        verdict: buyPass, specialsTonight: [happyHourNow, coverLater], coverTonight: coverLater
     )
 
     static let heron = Bar(

@@ -117,6 +117,33 @@ enum Fixtures {
                  "some_future_field":"ignored"}}]
     """
 
+    static let specialTonight = """
+    {"id":"sp1","kind":"cover","title":"FAKE Cover","details":"","days":[3,4,5],
+     "start_local":"21:00","end_local":"02:00","price_cents":500,"is_active":true,
+     "posted_by":"staff","updated_at":"2026-11-14T03:30:00Z","is_now":false}
+    """
+
+    static let happyHourTonight = """
+    {"id":"sp2","kind":"happy_hour","title":"FAKE Happy hour","details":"Half off.",
+     "days":[0,1,2,3,4],"start_local":"17:00","end_local":"20:00","price_cents":null,
+     "is_active":true,"posted_by":"admin","updated_at":"2026-11-14T03:30:00.25Z",
+     "is_now":true}
+    """
+
+    static let barsWithSpecials = """
+    [{"id":"b1","slug":"fake-owl","name":"FAKE Owl","address":"1 Fake St","capacity":220,
+      "pass_price_cents":1500,"live":\(live),
+      "verdict":{"recommendation":"buy_pass","text":"Get the pass.","threshold_min":20,
+                 "pass_price_cents":1500,"minutes_saved":31},
+      "specials_tonight":[\(happyHourTonight),\(specialTonight)],
+      "cover_tonight":\(specialTonight)},
+     {"id":"b2","slug":"fake-heron","name":"FAKE Heron","address":"2 Fake St","capacity":300,
+      "pass_price_cents":null,"live":\(noDataLive),
+      "verdict":{"recommendation":"no_data","text":"No recent data. No call yet.",
+                 "threshold_min":20,"pass_price_cents":null,"minutes_saved":null},
+      "specials_tonight":[],"cover_tonight":null}]
+    """
+
     static let session = """
     {"id":"s1","bar_id":"b1","status":"active","started_at":"2026-11-14T03:30:00.000001Z",
      "ended_at":null,"predicted_wait_min":31,"actual_wait_min":null,"near_bar":true,

@@ -26,6 +26,7 @@ struct ComponentGallery: View {
                 }
                 group("Basis and verdict") {
                     BasisLine(live: PreviewData.packedLive)
+                    SpecialsLine(bar: PreviewData.owl)
                     VerdictLine(verdict: PreviewData.buyPass)
                     VerdictLine(verdict: PreviewData.buyPass, long: true)
                 }

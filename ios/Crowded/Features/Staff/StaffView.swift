@@ -150,6 +150,27 @@ struct StaffView: View {
                     }
                 }
 
+                NavigationLink {
+                    StaffSpecialsView(api: app.api, barId: barId)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Specials")
+                                .font(.crowdedSection)
+                            Text("Happy hours, cover, food and events")
+                                .font(.crowdedSmall)
+                                .foregroundStyle(Colors.text2)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: Spacing.touch)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("staffSpecialsLink")
+
                 VStack(alignment: .leading, spacing: Spacing.s3) {
                     Text("What students see")
                         .font(.crowdedSection)
