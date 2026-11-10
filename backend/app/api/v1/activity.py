@@ -36,6 +36,7 @@ def get_active_session(user: CurrentUser, db: DB) -> LineSessionOut | None:
 def end_line_session(
     session_id: uuid.UUID, body: LineSessionEndIn, user: CurrentUser, db: DB
 ) -> LineSessionOut:
+    hit("line_end_user", str(user.id))
     return svc.end_session(db, user, session_id, body.outcome, body.door_code)
 
 

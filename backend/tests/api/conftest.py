@@ -124,8 +124,8 @@ def make_bar(db: Session, **kw: Any) -> Bar:
     defaults: dict[str, Any] = {
         "slug": f"fake-bar-{_counter['n']}-{len(kw)}",
         "name": "FAKE Test Bar",
-        "latitude": 40.0,
-        "longitude": -75.0,
+        "latitude": 0.5,
+        "longitude": 0.5,
         "capacity": 100,
     }
     defaults.update(kw)

@@ -17,7 +17,10 @@ class Base(DeclarativeBase):
 
 @lru_cache
 def get_engine() -> Engine:
-    return create_engine(get_settings().database_url, pool_pre_ping=True, future=True)
+    # hide_parameters keeps bound values (ids, future columns) out of error logs.
+    return create_engine(
+        get_settings().database_url, pool_pre_ping=True, future=True, hide_parameters=True
+    )
 
 
 @lru_cache

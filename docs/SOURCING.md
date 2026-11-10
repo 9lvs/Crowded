@@ -86,19 +86,26 @@ Students do not always stop their timers. Three tools cover that.
 
 **Staff line samples.** Paid door staff pick a person at the back of the line and time them to the
 door. A bar can have 2 active samples at once. A sample under 0.5 min or over 240 min is dropped.
-A sample older than 3 hours counts as abandoned. A finished sample feeds the estimate as a
-verified timer, writes an estimate error row, and referees line claims the same way a student
-timer does. Every start and end is in the audit log.
+A sample older than 3 hours counts as abandoned. Each staff member can start 4 samples per hour.
+A finished sample feeds the estimate as a verified timer and referees line claims the same way a
+student timer does, except that it never scores its own author. A staffer cannot referee their
+own line readings. A sample writes an estimate error row marked `sample` for the accuracy
+metric, but samples never feed calibration. Every start and end is in the audit log.
 
 **Door code.** Staff screens show a 4 digit code that changes every 2 minutes. It is an HMAC of
 the bar id and the time bucket, so nothing is stored. A student types it when they get inside.
-The current and the previous code both work. A right code marks the timer verified and pays 20
-points instead of 10. A wrong code never fails the request. The timer just ends unverified. Each
+The current and the previous code both work. The code proves where the student was at the
+end, not at the start. So a right code only marks the timer verified when the timer also started
+near the bar. Verified means "near at the start and confirmed at the door". A timer started far
+away or with no location ends normally and is not verified, and the code is not even checked.
+A verified timer pays 20 points instead of 10. A wrong code never fails the request. The timer just ends unverified. Each
 user gets 5 wrong codes per hour. After that codes are ignored and nothing else changes.
 
 **Clicker sync.** A busy door can tap a clicker and enter the total. The server stores the
 difference from tonight's headcount as one event marked `sync`. Sync events move the headcount
-but never the entry or exit rates, so a big jump cannot fake a fast line.
+but never the entry or exit rates, so a big jump cannot fake a fast line. One sync can move the
+headcount by at most 5000. A bigger difference returns 422 `sync_too_large`. A sync can still
+push a bar into capacity mode, the same as many taps can.
 
 ## Measuring it
 - Freshness: share of peak 15 minute intervals with recent data (target 80 percent or more).

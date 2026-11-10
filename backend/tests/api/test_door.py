@@ -79,6 +79,8 @@ def test_sample_lifecycle_completes_and_logs_error(
     assert out["status"] == "completed" and 7.5 < out["actual_wait_min"] < 8.5
     err = db.scalars(select(EstimateError)).one()
     assert 7.5 < err.actual_min < 8.5 and err.formula_min is not None
+    # Accuracy metrics only, never calibration (security review M-1).
+    assert err.source == "sample" and err.eligible is False
     assert client.get(f"/v1/staff/bars/{bar.id}/line-samples/active", headers=staff.h).json() == []
     again = client.post(
         f"/v1/staff/bars/{bar.id}/line-samples/{s['id']}/end",
@@ -164,18 +166,19 @@ def test_active_sample_counts_as_a_timer(
     assert live["basis"]["timers"] == 1
 
 
-def test_sample_referees_staff_line_claims(
-    client: TestClient, db: Session, staff: Auth, bar: Bar
-) -> None:
+def _sample_after_claim(
+    client: TestClient, db: Session, claimer: Auth, timer: Auth, bar: Bar
+) -> tuple[float, float]:
+    """`claimer` says "very long", `timer` runs a short sample. Reliability before and after."""
     for _ in range(6):
         client.post(
-            f"/v1/staff/bars/{bar.id}/door", json={"direction": "in", "count": 5}, headers=staff.h
+            f"/v1/staff/bars/{bar.id}/door", json={"direction": "in", "count": 5}, headers=claimer.h
         )
-    client.post(f"/v1/staff/bars/{bar.id}/line", json={"line_size": "very_long"}, headers=staff.h)
-    me = db.get(User, uuid.UUID(staff.user_id))
+    client.post(f"/v1/staff/bars/{bar.id}/line", json={"line_size": "very_long"}, headers=claimer.h)
+    me = db.get(User, uuid.UUID(claimer.user_id))
     assert me is not None
     before = me.reliability
-    s = _start_sample(client, staff, bar)
+    s = _start_sample(client, timer, bar)
     # The claim came before the sample started, and the real wait was short.
     row = db.get(LineSample, uuid.UUID(str(s["id"])))
     assert row is not None and row.entry_rate_at_start
@@ -185,14 +188,32 @@ def test_sample_referees_staff_line_claims(
     for ls in db.scalars(select(OutsideLineStatus)):
         ls.ts = ls.ts - timedelta(minutes=4)
     db.commit()
-    client.post(
+    r = client.post(
         f"/v1/staff/bars/{bar.id}/line-samples/{s['id']}/end",
         json={"outcome": "inside"},
-        headers=staff.h,
+        headers=timer.h,
     )
+    assert r.status_code == 200 and r.json()["status"] == "completed"
     db.expire_all()
-    me = db.get(User, uuid.UUID(staff.user_id))
-    assert me is not None and me.reliability < before
+    me = db.get(User, uuid.UUID(claimer.user_id))
+    assert me is not None
+    return before, me.reliability
+
+
+def test_sample_referees_other_staff_line_claims(
+    client: TestClient, db: Session, admin: Auth, staff: Auth, bar: Bar
+) -> None:
+    colleague = make_staff(client, admin, str(bar.id))
+    before, after = _sample_after_claim(client, db, staff, colleague, bar)
+    assert after < before
+
+
+def test_sample_never_scores_its_own_author(
+    client: TestClient, db: Session, staff: Auth, bar: Bar
+) -> None:
+    # Security review M-1: a staffer cannot referee their own line readings.
+    before, after = _sample_after_claim(client, db, staff, staff, bar)
+    assert after == before
 
 
 def test_sample_bola(
