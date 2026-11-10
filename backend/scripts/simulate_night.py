@@ -238,6 +238,8 @@ class Simulator:
         ]
         self.liars = {u.id for i, u in enumerate(self.users) if i % LIAR_EVERY == 0}
         self.busy: set[uuid.UUID] = set()
+        # (user, bar) pairs that already wrote tonight's calibration point (one per night).
+        self.calibrated: set[tuple[uuid.UUID, uuid.UUID]] = set()
         self.states: list[BarState] = []
         for i, (bar, spec) in enumerate(zip(self.bars, FAKE_BARS, strict=True)):
             staff = get_or_create_user(db, staff_phone(i), Role.staff)
@@ -262,6 +264,7 @@ class Simulator:
     def run_night(self, plan: NightPlan) -> None:
         # Same seed and night give the same data. nosec B311: fake data, not security.
         self.rng = random.Random(f"{self.seed}:{plan.label}")  # nosec B311
+        self.calibrated.clear()
         for s in self.states:
             s.queue.clear()
             s.pending.clear()
@@ -463,6 +466,12 @@ class Simulator:
     def record_error(
         self, s: BarState, session: LineSession, user: User, predicted: float, p: Pending
     ) -> None:
+        # Same rule as production: trusted timers only, one point per user per bar per night.
+        key = (user.id, s.bar.id)
+        eligible = session.near_bar and key not in self.calibrated
+        if eligible:
+            self.calibrated.add(key)
+            session.calibration_eligible = True
         self.db.add(
             EstimateError(
                 bar_id=s.bar.id,
@@ -471,6 +480,8 @@ class Simulator:
                 formula_min=session.formula_wait_min,
                 actual_min=p.actual,
                 abs_error_min=abs(predicted - p.actual),
+                source="timer",
+                eligible=eligible,
             )
         )
         s.stats.errors.append(predicted - p.actual)

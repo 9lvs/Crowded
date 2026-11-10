@@ -384,3 +384,21 @@ end, add the partial unique index for one active session per user, and add the p
 start tests. M-1 and M-3 are small changes and should land in the same pass, since together with
 H-1 they decide whether timers can be trusted as the referee. M-2 can follow before the pilot
 opens. Schedule the Low items for Phase 2.
+
+## Remediation status (backend-implementer, after review)
+Awaiting re-review by the lead's security gate.
+
+| ID | Status | Fix |
+|---|---|---|
+| H-1 | Fixed | `end_session` and `end_sample` load the row with `SELECT ... FOR UPDATE` and re-check the status. Rewards, estimate errors, reliability and refereeing run only for the request that won. Partial unique index `uq_line_sessions_one_active` on `line_sessions (user_id) WHERE status = 'active'`. `start_session` turns the `IntegrityError` into 409 `session_already_active`. Sample starts hold the bar row lock until the insert commits (the old code committed inside the lock, which released it). Partial unique index `uq_reward_ledger_reason_ref` on `reward_ledger (reason, ref_id) WHERE ref_id IS NOT NULL`. The migration abandons duplicate active timers and drops duplicate rewards first. New limit `line_end_user` (20 per hour). Tests with 10 real parallel requests: `test_parallel_ends_of_one_timer_have_one_winner`, `test_parallel_starts_give_one_active_timer`, `test_parallel_sample_ends_have_one_winner`, `test_parallel_sample_starts_respect_the_active_cap` |
+| M-1 | Fixed | `score_line_sources` excludes the author from staff readings and student reports. Samples pass their `staff_user_id`. 4 samples per staff member per hour (409 `sample_rate_limited`). Sample errors are stored with `source = "sample"` and are never eligible for calibration. Tests `test_sample_never_scores_its_own_author`, `test_samples_are_capped_per_staff_per_hour`, `test_samples_never_move_calibration`. Not done: the admin metric that compares staff samples with student timers |
+| M-2 | Fixed | `verified` = started near the bar AND a valid code. A timer started away or with no location ends normally and unverified, and the code is not checked. Documented in SOURCING.md. Test `test_door_code_does_not_verify_a_timer_started_away`. Not done: the duration sanity check and the shorter grace for the previous bucket |
+| M-3 | Fixed | `estimate_errors.eligible` is true only for completed timers that started near the bar, the first per user per bar per night. `live._calibration` uses eligible timer rows only and returns 1.0 until there are 5 points from 3 distinct users. Distinct users are counted through `line_sessions.calibration_eligible`, so `estimate_errors` stays free of user ids and user keys. Older rows are kept for MAE but are not eligible. Tests `test_calibration_needs_five_points_from_three_users`, `test_one_calibration_point_per_user_per_night`. Open: untrusted completed timers still count in the timer median at full weight (Phase 1 behavior) |
+| L-1 | Fixed | `line_samples` purged with the raw window. The data inventory lists line samples, specials and the `verified` and `calibration_eligible` flags. Test `test_retention_purges_old_line_samples` |
+| L-2 | Open | Web client work (offline queue). Not in this backend pass |
+| L-3 | Partly fixed | A difference over 5000 returns 422 `sync_too_large`, never 500. Sync locks the bar row. Capacity mode through sync is documented, not changed. Test `test_count_sync_too_large_is_422_not_500` |
+| L-4 | Partly fixed | Wrong door code check, match and miss count run in one step under the limiter lock (`RateLimiter.guarded`). Still in process memory until Redis (D3). Test `test_guarded_limiter_counts_misses_atomically` |
+| L-5 | Open | iOS and Docker pinning. Not in this backend pass |
+| I-2 | Fixed | Engine created with `hide_parameters=True`. Test `test_engine_hides_sql_parameters` |
+| I-7 | Fixed | FAKE seed and simulator bars moved to a made up point in the open ocean near 0.5 N, 0.5 E. Test fixtures use the same spot |
+| Others | Open, tracked | I-1, I-3, I-4, I-5, I-6, I-8 |

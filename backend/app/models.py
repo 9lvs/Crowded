@@ -244,6 +244,11 @@ class LineSession(Base):
     near_bar: Mapped[bool] = mapped_column(Boolean, default=False)
     # True when the student typed the rotating door code at the door (docs/SOURCING.md).
     verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # True when this timer wrote the calibration point for its user, bar and night. Lets the
+    # calibration gate count distinct users without putting a user id on estimate_errors.
+    calibration_eligible: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     distance_bucket: Mapped[DistanceBucket] = mapped_column(
         _enum(DistanceBucket, "distance_bucket"), default=DistanceBucket.unknown
     )
@@ -251,6 +256,13 @@ class LineSession(Base):
     __table_args__ = (
         Index("ix_line_sessions_bar_started", "bar_id", "started_at"),
         Index("ix_line_sessions_user_status", "user_id", "status"),
+        # One active timer per user. Parallel starts lose with an IntegrityError (409).
+        Index(
+            "uq_line_sessions_one_active",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
     )
 
 
@@ -377,9 +389,25 @@ class RewardLedger(Base):
     reason: Mapped[str] = mapped_column(String(32))
     ref_id: Mapped[uuid.UUID | None] = mapped_column()
 
+    __table_args__ = (
+        # One reward per timer or report, even if a request races (defense in depth).
+        Index(
+            "uq_reward_ledger_reason_ref",
+            "reason",
+            "ref_id",
+            unique=True,
+            postgresql_where=text("ref_id IS NOT NULL"),
+        ),
+    )
+
 
 class EstimateError(Base):
-    """Estimate vs actual for completed timers. No user id so it survives account deletion."""
+    """Estimate vs actual for completed timers and staff samples.
+
+    No user id or user key, so it survives account deletion. `source` is "timer" or "sample".
+    Only rows with `eligible` true feed calibration: trusted student timers, at most one per
+    user per bar per night (docs/ESTIMATION.md). Samples are never eligible.
+    """
 
     __tablename__ = "estimate_errors"
 
@@ -390,6 +418,10 @@ class EstimateError(Base):
     formula_min: Mapped[float | None] = mapped_column(Float)
     actual_min: Mapped[float] = mapped_column(Float)
     abs_error_min: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(8), default="timer", server_default="timer")
+    eligible: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+    __table_args__ = (Index("ix_estimate_errors_bar_created", "bar_id", "created_at"),)
 
 
 class AuditLog(Base):

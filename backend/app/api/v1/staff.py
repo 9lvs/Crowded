@@ -30,6 +30,8 @@ from app.services import samples as samples_svc
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
+MAX_SYNC_DELTA = 5000  # matches the door_count_range CHECK for sync events
+
 
 def invite_hash(code: str) -> str:
     return pepper_hash(normalize_invite_code(code), "staff_invite")
@@ -152,8 +154,13 @@ def count_sync(
     body: CountSyncIn, bar: StaffBar, user: CurrentUser, request: Request, db: DB
 ) -> StaffState:
     """Set tonight's headcount from a clicker total. One event holds the difference."""
+    # Lock the bar row so parallel syncs compute their difference one at a time.
+    db.execute(select(Bar.id).where(Bar.id == bar.id).with_for_update())
     ins, outs = live.door_totals(db, bar, live.utcnow())
     delta = body.inside_now - (ins - outs)
+    if abs(delta) > MAX_SYNC_DELTA:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="sync_too_large")
     if delta != 0:
         db.add(
             DoorEvent(

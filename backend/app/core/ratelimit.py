@@ -6,11 +6,11 @@ Good enough for a single instance pilot. Swap for Redis before running more than
 
 from __future__ import annotations
 
-import contextlib
 import math
 import threading
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 
 from fastapi import HTTPException, status
 
@@ -45,6 +45,31 @@ class RateLimiter:
                 q.popleft()
             return len(q)
 
+    def guarded(
+        self,
+        key: str,
+        limit: int,
+        window_s: float,
+        attempt: Callable[[], bool],
+        now: float | None = None,
+    ) -> bool:
+        """Run `attempt` only while under the limit, and record a hit when it fails.
+
+        Check, attempt and record happen under one lock, so parallel callers cannot all slip
+        under the limit before any failure is counted. Returns False when over the limit.
+        """
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            q = self._hits[key]
+            while q and q[0] <= now - window_s:
+                q.popleft()
+            if len(q) >= limit:
+                return False
+            ok = attempt()
+            if not ok:
+                q.append(now)
+            return ok
+
     def reset(self) -> None:
         with self._lock:
             self._hits.clear()
@@ -63,6 +88,7 @@ LIMITS: dict[str, tuple[int, float]] = {
     "report_user_bar": (2, 600),
     "report_bar": (300, 600),
     "line_user": (10, 3600),
+    "line_end_user": (20, 3600),
     "staff_user": (240, 60),
     "admin_user": (120, 60),
     "read_user": (240, 60),
@@ -76,14 +102,10 @@ def hit(name: str, key: str) -> None:
     limiter.check(f"{name}:{key}", limit, window)
 
 
-def door_code_allowed(user_key: str) -> bool:
-    """True while the user is under the wrong-code limit. Does not record a hit."""
-    limit, window = LIMITS["door_code_user"]
-    return limiter.count(f"door_code_user:{user_key}", window) < limit
+def door_code_try(user_key: str, matches: Callable[[], bool]) -> bool:
+    """Check a door code under the wrong-code limit. Over the limit, codes are ignored.
 
-
-def door_code_miss(user_key: str) -> None:
-    """Record one wrong code. Over the limit is fine here, the caller just ignores codes."""
+    The limit check, the match and the miss count are one atomic step (security review L-4).
+    """
     limit, window = LIMITS["door_code_user"]
-    with contextlib.suppress(HTTPException):
-        limiter.check(f"door_code_user:{user_key}", limit, window)
+    return limiter.guarded(f"door_code_user:{user_key}", limit, window, matches)

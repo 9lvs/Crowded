@@ -37,7 +37,8 @@ Code: `backend/app/estimation/` (pure functions, contract in `types.py`).
   way toward the target. Clamp to [0.05, 1].
 
 ## Verified timers and sync events
-A timer is verified when a student typed the door code or when door staff timed the person. A
+A timer is verified when a student typed the door code on a timer that started near the bar, or
+when door staff timed the person. A
 verified timer weighs `verified_timer_weight` (2.0) times as much in the timer median. Verified
 timers also count as near the bar.
 
@@ -52,10 +53,22 @@ only sync events has a headcount but no known rate, so the default rate is used.
   timer +1 (max 3), each near-bar report +0.5 (max 2). 0 to 1.5 low, 2 to 3.5 medium, 4+ high.
 
 ## Calibration
-`calibration_factor(points, now)`: completed timers from the last 7 days, each paired with the
+`calibration_factor(points, now)`: eligible timers from the last 7 days, each paired with the
 formula estimate stored when the timer started. Recency weighted median of actual / predicted,
-ignoring predicted under 2 min (half life one day). No points gives 1.0. Clamped to [0.5, 2.0]. Every completed timer
-also writes an `estimate_errors` row (predicted, actual, absolute error) so admins can track MAE.
+ignoring predicted under 2 min (half life one day). No points gives 1.0. Clamped to [0.5, 2.0].
+
+Every completed timer and staff sample writes an `estimate_errors` row (predicted, actual,
+absolute error, `source` timer or sample) so admins can track MAE. Only rows with `eligible` true
+feed calibration. A row is eligible when it comes from a completed student timer that started
+near the bar (verified timers always did), and it is the first such timer for that user at that
+bar tonight. Samples and untrusted timers are never eligible.
+
+`services/live._calibration` returns 1.0 until the window holds at least 5 eligible points from
+at least 3 distinct users. Distinct users are counted from `line_sessions.calibration_eligible`,
+which is set on the timer that wrote the point. So `estimate_errors` carries no user id or user
+key and stays safe to keep after account deletion. Deleting an account removes its sessions,
+which can only lower the user count, never raise it. Rows written before this rule are kept for
+MAE but are not eligible.
 
 ## Flags
 `sources_disagree`: staff and student line estimates differ by 10+ people and 40 percent.

@@ -45,6 +45,9 @@ SNAPSHOT_EVERY = timedelta(minutes=2)
 HISTORY_DAYS = 28
 ACTIVE_SESSION_MAX = timedelta(hours=4)
 SAMPLE_ACTIVE_MAX = timedelta(hours=3)
+# Calibration stays at 1.0 until this much independent evidence exists (security review M-3).
+CALIBRATION_MIN_POINTS = 5
+CALIBRATION_MIN_USERS = 3
 
 
 def utcnow() -> datetime:
@@ -77,11 +80,21 @@ def current_pass_price(db: Session, bar_id: uuid.UUID) -> int | None:
 
 
 def _calibration(db: Session, bar_id: uuid.UUID, now: datetime) -> float:
+    """Calibration factor from eligible timer points only.
+
+    Eligible means a completed student timer that started near the bar, at most one per user
+    per bar per night. Samples and untrusted timers never count. Returns 1.0 until there are
+    CALIBRATION_MIN_POINTS points from CALIBRATION_MIN_USERS distinct users. Distinct users
+    are counted through line_sessions, so estimate_errors carries no user id or user key.
+    """
     since = now - timedelta(minutes=PARAMS.calibration_window_min)
     rows = db.execute(
         select(EstimateError.created_at, EstimateError.formula_min, EstimateError.actual_min).where(
             EstimateError.bar_id == bar_id,
             EstimateError.created_at >= since,
+            EstimateError.created_at <= now,
+            EstimateError.eligible.is_(True),
+            EstimateError.source == "timer",
             EstimateError.formula_min.is_not(None),
         )
     ).all()
@@ -90,6 +103,18 @@ def _calibration(db: Session, bar_id: uuid.UUID, now: datetime) -> float:
         for ts, f, a in rows
         if f is not None
     ]
+    if len(points) < CALIBRATION_MIN_POINTS:
+        return 1.0
+    users = db.scalar(
+        select(func.count(func.distinct(LineSession.user_id))).where(
+            LineSession.bar_id == bar_id,
+            LineSession.calibration_eligible.is_(True),
+            LineSession.ended_at >= since,
+            LineSession.ended_at <= now,
+        )
+    )
+    if (users or 0) < CALIBRATION_MIN_USERS:
+        return 1.0
     return est.calibration_factor(points, now, PARAMS)
 
 

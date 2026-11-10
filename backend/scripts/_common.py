@@ -32,14 +32,15 @@ class FakeBarSpec:
     service_rate: float
 
 
-# An arbitrary made up downtown. A few hundred meters between bars.
+# A made up spot in the open ocean (near 0.5 N, 0.5 E), far from any real town, so the public
+# repo hints at no pilot location. A few hundred meters between bars.
 FAKE_BARS: tuple[FakeBarSpec, ...] = (
     FakeBarSpec(
         "fake-tipsy-owl",
         "FAKE The Tipsy Owl",
         "FAKE 100 Example Ave",
-        40.7934,
-        -77.8600,
+        0.5000,
+        0.5000,
         120,
         1500,
         1.15,
@@ -49,8 +50,8 @@ FAKE_BARS: tuple[FakeBarSpec, ...] = (
         "fake-copper-fox",
         "FAKE Copper Fox",
         "FAKE 200 Example Ave",
-        40.7962,
-        -77.8578,
+        0.5028,
+        0.5022,
         180,
         2000,
         1.0,
@@ -60,8 +61,8 @@ FAKE_BARS: tuple[FakeBarSpec, ...] = (
         "fake-neon-moose",
         "FAKE Neon Moose",
         "FAKE 300 Example Ave",
-        40.7919,
-        -77.8545,
+        0.4985,
+        0.5055,
         250,
         None,
         0.9,

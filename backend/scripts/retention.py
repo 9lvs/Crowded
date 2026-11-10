@@ -20,6 +20,7 @@ from app.models import (
     Device,
     DoorEvent,
     EstimateError,
+    LineSample,
     LineSession,
     LoginCode,
     OutsideLineStatus,
@@ -41,6 +42,8 @@ def purge(db: Session, now: datetime, raw_days: int) -> dict[str, int]:
         "crowd_reports": delete(CrowdReport).where(CrowdReport.created_at < raw_cut),
         # Includes sessions left "active": nobody stays in line for 30 days.
         "line_sessions": delete(LineSession).where(LineSession.started_at < raw_cut),
+        # Staff work hours trail (who timed the line and when). Same raw window.
+        "line_samples": delete(LineSample).where(LineSample.started_at < raw_cut),
         "door_events": delete(DoorEvent).where(DoorEvent.ts < raw_cut),
         "outside_line_status": delete(OutsideLineStatus).where(OutsideLineStatus.ts < raw_cut),
         "login_codes": delete(LoginCode).where(LoginCode.created_at < now - timedelta(days=1)),

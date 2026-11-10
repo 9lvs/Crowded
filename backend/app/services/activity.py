@@ -6,12 +6,13 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import exists, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import estimation as est
 from app.core.location import bucket_for, haversine_m
-from app.core.ratelimit import door_code_allowed, door_code_miss
+from app.core.ratelimit import door_code_try
 from app.models import (
     Bar,
     CrowdReport,
@@ -97,18 +98,36 @@ def start_session(db: Session, user: User, bar: Bar, loc: LocationIn | None) -> 
         distance_bucket=bucket,
     )
     db.add(s)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # uq_line_sessions_one_active: a parallel start won the race.
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="session_already_active") from None
     return session_out(s)
 
 
 def _door_code_ok(user: User, bar_id: uuid.UUID, code: str | None) -> bool:
     """Check a typed door code. Wrong codes are counted. Over the limit, codes are ignored."""
-    if code is None or not door_code_allowed(str(user.id)):
+    if code is None:
         return False
-    if door_svc.code_matches(bar_id, code):
-        return True
-    door_code_miss(str(user.id))
-    return False
+    return door_code_try(str(user.id), lambda: door_svc.code_matches(bar_id, code))
+
+
+def _already_calibrated_tonight(db: Session, s: LineSession, night: datetime) -> bool:
+    return bool(
+        db.scalar(
+            select(
+                exists().where(
+                    LineSession.user_id == s.user_id,
+                    LineSession.bar_id == s.bar_id,
+                    LineSession.calibration_eligible.is_(True),
+                    LineSession.started_at >= night,
+                    LineSession.id != s.id,
+                )
+            )
+        )
+    )
 
 
 def end_session(
@@ -118,11 +137,19 @@ def end_session(
     outcome: str,
     door_code: str | None = None,
 ) -> LineSessionOut:
-    s = db.get(LineSession, session_id)
+    # Lock the row, then check the status. Parallel ends of one timer queue on the lock and
+    # every one after the first sees a finished timer (security review H-1).
+    s = db.scalar(
+        select(LineSession)
+        .where(LineSession.id == session_id, LineSession.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     # Same 404 for "missing" and "not yours" (no object enumeration).
-    if s is None or s.user_id != user.id:
+    if s is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="not_found")
     if s.status != SessionStatus.active:
+        db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, detail="session_not_active")
     now = live.utcnow()
     s.ended_at = now
@@ -131,10 +158,28 @@ def end_session(
     if outcome == "inside" and MIN_VALID_WAIT_MIN <= actual <= MAX_VALID_WAIT_MIN:
         s.status = SessionStatus.completed
         s.actual_wait_min = actual
-        s.verified = _door_code_ok(user, s.bar_id, door_code)
-        trusted = s.near_bar or s.verified
+        # A door code only upgrades a timer that started near the bar (security review M-2).
+        # It proves where the student was at the end, so alone it proves nothing about the
+        # start. Away from the bar the code is not even checked.
+        s.verified = s.near_bar and _door_code_ok(user, s.bar_id, door_code)
+        trusted = s.near_bar
         if s.predicted_wait_min is not None:
-            record_error(db, s.bar_id, now, s.predicted_wait_min, s.formula_wait_min, actual)
+            eligible = False
+            bar = db.get(Bar, s.bar_id)
+            if trusted and bar is not None:
+                night = live.tonight_start(bar, now)
+                eligible = not _already_calibrated_tonight(db, s, night)
+                s.calibration_eligible = eligible
+            record_error(
+                db,
+                s.bar_id,
+                now,
+                s.predicted_wait_min,
+                s.formula_wait_min,
+                actual,
+                source="timer",
+                eligible=eligible,
+            )
             if trusted:
                 user.reliability = est.update_reliability(
                     user.reliability, s.predicted_wait_min, actual
@@ -162,8 +207,15 @@ def record_error(
     predicted: float,
     formula: float | None,
     actual: float,
+    *,
+    source: str,
+    eligible: bool,
 ) -> None:
-    """Estimate vs actual for a finished timer or staff sample. Feeds calibration."""
+    """Estimate vs actual for a finished timer or staff sample.
+
+    Every row feeds the accuracy metrics. Only `eligible` rows feed calibration: trusted
+    student timers, one per user per bar per night. Samples are never eligible.
+    """
     db.add(
         EstimateError(
             bar_id=bar_id,
@@ -172,6 +224,8 @@ def record_error(
             formula_min=formula,
             actual_min=actual,
             abs_error_min=abs(predicted - actual),
+            source=source,
+            eligible=eligible and source == "timer",
         )
     )
 
@@ -189,6 +243,8 @@ def score_line_sources(
     people really in line ~= actual wait x entry rate at the start. Every staff line reading and
     student line report made just before the timer started is scored against that, and the
     reporter's reliability moves toward how close they were. One honest timer referees both.
+    `exclude_user` (the timer owner or the sample's staff author) is never scored, so nobody
+    referees their own claims (security review M-1).
     """
     if not entry_rate_at_start:
         return
@@ -201,6 +257,11 @@ def score_line_sources(
             OutsideLineStatus.ts >= since,
             OutsideLineStatus.ts <= started_at,
             OutsideLineStatus.staff_user_id.is_not(None),
+            *(
+                [OutsideLineStatus.staff_user_id != exclude_user]
+                if exclude_user is not None
+                else []
+            ),
         )
     ).all()
     report_rows = db.execute(
