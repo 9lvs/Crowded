@@ -37,6 +37,9 @@
 - [x] Instagram launch kit and bar one pager (marketing/), pilot playbook (docs/PILOT.md)
 - [x] Bar specials, happy hours, cover and events: backend, web, staff editing, iOS (green CI)
 - [x] Team briefing deck, business model options (docs/BUSINESS.md)
+- [x] Door mode for staff (tap zones, clicker keys, undo, offline queue, count sync), staff line
+      checks, rotating door code that verifies student timers (web and iOS, green CI)
+- [ ] Deals: owner picks a layout from the mockup, then structured deal items
 
 ## Phase 2: hardening and deploy readiness
 - [ ] Close Phase 1 review findings
