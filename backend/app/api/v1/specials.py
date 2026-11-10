@@ -69,6 +69,7 @@ def _update(
             raise HTTPException(UNPROCESSABLE, detail=f"{field}_required")
     if "details" in changes and changes["details"] is None:
         changes["details"] = ""
+    # An explicit null price clears it ("price_cents" stays in changes as None).
     if changes.get("start_local", row.start_local) == changes.get("end_local", row.end_local):
         raise HTTPException(UNPROCESSABLE, detail="start_equals_end")
     for k, v in changes.items():

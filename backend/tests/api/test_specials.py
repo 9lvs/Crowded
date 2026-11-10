@@ -187,9 +187,17 @@ def test_31st_special_rejected(client: TestClient, admin: Auth, bar: Bar) -> Non
     assert r.json()["detail"] == "too_many_specials"
 
 
-def test_summary_and_detail(client: TestClient, admin: Auth, user: Auth, bar: Bar) -> None:
+def test_summary_and_detail(
+    client: TestClient, admin: Auth, user: Auth, bar: Bar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.services import live
+
+    # Freeze the clock at 22:00 New York time on a Thursday so "now" is deterministic.
+    monkeypatch.setattr(live, "utcnow", lambda: datetime(2026, 11, 13, 3, 0, tzinfo=UTC))
     base = f"/v1/admin/bars/{bar.id}/specials"
-    # Every day, so always tonight. 12:00 to 11:59 is "now" nearly all day.
+    # Every day, so always tonight. 12:00 to 11:59 covers 22:00.
     now_sp = client.post(
         base,
         json=body(title="FAKE Always", days=ALL_DAYS, start_local="12:00", end_local="11:59"),
@@ -241,3 +249,11 @@ def test_empty_summary(client: TestClient, user: Auth, bar: Bar) -> None:
     assert d["specials_tonight"] == []
     assert d["cover_tonight"] is None
     assert d["specials_week"] == []
+
+
+def test_patch_null_price_clears_it(client: TestClient, admin: Auth, bar: Bar) -> None:
+    base = f"/v1/admin/bars/{bar.id}/specials"
+    sp = client.post(base, json=body(kind="cover", price_cents=500), headers=admin.h).json()
+    r = client.patch(f"{base}/{sp['id']}", json={"price_cents": None}, headers=admin.h)
+    assert r.status_code == 200
+    assert r.json()["price_cents"] is None
