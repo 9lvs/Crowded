@@ -18,7 +18,16 @@ from sqlalchemy.orm import Session
 from app.api.v1.staff import invite_hash
 from app.core.security import new_invite_code
 from app.db import get_sessionmaker
-from app.models import Bar, BarSpecial, PassPrice, Role, SpecialKind, StaffInvite, utcnow
+from app.models import (
+    Bar,
+    BarSpecial,
+    DealCategory,
+    PassPrice,
+    Role,
+    SpecialKind,
+    StaffInvite,
+    utcnow,
+)
 from scripts._common import (
     ADMIN_PHONE,
     FAKE_BARS,
@@ -26,75 +35,137 @@ from scripts._common import (
     require_dev_env,
 )
 
-# (kind, title, details, days, start, end, price_cents). All FAKE, no real brands.
-FakeSpecial = tuple[SpecialKind, str, str, list[int], str, str, int | None]
+# Deal items are (name, price_label, category, note). All FAKE, no real brands.
+Item = tuple[str, str, DealCategory, str]
+# (kind, title, details, days, start, end, price_cents, all_day, items)
+FakeSpecial = tuple[SpecialKind, str, str, list[int], str, str, int | None, bool, list[Item]]
 WEEKDAYS = [0, 1, 2, 3, 4]
+EVERY = [0, 1, 2, 3, 4, 5, 6]
+B, P, S, M, W, F = (
+    DealCategory.beer,
+    DealCategory.pitchers,
+    DealCategory.shots,
+    DealCategory.mixers,
+    DealCategory.wine,
+    DealCategory.food,
+)
+K = SpecialKind
 SPECIALS: dict[str, list[FakeSpecial]] = {
     "fake-tipsy-owl": [
         (
-            SpecialKind.happy_hour,
-            "FAKE Early Hour",
-            "Half off wells",
-            WEEKDAYS,
-            "17:00",
-            "20:00",
+            K.drink,
+            "FAKE All Night Drafts",
+            "Every night",
+            EVERY,
+            "12:00",
+            "04:00",
             None,
+            True,
+            [("FAKE Lager drafts", "$3", B, "")],
         ),
-        (SpecialKind.cover, "FAKE Cover", "Cash or card", [3, 4, 5], "21:00", "02:00", 500),
-        (SpecialKind.food, "FAKE Wing Night", "Ten wings", [2], "18:00", "22:00", 700),
-        (SpecialKind.event, "FAKE Trivia", "Teams of up to six", [3], "20:00", "22:00", None),
+        (
+            K.happy_hour,
+            "FAKE Owl Hour",
+            "Weekdays 9 to 11 PM",
+            WEEKDAYS,
+            "21:00",
+            "23:00",
+            None,
+            False,
+            [
+                ("FAKE Regular drafts", "$3", B, ""),
+                ("FAKE House shots", "$3", S, ""),
+                ("FAKE House wine", "$3", W, ""),
+                ("FAKE 32oz pitchers", "$5", P, ""),
+            ],
+        ),
+        (K.event, "FAKE DJ Night", "DJ on the floor", [3], "21:00", "02:00", None, False, []),
+        (
+            K.food,
+            "FAKE Wing Night",
+            "Wednesday dinner",
+            [2],
+            "18:00",
+            "22:00",
+            None,
+            False,
+            [("FAKE Ten wings", "$7", F, "Dine in only")],
+        ),
+        (K.cover, "FAKE Cover", "Cash or card", [3, 4, 5], "21:00", "02:00", 500, False, []),
     ],
     "fake-copper-fox": [
+        (K.cover, "FAKE Cover", "Every night", EVERY, "18:00", "02:00", 300, False, []),
         (
-            SpecialKind.cover,
-            "FAKE Cover",
-            "Every night",
-            [0, 1, 2, 3, 4, 5, 6],
-            "18:00",
-            "02:00",
-            300,
-        ),
-        (
-            SpecialKind.happy_hour,
+            K.happy_hour,
             "FAKE Fox Hour",
-            "Two for one drafts",
+            "Weekdays 4 to 7 PM",
             WEEKDAYS,
             "16:00",
             "19:00",
             None,
+            False,
+            [("FAKE Drafts", "2 for 1", B, ""), ("FAKE Well mixers", "$4", M, "")],
         ),
         (
-            SpecialKind.drink,
+            K.drink,
             "FAKE Pitcher Deal",
-            "Pitchers at a set price",
+            "Tuesday and Thursday",
             [1, 3],
             "20:00",
             "00:00",
-            1200,
+            None,
+            False,
+            [("FAKE Pitchers", "$12", P, "")],
         ),
-        (SpecialKind.event, "FAKE Live Band", "Local act", [4, 5], "22:00", "01:00", None),
+        (K.event, "FAKE Live Band", "Local act", [4, 5], "22:00", "01:00", None, False, []),
         (
-            SpecialKind.food,
+            K.food,
             "FAKE Lunch Special",
             "Burger and a soda",
             WEEKDAYS,
             "11:00",
             "14:00",
-            900,
+            None,
+            False,
+            [("FAKE Burger and soda", "$9", F, "Dine in only")],
         ),
     ],
+    # The hidden gem: strong deals every night.
     "fake-neon-moose": [
         (
-            SpecialKind.happy_hour,
-            "FAKE Moose Hour",
-            "Cheap rail drinks",
-            WEEKDAYS,
-            "17:00",
-            "20:00",
+            K.drink,
+            "FAKE Moose All Night",
+            "Every night, all night",
+            EVERY,
+            "12:00",
+            "04:00",
             None,
+            True,
+            [
+                ("FAKE Double well mixers", "$2", M, ""),
+                ("FAKE Lager drafts", "$2", B, ""),
+                ("FAKE House shots", "$2", S, ""),
+                ("FAKE House wine", "$3", W, ""),
+            ],
         ),
-        (SpecialKind.cover, "FAKE Cover", "After ten", [4, 5], "22:00", "03:00", 500),
-        (SpecialKind.event, "FAKE Karaoke", "Sign up at the bar", [3], "21:00", "01:00", None),
+        (
+            K.happy_hour,
+            "FAKE Moose Hour",
+            "Every night 9 to 11 PM",
+            EVERY,
+            "21:00",
+            "23:00",
+            None,
+            False,
+            [
+                ("FAKE Double well mixers", "$1", M, ""),
+                ("FAKE Pitchers", "$5", P, ""),
+                ("FAKE Rail shots", "50\u00a2", S, ""),
+                ("FAKE Wings", "Half priced", F, "Dine in only"),
+            ],
+        ),
+        (K.cover, "FAKE Cover", "After ten", [4, 5], "22:00", "03:00", 500, False, []),
+        (K.event, "FAKE Karaoke", "Sign up at the bar", [3], "21:00", "01:00", None, False, []),
     ],
 }
 
@@ -156,7 +227,9 @@ def run(db: Session) -> dict[str, str]:
         codes[spec.slug] = code
 
         db.execute(delete(BarSpecial).where(BarSpecial.bar_id == bar.id))
-        for kind, title, details, days, start, end, cents in SPECIALS.get(spec.slug, []):
+        for kind, title, details, days, start, end, cents, all_day, items in SPECIALS.get(
+            spec.slug, []
+        ):
             db.add(
                 BarSpecial(
                     bar_id=bar.id,
@@ -167,6 +240,11 @@ def run(db: Session) -> dict[str, str]:
                     start_local=start,
                     end_local=end,
                     price_cents=cents,
+                    all_day=all_day,
+                    items=[
+                        {"name": n, "price_label": p, "category": c.value, "note": note}
+                        for n, p, c, note in items
+                    ],
                     posted_by_role="admin",
                     created_by=admin.id,
                 )

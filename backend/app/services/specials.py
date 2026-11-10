@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Bar, BarSpecial, SpecialKind
-from app.schemas import SpecialOut, SpecialTonight
+from app.schemas import DealItemOut, SpecialOut, SpecialTonight
 
 NIGHT_START_HOUR = 12
 MAX_SPECIALS_PER_BAR = 30
@@ -82,6 +82,8 @@ def to_out(s: BarSpecial) -> SpecialOut:
         start_local=s.start_local,
         end_local=s.end_local,
         price_cents=s.price_cents,
+        all_day=s.all_day,
+        items=[DealItemOut(**i) for i in (s.items or [])],
         is_active=s.is_active,
         posted_by="admin" if s.posted_by_role == "admin" else "staff",
         updated_at=s.updated_at,
