@@ -75,7 +75,7 @@ into `tokens.css`.
 | `js/api.js` | Real or mock API calls, token refresh, 401 and 429 handling, mock gating. |
 | `js/auth.js` | Sign in flow shared by both pages (21+ attestation, phone, code). |
 | `js/app.js` | Student app router and screens, report sheet, staff banner. Polls every 15 s while visible. |
-| `js/staff.js` | Staff app: invite step and door counter with optimistic updates. |
+| `js/staff.js` | Staff app: invite step, door counter with optimistic updates, and the Specials editor. |
 | `fonts/` | Bricolage Grotesque and DM Sans, latin subset, SIL OFL 1.1 (`OFL.txt`). |
 | `tools/bundle_preview.py` | Inlines everything into one HTML file in mock mode for a shareable preview. |
 

@@ -175,10 +175,12 @@
 
   function barRow(b, refresh) {
     var lv = b.live;
+    var specialLine = ui.specialsLine(b);
     var hasWait = lv.has_recent_data && lv.wait_min !== null;
     var crowdLabel = lv.crowd_level ? ui.CROWD_LABEL[lv.crowd_level] : "Crowd unknown";
     var label = b.name + ". " + (lv.crowd_level ? "Crowd " + crowdLabel + ". " : "Crowd unknown. ") +
-      waitLabel(lv) + ". " + (lv.has_recent_data ? lv.basis.text + ". " : "") + ui.verdictShort(b.verdict) + ".";
+      waitLabel(lv) + ". " + (lv.has_recent_data ? lv.basis.text + ". " : "") + ui.verdictShort(b.verdict) + "." +
+      (specialLine ? " " + specialLine + "." : "");
     var right = hasWait
       ? h("span", { class: "row-wait" }, h("span", { class: "num row-wait__num", text: String(lv.wait_min) }), h("span", { class: "row-wait__unit", text: "min" }))
       : h("span", { class: "row-wait row-wait--none", text: lv.has_recent_data ? "No line data" : "No data" });
@@ -200,7 +202,8 @@
           { class: "bar-row__text" },
           h("span", { class: "bar-row__name", text: b.name }),
           h("span", { class: "bar-row__crowd" }, lv.crowd_level ? ui.crowd(lv.crowd_level) : h("span", { class: "faint", text: "Crowd unknown" })),
-          h("span", { class: "bar-row__basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min" })
+          h("span", { class: "bar-row__basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min" }),
+          specialLine ? h("span", { class: "bar-row__special", text: specialLine }) : null
         ),
         right
       ),
@@ -445,6 +448,80 @@
     return "Wait by hour. " + parts.join(". ");
   }
 
+  // ---------- Specials on the bar detail ----------
+  function specialItem(sp, opts) {
+    opts = opts || {};
+    var price = ui.fmtPrice(sp.price_cents);
+    var when = ui.fmtWindow(sp) + (price ? " \u00b7 " + price : "");
+    return h(
+      "li",
+      { class: "special" },
+      h(
+        "p",
+        { class: "special__kind" },
+        ui.kindLabel(sp.kind),
+        opts.showNow && sp.is_now ? h("span", { class: "tag", text: "Now" }) : null
+      ),
+      h("p", { class: "special__title", text: sp.title }),
+      sp.details ? h("p", { class: "special__details", text: sp.details }) : null,
+      h("p", { class: "special__when", text: when }),
+      h(
+        "p",
+        { class: "special__meta", text: (sp.posted_by === "admin" ? "Posted by Crowded" : "Posted by the bar") + " \u00b7 Updated " + ui.fmtAgo(sp.updated_at) }
+      )
+    );
+  }
+
+  function specialsTonight(b) {
+    var list = b.specials_tonight || [];
+    return h(
+      "section",
+      { class: "specials", "aria-labelledby": "specials-tonight-h" },
+      h("h2", { class: "section-title", id: "specials-tonight-h", text: "Tonight" }),
+      list.length
+        ? h(
+            "ul",
+            { class: "special-list" },
+            list.map(function (sp) {
+              return specialItem(sp, { showNow: true });
+            })
+          )
+        : h("p", { class: "special-empty", text: "No specials posted." })
+    );
+  }
+
+  function specialsWeek(b) {
+    var week = b.specials_week || [];
+    var groups = [];
+    for (var d = 0; d < 7; d++) {
+      var items = week.filter(function (sp) {
+        return sp.days.indexOf(d) !== -1;
+      });
+      if (items.length) {
+        groups.push(
+          h(
+            "div",
+            { class: "week__day" },
+            h("h3", { class: "week__name", text: ui.DAY_LONG[d] }),
+            h(
+              "ul",
+              { class: "special-list" },
+              items.map(function (sp) {
+                return specialItem(sp);
+              })
+            )
+          )
+        );
+      }
+    }
+    return h(
+      "details",
+      { class: "week" },
+      h("summary", { class: "week__summary", text: "This week" }),
+      groups.length ? groups : h("p", { class: "special-empty", text: "No specials posted." })
+    );
+  }
+
   function BarDetail(id) {
     var cleanups = [];
     var body = h("div", null, h("div", { class: "skeleton", "aria-hidden": "true" }), h("div", { class: "skeleton", "aria-hidden": "true" }));
@@ -568,6 +645,8 @@
         h("p", { class: "detail__addr", text: b.address }),
         hero,
         basis,
+        specialsTonight(b),
+        specialsWeek(b),
         h("h2", { class: "section-title", text: "Wait by hour" }),
         chart(b.wait_by_hour || []),
         h(

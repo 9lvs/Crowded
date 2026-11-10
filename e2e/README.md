@@ -7,6 +7,7 @@ FAKE (seeded bars, +1555 phone numbers).
 |---|---|---|
 | `tests/student.spec.ts` | real backend | 21+ gate (UI and API), Tonight with basis lines, bar detail, crowd report, line timer, settings, sign out, account deletion |
 | `tests/staff.spec.ts` | real backend | staff sign in, invite, door counter, line size, staff banner in the student app, user versus staff API separation |
+| `tests/specials.spec.ts` | real backend, plus mock | Tonight specials line, bar detail Tonight and This week, staff add and delete a special, mock mode specials with zero console errors |
 | `tests/mock.spec.ts` | any server on localhost | mock mode student and staff flows with zero console errors, mock storage isolation |
 | `tests/a11y.spec.ts` | any server on localhost | accessible names, labels, alt text, 44px targets, crowd level not color only |
 

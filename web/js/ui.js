@@ -104,7 +104,70 @@
     if (diff < 15) return "just now";
     if (diff < 60) return Math.floor(diff) + " sec ago";
     if (diff < 3600) return Math.floor(diff / 60) + " min ago";
-    return Math.floor(diff / 3600) + " hr ago";
+    if (diff < 86400) return Math.floor(diff / 3600) + " hr ago";
+    var days = Math.floor(diff / 86400);
+    return days + (days === 1 ? " day ago" : " days ago");
+  }
+
+  // ---------- Specials ----------
+  var SPECIAL_KINDS = [
+    { value: "happy_hour", label: "Happy hour" },
+    { value: "drink", label: "Drink" },
+    { value: "food", label: "Food" },
+    { value: "cover", label: "Cover" },
+    { value: "event", label: "Event" }
+  ];
+  var DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  var DAY_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  function kindLabel(kind) {
+    for (var i = 0; i < SPECIAL_KINDS.length; i++) if (SPECIAL_KINDS[i].value === kind) return SPECIAL_KINDS[i].label;
+    return "Special";
+  }
+
+  // "17:00" -> "5 PM", "21:30" -> "9:30 PM"
+  function fmtTime12(hhmm) {
+    var m = /^(\d{2}):(\d{2})$/.exec(hhmm || "");
+    if (!m) return "";
+    var hr = Number(m[1]);
+    var h12 = hr % 12 === 0 ? 12 : hr % 12;
+    return h12 + (m[2] === "00" ? "" : ":" + m[2]) + (hr < 12 ? " AM" : " PM");
+  }
+
+  function fmtWindow(s) {
+    return fmtTime12(s.start_local) + " to " + fmtTime12(s.end_local);
+  }
+
+  function coverText(s) {
+    if (s.price_cents === null || s.price_cents === undefined) return "Cover";
+    return s.price_cents === 0 ? "Free cover" : "Cover " + fmtPrice(s.price_cents);
+  }
+
+  // One quiet line for a Tonight row. Prefer something happening now, then cover, then a count.
+  // Returns null when the bar has nothing tonight.
+  function specialsLine(bar) {
+    var list = bar.specials_tonight || [];
+    if (!list.length) return null;
+    function name(s) {
+      if (s.kind === "cover") return coverText(s);
+      return s.kind === "happy_hour" ? "Happy hour" : s.title;
+    }
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i].is_now) return name(list[i]) + " now until " + fmtTime12(list[i].end_local);
+    }
+    var cover = bar.cover_tonight || null;
+    if (!cover) {
+      for (i = 0; i < list.length; i++) {
+        if (list[i].kind === "cover") {
+          cover = list[i];
+          break;
+        }
+      }
+    }
+    if (cover) return coverText(cover) + " from " + fmtTime12(cover.start_local);
+    if (list.length === 1) return list[0].title + " from " + fmtTime12(list[0].start_local);
+    return list.length + " specials tonight";
   }
 
   function fmtHour(hour) {
@@ -370,6 +433,14 @@
     fmtAgo: fmtAgo,
     fmtHour: fmtHour,
     fmtDate: fmtDate,
+    SPECIAL_KINDS: SPECIAL_KINDS,
+    DAY_SHORT: DAY_SHORT,
+    DAY_LONG: DAY_LONG,
+    kindLabel: kindLabel,
+    fmtTime12: fmtTime12,
+    fmtWindow: fmtWindow,
+    coverText: coverText,
+    specialsLine: specialsLine,
     CROWD_LABEL: CROWD_LABEL,
     LINE_SIZES: LINE_SIZES
   };

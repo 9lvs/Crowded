@@ -1565,3 +1565,227 @@ button {
     font-size: 3.25rem;
   }
 }
+
+/* ---------- Specials ---------- */
+.bar-row__special {
+  font-size: var(--text-sm);
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+.special-list {
+  border-top: 1px solid var(--border);
+}
+
+.special {
+  display: grid;
+  gap: 2px;
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.special__kind {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.special__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+  line-height: var(--leading-snug);
+}
+
+.special__details,
+.special__when {
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.special__meta {
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+
+.special-empty {
+  padding-block: var(--space-3);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.week {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.week__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--touch);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+  cursor: pointer;
+  list-style: none;
+}
+
+.week__summary::-webkit-details-marker {
+  display: none;
+}
+
+.week__summary::after {
+  content: "Show";
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+
+.week[open] > .week__summary::after {
+  content: "Hide";
+}
+
+.week__summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.week__name {
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.week__day:last-child .special:last-child {
+  border-bottom: 0;
+}
+
+/* Staff specials */
+.sp-item {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.sp-item.is-off .sp-item__title {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.sp-item__title {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+}
+
+.sp-item__sub {
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+
+.sp-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sp-item__confirm {
+  font-weight: var(--weight-bold);
+  flex-basis: 100%;
+}
+
+.sp-switch {
+  min-height: 44px;
+  min-width: 88px;
+  padding: 0 var(--space-3);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+}
+
+.sp-switch[aria-checked="true"] {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.sp-form {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.sp-form__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+}
+
+.sp-form .input {
+  min-height: 48px;
+  font-size: var(--text-md);
+}
+
+.sp-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.sp-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sp-day {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.sp-day[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+  font-weight: var(--weight-bold);
+}
+
+.sp-form__btns {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.sp-form__btns .btn {
+  flex: 1;
+}
+
+.field__hint {
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}

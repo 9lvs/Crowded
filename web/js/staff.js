@@ -139,6 +139,270 @@
     }, 50);
   }
 
+  // ---------- Specials ----------
+  var SPECIAL_ERRORS = {
+    too_many_specials: "This bar has 30 specials. Delete one first.",
+    start_equals_end: "Start and end times must differ.",
+    not_found: "That special is gone. Refresh the page.",
+    title_required: "Add a title.",
+    kind_required: "Pick a kind.",
+    days_required: "Pick at least one day.",
+    start_local_required: "Set a start time.",
+    end_local_required: "Set an end time.",
+    is_active_required: "Choose on or off.",
+    "start and end must differ": "Start and end times must differ.",
+    "days must be unique": "Pick each day once.",
+    "time must be HH:MM, 24 hour": "Use a real time, like 9:00 PM.",
+    "control characters are not allowed": "Remove special characters from the text."
+  };
+
+  function specialError(e) {
+    var d = e && e.detail;
+    if (d && SPECIAL_ERRORS[d]) return SPECIAL_ERRORS[d];
+    if (e && e.status === 403) return "This phone is not staff for that bar.";
+    if (e && e.status === 422) return d ? "Check the form. " + d : "Check the form and try again.";
+    return d || "Not saved. Try again.";
+  }
+
+  function dollarsToCents(text) {
+    var t = String(text || "").replace(/^\s*\$?\s*/, "").trim();
+    if (!t) return { cents: null };
+    if (!/^\d{1,4}(\.\d{1,2})?$/.test(t)) return { error: "Price is in dollars, like 5 or 7.50." };
+    var cents = Math.round(parseFloat(t) * 100);
+    if (cents > 100000) return { error: "Price can be at most $1000." };
+    return { cents: cents };
+  }
+
+  function centsToDollars(c) {
+    if (c === null || c === undefined) return "";
+    return c % 100 === 0 ? String(c / 100) : (c / 100).toFixed(2);
+  }
+
+  function daysText(days) {
+    if (days.length === 7) return "Every day";
+    return days
+      .map(function (d) {
+        return ui.DAY_SHORT[d];
+      })
+      .join(", ");
+  }
+
+  function specialsSection(barId) {
+    var list = [];
+    var confirmId = null;
+    var listEl = h("div", { class: "sp-list" });
+    var formWrap = h("div", null);
+    var loadErr = h("p", { class: "small form-error", role: "alert" });
+    var editingId = null;
+
+    function mutate(promise, okMsg) {
+      return promise
+        .then(function () {
+          if (okMsg) ui.toast(okMsg);
+          return reload();
+        })
+        .catch(function (e) {
+          if (e.status !== 429 && e.status !== 401) ui.toast(specialError(e));
+        });
+    }
+
+    function reload() {
+      return api
+        .staffSpecials(barId)
+        .then(function (rows) {
+          list = rows;
+          loadErr.textContent = "";
+          drawList();
+        })
+        .catch(function (e) {
+          if (e.status !== 401 && e.status !== 429) loadErr.textContent = specialError(e);
+        });
+    }
+
+    function drawList() {
+      ui.clear(listEl);
+      if (!list.length) {
+        listEl.appendChild(h("p", { class: "special-empty", text: "No specials yet. Add one below." }));
+        return;
+      }
+      var ul = h("ul", { class: "special-list" });
+      list.forEach(function (sp) {
+        var price = ui.fmtPrice(sp.price_cents);
+        var sub = ui.kindLabel(sp.kind) + " · " + daysText(sp.days) + " · " + ui.fmtWindow(sp) + (price ? " · " + price : "");
+        var actions;
+        if (confirmId === sp.id) {
+          actions = h(
+            "div",
+            { class: "sp-item__actions", role: "group", "aria-label": "Confirm delete " + sp.title },
+            h("p", { class: "sp-item__confirm", text: "Delete this special?" }),
+            h("button", { class: "btn btn--secondary", type: "button", onclick: function () { confirmId = null; drawList(); } }, "Keep it"),
+            h(
+              "button",
+              {
+                class: "btn btn--primary",
+                type: "button",
+                "aria-label": "Yes, delete " + sp.title,
+                onclick: function () {
+                  confirmId = null;
+                  if (editingId === sp.id) startForm(null);
+                  mutate(api.deleteSpecial(barId, sp.id), "Special deleted");
+                }
+              },
+              "Delete"
+            )
+          );
+        } else {
+          actions = h(
+            "div",
+            { class: "sp-item__actions" },
+            h(
+              "button",
+              {
+                class: "sp-switch",
+                type: "button",
+                role: "switch",
+                "aria-checked": String(sp.is_active),
+                "aria-label": "Active: " + sp.title,
+                onclick: function () {
+                  mutate(api.updateSpecial(barId, sp.id, { is_active: !sp.is_active }), sp.is_active ? "Special hidden" : "Special live");
+                }
+              },
+              sp.is_active ? "On" : "Off"
+            ),
+            h("button", { class: "btn btn--secondary", type: "button", "aria-label": "Edit " + sp.title, onclick: function () { startForm(sp); } }, "Edit"),
+            h("button", { class: "btn btn--outline", type: "button", "aria-label": "Delete " + sp.title, onclick: function () { confirmId = sp.id; drawList(); } }, "Delete")
+          );
+        }
+        ul.appendChild(
+          h(
+            "li",
+            { class: "sp-item" + (sp.is_active ? "" : " is-off") },
+            h("p", { class: "sp-item__title", text: sp.title }),
+            h("p", { class: "sp-item__sub", text: sub + (sp.is_active ? "" : " · Hidden from students") }),
+            actions
+          )
+        );
+      });
+      listEl.appendChild(ul);
+    }
+
+    function startForm(sp) {
+      editingId = sp ? sp.id : null;
+      ui.clear(formWrap);
+      var days = sp ? sp.days.slice() : [];
+      var kind = h("select", { class: "input", id: "sp-kind" });
+      ui.SPECIAL_KINDS.forEach(function (k) {
+        kind.appendChild(h("option", { value: k.value, text: k.label }));
+      });
+      var title = h("input", { class: "input", id: "sp-title", type: "text", maxlength: "80", autocomplete: "off", placeholder: "Half price wells" });
+      var details = h("input", { class: "input", id: "sp-details", type: "text", maxlength: "200", autocomplete: "off", placeholder: "Optional" });
+      var start = h("input", { class: "input", id: "sp-start", type: "time", value: "17:00" });
+      var end = h("input", { class: "input", id: "sp-end", type: "time", value: "20:00" });
+      var price = h("input", { class: "input", id: "sp-price", type: "text", inputmode: "decimal", autocomplete: "off", placeholder: "Optional, like 5 or 7.50" });
+      if (sp) {
+        kind.value = sp.kind;
+        title.value = sp.title;
+        details.value = sp.details || "";
+        start.value = sp.start_local;
+        end.value = sp.end_local;
+        price.value = centsToDollars(sp.price_cents);
+      }
+      var err = h("p", { class: "small form-error", role: "alert" });
+      var save = h("button", { class: "btn btn--primary", type: "submit" }, sp ? "Save changes" : "Add special");
+      var dayBtns = ui.DAY_SHORT.map(function (label, i) {
+        var b = h("button", {
+          class: "sp-day",
+          type: "button",
+          "aria-pressed": String(days.indexOf(i) !== -1),
+          "aria-label": ui.DAY_LONG[i],
+          text: label,
+          onclick: function () {
+            var at = days.indexOf(i);
+            if (at === -1) days.push(i);
+            else days.splice(at, 1);
+            b.setAttribute("aria-pressed", String(at === -1));
+          }
+        });
+        return b;
+      });
+      var form = h(
+        "form",
+        {
+          class: "sp-form",
+          novalidate: true,
+          "aria-label": sp ? "Edit special" : "Add special",
+          onsubmit: function (e) {
+            e.preventDefault();
+            err.textContent = "";
+            var t = title.value.trim();
+            if (!t) return void (err.textContent = SPECIAL_ERRORS.title_required);
+            if (!days.length) return void (err.textContent = SPECIAL_ERRORS.days_required);
+            if (!start.value || !end.value) return void (err.textContent = "Set a start and end time.");
+            if (start.value === end.value) return void (err.textContent = SPECIAL_ERRORS.start_equals_end);
+            var pr = dollarsToCents(price.value);
+            if (pr.error) return void (err.textContent = pr.error);
+            var body = {
+              kind: kind.value,
+              title: t,
+              details: details.value.trim(),
+              days: days.slice().sort(),
+              start_local: start.value,
+              end_local: end.value,
+              price_cents: pr.cents
+            };
+            save.disabled = true;
+            var p = sp ? api.updateSpecial(barId, sp.id, body) : api.addSpecial(barId, body);
+            p.then(function () {
+              ui.toast(sp ? "Special saved" : "Special added");
+              startForm(null);
+              return reload();
+            }).catch(function (e2) {
+              save.disabled = false;
+              if (e2.status !== 429 && e2.status !== 401) err.textContent = specialError(e2);
+            });
+          }
+        },
+        h("h3", { class: "sp-form__title", text: sp ? "Edit special" : "Add special" }),
+        h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-kind", text: "Kind" }), kind),
+        h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-title", text: "Title" }), title),
+        h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-details", text: "Details" }), details),
+        h("div", { class: "field" }, h("span", { class: "field__label", id: "sp-days-l", text: "Days" }), h("div", { class: "sp-days", role: "group", "aria-labelledby": "sp-days-l" }, dayBtns)),
+        h(
+          "div",
+          { class: "sp-times" },
+          h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-start", text: "Starts" }), start),
+          h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-end", text: "Ends" }), end)
+        ),
+        h("p", { class: "field__hint", text: "An end time before the start runs past midnight." }),
+        h("div", { class: "field" }, h("label", { class: "field__label", for: "sp-price", text: "Price in dollars" }), price),
+        err,
+        h(
+          "div",
+          { class: "sp-form__btns" },
+          save,
+          sp ? h("button", { class: "btn btn--secondary", type: "button", onclick: function () { startForm(null); } }, "Cancel") : null
+        )
+      );
+      formWrap.appendChild(form);
+      if (sp) {
+        formWrap.scrollIntoView({ block: "center" });
+        title.focus({ preventScroll: true });
+      }
+    }
+
+    startForm(null);
+    reload();
+    return h(
+      "section",
+      { class: "staff__section", "aria-label": "Specials" },
+      h("h2", { class: "section-title", text: "Specials" }),
+      h("p", { class: "basis", text: "Students see these on Tonight and on your bar page." }),
+      loadErr,
+      listEl,
+      formWrap
+    );
+  }
+
   function counter(barId) {
     stopTimers();
     ui.clear(root);
@@ -291,6 +555,7 @@
           ),
           waitBasis
         ),
+        specialsSection(barId),
         h("div", { class: "staff__foot" }, tally)
       )
     );
