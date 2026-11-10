@@ -24,6 +24,20 @@ All numbers below are placeholders for discussion, not research. Validate them w
 (option C). Taking a cut of cash collected at the door can't be tracked or enforced. Until
 then, use option B, a flat fee per redemption.
 
+## Three kinds of bars, three offers
+Real bar names and prices stay out of this public repo. The owner has examples of each type.
+
+| Type | What they look like | What they want | What we sell them | How we charge |
+|---|---|---|---|---|
+| **The line bar** | Packed every night, cover from early evening, waits that can pass an hour. Unhappy with the current line skip provider | Turn the line into revenue with less friction and a smaller cut | Cover and line skip sold in the app, a faster door, the free counter | A per transaction fee clearly below the incumbent's cut (percentage or a flat student booking fee). Payments needed (option C) |
+| **The fast busy bar** | Packed, but the line moves. Cover only some nights | Prove the line is short, staff the door right, plan nights | Analytics (peak times, door throughput, capacity, trends), and a public "short wait even when packed" record built from our data | Monthly subscription (option A) |
+| **The hidden gem** | Rarely packed except bar crawls, great deals few people know about, weak location or reputation | Get students through the door | Specials and happy hours shown to students, featured "Deals tonight", events and crawls | Pay per result (option B), or a small monthly listing fee |
+
+The student side benefits from all three: specials, happy hours, cover tonight and events make
+the app useful even when lines are short, and give bars a reason to keep their page current.
+Showing a bar's own posted specials is information, not an inducement, but Pennsylvania has
+specific happy hour and drink pricing rules. Have the lawyers confirm what we can display.
+
 ## Recommended path
 1. **Pilot, about 3 months: free for bars.** Pay a small stipend to door counters or ambassadors so
    the data is dense. Goal: prove accuracy, freshness and repeat student use.
