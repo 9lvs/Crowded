@@ -187,15 +187,15 @@
       if (location) body.location = location;
       return request("POST", "/v1/line-sessions", body);
     },
-    endSession: function (id, outcome, doorCode) {
+    endSession: function (id, outcome) {
       var body = { outcome: outcome };
-      if (doorCode) body.door_code = doorCode;
       return request("POST", "/v1/line-sessions/" + encodeURIComponent(id) + "/end", body);
     },
-    report: function (barId, crowdLevel, lineSize, location) {
+    report: function (barId, crowdLevel, lineSize, location, drinkWait) {
       var body = { bar_id: barId };
       if (crowdLevel) body.crowd_level = crowdLevel;
       if (lineSize) body.line_size = lineSize;
+      if (drinkWait) body.drink_wait = drinkWait;
       if (location) body.location = location;
       return request("POST", "/v1/reports", body);
     },
@@ -231,8 +231,14 @@
     countSync: function (barId, insideNow) {
       return request("POST", "/v1/staff/bars/" + encodeURIComponent(barId) + "/count-sync", { inside_now: insideNow });
     },
-    doorCode: function (barId) {
-      return request("GET", "/v1/staff/bars/" + encodeURIComponent(barId) + "/door-code");
+    inside: function (barId, body) {
+      return request("POST", "/v1/staff/bars/" + encodeURIComponent(barId) + "/inside", body);
+    },
+    updateSettings: function (barId, body) {
+      return request("PATCH", "/v1/staff/bars/" + encodeURIComponent(barId) + "/settings", body);
+    },
+    adminBars: function () {
+      return request("GET", "/v1/admin/bars");
     },
     activeSamples: function (barId) {
       return request("GET", "/v1/staff/bars/" + encodeURIComponent(barId) + "/line-samples/active");

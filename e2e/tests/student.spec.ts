@@ -56,7 +56,14 @@ test.describe.serial("student journey", () => {
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("radio", { name: "Busy" }).click();
     await sheet.getByRole("radio", { name: /Medium/ }).click();
+    // The drink wait question is optional and has the same four choices as the door staff see.
+    await expect(sheet.getByText("How long for a drink?")).toBeVisible();
+    await sheet.getByRole("radio", { name: "5 to 10", exact: true }).click();
+    const sent = page.waitForRequest((r) => r.url().endsWith("/v1/reports") && r.method() === "POST");
     await sheet.getByRole("button", { name: "Send report" }).click();
+    const body = (await sent).postDataJSON();
+    expect(body.drink_wait).toBe("5_to_10");
+    expect(body.crowd_level).toBe("busy");
     await expect(sheet.getByText("Report sent")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 5_000 });
   });
@@ -65,10 +72,9 @@ test.describe.serial("student journey", () => {
     await page.getByRole("button", { name: "I'm in line" }).click();
     await expect(page.getByText("You're in line at")).toBeVisible();
     await expect(page.getByRole("heading", { name: SEED_BARS[0] })).toBeVisible();
+    // The door code is off. I'm inside ends the timer right away.
     await page.getByRole("button", { name: "I'm inside" }).click();
-    // The door code is optional. Skip ends the timer.
-    await expect(page.getByLabel("Door code, shown by staff at the door")).toBeVisible();
-    await page.getByRole("button", { name: "Skip" }).click();
+    await expect(page.getByLabel("Door code, shown by staff at the door")).toHaveCount(0);
     // Under 30 seconds is not counted as a real wait, and the app says so.
     await expect(page.getByRole("heading", { name: "Too quick to count" })).toBeVisible();
     await page.getByRole("link", { name: "Done" }).click();

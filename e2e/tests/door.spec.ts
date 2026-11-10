@@ -1,14 +1,11 @@
-/* Door mode: tap zones, clicker keys, undo, offline queue, count sync, line checks, door code.
-   Real backend tests share one staff account and one student, all through the API. That is 3
-   sign ins, none through the UI. Line checks and timers under 30 seconds are not counted by the
-   server, so the real test starts them early and waits once. */
+/* Door mode: tap zones, clicker keys, undo, offline queue, count sync, line checks, reminders.
+   The real backend test shares one door staff account, made through the admin API. Line checks
+   under 30 seconds are not counted by the server, so the real test starts one early and waits. */
 import { APIRequestContext, expect, test } from "@playwright/test";
-import { ADMIN_PHONE, apiSignIn, ApiSession, auth, collectErrors, fakePhone, openAs, SEED_BARS, adminSignIn } from "./helpers";
+import { ApiSession, auth, adminSignIn, barIdByName, collectErrors, openAs, SEED_BARS, staffAt } from "./helpers";
 
 let staff: ApiSession;
-let student: ApiSession;
 let barId: string;
-let timerStartedAt = 0;
 
 async function headcount(request: APIRequestContext): Promise<number> {
   const r = await request.get(`/v1/staff/bars/${barId}`, { headers: auth(staff) });
@@ -18,37 +15,16 @@ async function headcount(request: APIRequestContext): Promise<number> {
 
 test.beforeAll(async ({ request }) => {
   const admin = await adminSignIn(request);
-  const bars = await request.get("/v1/admin/bars", { headers: auth(admin) });
-  const owl = (await bars.json()).find((b: { name: string }) => b.name === SEED_BARS[0]);
-  expect(owl).toBeTruthy();
-  barId = owl.id;
-  const inv = await request.post(`/v1/admin/bars/${barId}/invites`, { headers: auth(admin) });
-  expect(inv.status(), await inv.text()).toBe(201);
-  staff = await apiSignIn(request, fakePhone().e164);
-  const redeem = await request.post("/v1/staff/invites/redeem", {
-    headers: auth(staff),
-    data: { code: (await inv.json()).code },
-  });
-  expect(redeem.status(), await redeem.text()).toBe(200);
-  student = await apiSignIn(request, fakePhone().e164);
+  barId = await barIdByName(request, admin, SEED_BARS[0]);
+  staff = await staffAt(request, admin, barId, "door");
 });
 
-test("door mode: tap zones, clicker keys, undo, offline queue, count sync, line check and door code", async ({
+test("door mode: tap zones, clicker keys, undo, offline queue, count sync and line check", async ({
   page,
   request,
 }) => {
   test.setTimeout(120_000);
   const errors = collectErrors(page);
-
-  // A student timer starts now, at the bar, so it is long enough to count by the next test.
-  // Door codes only verify timers that started near the bar (security review M-2).
-  const bar = await (await request.get(`/v1/bars/${barId}`, { headers: auth(student) })).json();
-  const started = await request.post("/v1/line-sessions", {
-    headers: auth(student),
-    data: { bar_id: barId, location: { latitude: bar.latitude, longitude: bar.longitude } },
-  });
-  expect(started.status(), await started.text()).toBe(201);
-  timerStartedAt = Date.now();
 
   await openAs(page, staff, "/staff.html");
   const count = page.getByRole("region", { name: "Headcount" });
@@ -109,23 +85,6 @@ test("door mode: tap zones, clicker keys, undo, offline queue, count sync, line 
   });
   const sampleStarted = Date.now();
 
-  await test.step("the door code panel shows the 4 digit code from the API", async () => {
-    await page.getByRole("button", { name: "Code", exact: true }).click();
-    const panel = page.getByRole("region", { name: "Door code" });
-    await expect(panel).toContainText(/New code in/);
-    const shown = (await panel.locator(".code__digits").innerText()).trim();
-    expect(shown).toMatch(/^\d{4}$/);
-    const api = await request.get(`/v1/staff/bars/${barId}/door-code`, { headers: auth(staff) });
-    expect(api.status()).toBe(200);
-    const current = (await api.json()).code as string;
-    // The code can roll over between the two reads. Retry once if so.
-    if (shown !== current) {
-      const again = await request.get(`/v1/staff/bars/${barId}/door-code`, { headers: auth(staff) });
-      expect([current, (await again.json()).code]).toContain(shown);
-    }
-    await expect(panel).toContainText("Students in line enter this code when they get to the door.");
-  });
-
   await test.step("finish the line check and see the last measured wait", async () => {
     const wait = 32_000 - (Date.now() - sampleStarted);
     if (wait > 0) await page.waitForTimeout(wait);
@@ -138,31 +97,7 @@ test("door mode: tap zones, clicker keys, undo, offline queue, count sync, line 
   expect(errors.filter((e) => !/ERR_FAILED/.test(e))).toEqual([]);
 });
 
-test("a student who types the door code gets Verified at the door", async ({ page, request }) => {
-  test.setTimeout(90_000);
-  // The timer from the first test must be at least 30 seconds old to count.
-  const wait = 33_000 - (Date.now() - timerStartedAt);
-  if (wait > 0) await page.waitForTimeout(wait);
-
-  const codeRes = await request.get(`/v1/staff/bars/${barId}/door-code`, { headers: auth(staff) });
-  expect(codeRes.status(), await codeRes.text()).toBe(200);
-  const code = (await codeRes.json()).code as string;
-
-  await page.goto("/staff.html");
-  await page.evaluate((rt) => window.localStorage.setItem("crowded.rt", rt), student.refresh);
-  await page.goto("/#/timer");
-  await expect(page.getByText("You're in line at")).toBeVisible();
-  await page.getByRole("button", { name: "I'm inside" }).click();
-  const input = page.getByLabel("Door code, shown by staff at the door");
-  await expect(input).toBeVisible();
-  await expect(page.getByRole("button", { name: "Done" })).toBeDisabled();
-  await input.fill(code);
-  await page.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByText("Verified at the door")).toBeVisible();
-  await expect(page.getByText("+20 points")).toBeVisible();
-});
-
-test("door mode in mock mode: taps, keys, undo, line check, door code, reminders, no console errors", async ({ page }) => {
+test("door mode in mock mode: taps, keys, undo, line check, reminders, no console errors", async ({ page }) => {
   const errors = collectErrors(page);
   await page.clock.install();
   await page.goto("/staff.html?mock=1");
@@ -202,12 +137,12 @@ test("door mode in mock mode: taps, keys, undo, line check, door code, reminders
   await page.getByRole("group", { name: "Line check 1 running" }).getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByText(/Last line check: \d+ min, /)).toBeVisible();
 
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Door code" }).locator(".code__digits")).toHaveText(/^\d{4}$/);
-
   // Reminders show up after 15 and 20 minutes and can be dismissed.
   await page.getByRole("button", { name: "Door", exact: true }).click();
   await page.clock.runFor("16:00");
+  await expect(page.getByText("Update inside: how busy and drink wait")).toBeVisible();
+  await page.getByRole("button", { name: "Dismiss: Update inside: how busy and drink wait" }).click();
+  await expect(page.getByText("Update inside: how busy and drink wait")).toHaveCount(0);
   await expect(page.getByText("Update the line size")).toBeVisible();
   await page.getByRole("button", { name: "Dismiss: Update the line size" }).click();
   await expect(page.getByText("Update the line size")).toHaveCount(0);

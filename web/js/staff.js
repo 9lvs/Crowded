@@ -59,7 +59,7 @@
     C.auth.mount(box, {
       brandSuffix: "for staff",
       title: "Door counter",
-      pitch: "Count people in and out and set the outside line size. Students see a live estimate within seconds.",
+      pitch: "Count people in, report the line and tell us how busy it is inside. Students see a live estimate within seconds.",
       demo: api.isMock,
       footer: h(
         "p",
@@ -74,8 +74,60 @@
   function route() {
     var me = api.me;
     if (!me) return signIn();
+    if (me.role === "admin" && !me.staff_bar_id) return adminPicker();
     if (!me.staff_bar_id) return invite();
-    counter(me.staff_bar_id);
+    counter(me.staff_bar_id, { manager: me.staff_level === "manager" || me.role === "admin" });
+  }
+
+  // Admins have no bar of their own. They pick one and get the manager view for it.
+  function adminPicker() {
+    stopTimers();
+    ui.clear(root);
+    var listEl = h("ul", { class: "bar-pick" });
+    var err = h("p", { class: "small form-error", role: "alert" });
+    root.appendChild(
+      h(
+        "div",
+        { class: "welcome" },
+        h("div", { class: "staff__top" }, ui.wordmark("for staff"), signOutBtn()),
+        h(
+          "div",
+          { class: "welcome__hero" },
+          h("h1", { class: "welcome__title", text: "Pick a bar" }),
+          h("p", { class: "welcome__pitch", text: "You are an admin. Choose the bar to work on." })
+        ),
+        err,
+        listEl
+      )
+    );
+    api
+      .adminBars()
+      .then(function (bars) {
+        bars.forEach(function (b) {
+          if (!b.is_active) return;
+          listEl.appendChild(
+            h(
+              "li",
+              null,
+              h(
+                "button",
+                {
+                  class: "btn btn--secondary btn--block btn--lg",
+                  type: "button",
+                  onclick: function () {
+                    counter(b.id, { manager: true, admin: true });
+                  }
+                },
+                b.name
+              )
+            )
+          );
+        });
+        if (!listEl.children.length) err.textContent = "No bars yet.";
+      })
+      .catch(function (e) {
+        if (e.status !== 401 && e.status !== 429) err.textContent = e.detail || "Could not load bars";
+      });
   }
 
   function invite() {
@@ -550,6 +602,7 @@
   var IN_KEYS = { ArrowRight: 1, PageDown: 1, " ": 1, Enter: 1, ".": 1 };
   var OUT_KEYS = { ArrowLeft: 1, PageUp: 1, ",": 1 };
   var UNDO_MS = 30000;
+  var INSIDE_REMIND_MS = 15 * 60000;
   var LINE_REMIND_MS = 15 * 60000;
   var SAMPLE_REMIND_MS = 20 * 60000;
 
@@ -586,13 +639,15 @@
     }
   }
 
-  function counter(barId) {
+  function counter(barId, opts) {
+    opts = opts || {};
+    var manager = !!opts.manager;
     stopTimers();
     ui.clear(root);
     var QKEY = "crowded.door.queue." + barId;
     var LKEY = "crowded.door.last." + barId;
     var server = null; // last StaffState from the server
-    var local = { headcount: 0, line_size: null };
+    var local = { headcount: 0, line_size: null, crowd: null, drink: null, insideAt: 0 };
     var queue = []; // taps not yet saved: {dir, n, ts}
     var draining = false;
     var offline = false;
@@ -608,10 +663,11 @@
     var lineDismissed = 0;
     var sampleDismissed = 0;
     var lineLocalSet = 0;
+    var insideDismissed = 0;
     var showLineRemind = false;
     var showSampleRemind = false;
+    var showInsideRemind = false;
     var wake = null;
-    var code = { value: null, expiresAt: 0, loading: false, failed: false };
 
     // ----- persisted queue (backup only) -----
     var saved = readJson(QKEY);
@@ -642,6 +698,7 @@
 
     // ----- elements -----
     var barName = h("p", { class: "staff__bar", text: "Loading" });
+    var countLabel = h("p", { class: "count__label", text: "Inside now" });
     var num = h("p", { class: "count__num", "aria-live": "polite", text: "0" });
     var capText = h("p", { class: "count__cap", text: "" });
     var fill = h("div", { class: "cap__fill" });
@@ -663,8 +720,29 @@
       { class: "btn btn--outline door__undo", type: "button", "aria-label": "Undo last tap", disabled: true, onclick: undo },
       "Undo"
     );
-    var codeDigits = h("p", { class: "code__digits", text: "----" });
-    var codeLeft = h("p", { class: "code__left", text: "" });
+    var insideUpdated = h("p", { class: "updated", text: "" });
+    var seeCrowd = h("span", { class: "stat__value", text: "--" });
+    var seeDrink = h("span", { class: "stat__value", text: "--" });
+    var seeBasis = h("p", { class: "basis", text: "" });
+    var entriesOnlyNote = h("p", { class: "clicker-hint entries-note", text: "This bar counts entries only." });
+    var clickerBtn = h("button", { class: "btn btn--secondary btn--block", type: "button", onclick: clickerSheet }, "Clicker total");
+    var clickerHint = h("p", { class: "clicker-hint", text: "" });
+    var exitsSwitch = h(
+      "button",
+      {
+        class: "sp-switch",
+        type: "button",
+        role: "switch",
+        "aria-checked": "false",
+        "aria-label": "Count exits too",
+        disabled: true,
+        onclick: function () {
+          toggleExits();
+        }
+      },
+      "Off"
+    );
+    var statsBox = h("ul", { class: "stats" });
 
     var lineSeg = ui.segmented({
       label: "Outside line size",
@@ -680,6 +758,68 @@
         sendLine(v);
       }
     });
+
+    var crowdSeg = ui.segmented({
+      label: "How busy inside",
+      options: [
+        { value: "easy", label: "Easy" },
+        { value: "busy", label: "Busy" },
+        { value: "packed", label: "Packed" }
+      ],
+      onChange: function (v) {
+        if (v) sendInside({ crowd_level: v });
+      }
+    });
+    var drinkSeg = ui.segmented({
+      label: "How long for a drink",
+      wrap: true,
+      cols: 2,
+      options: ui.DRINK_WAITS,
+      onChange: function (v) {
+        if (v) sendInside({ drink_wait: v });
+      }
+    });
+
+    function sendInside(body) {
+      ui.haptic();
+      if (body.crowd_level) local.crowd = body.crowd_level;
+      if (body.drink_wait) local.drink = body.drink_wait;
+      local.insideAt = Date.now();
+      showInsideRemind = false;
+      drawReminders();
+      api
+        .inside(barId, body)
+        .then(function (st) {
+          reconcile(st);
+          ui.toast(body.crowd_level ? "Inside set to " + ui.CROWD_LABEL[body.crowd_level].toLowerCase() : "Drink wait saved");
+        })
+        .catch(function (e) {
+          if (!quietError(e)) ui.toast(e.status === 0 ? "You're offline. Not saved." : e.detail || "Not saved. Try again.");
+          load();
+        });
+    }
+
+    function toggleExits() {
+      if (!server) return;
+      var next = !(server.counts_exits !== false);
+      exitsSwitch.disabled = true;
+      api
+        .updateSettings(barId, { counts_exits: next })
+        .then(function (st) {
+          reconcile(st);
+          ui.toast(next ? "Exits are counted" : "Entries only");
+        })
+        .catch(function (e) {
+          if (!quietError(e)) ui.toast(e.status === 403 ? "Only managers can change this." : e.detail || "Not saved. Try again.");
+        })
+        .then(function () {
+          exitsSwitch.disabled = !server;
+        });
+    }
+
+    function countsExits() {
+      return !server || server.counts_exits !== false;
+    }
 
     function labelFor(v) {
       for (var i = 0; i < ui.LINE_SIZES.length; i++) if (ui.LINE_SIZES[i].value === v) return ui.LINE_SIZES[i].label.toLowerCase();
@@ -706,7 +846,19 @@
     // ----- painting -----
     function paint() {
       var cap = server ? server.capacity : 0;
+      var exits = countsExits();
       num.textContent = String(local.headcount);
+      countLabel.textContent = exits ? "Inside now" : "Entries tonight";
+      countSection.setAttribute("aria-label", exits ? "Headcount" : "Entries tonight");
+      capText.hidden = !exits;
+      capBar.hidden = !exits;
+      outZone.hidden = !exits;
+      entriesOnlyNote.hidden = exits;
+      clickerBtn.hidden = !exits;
+      tally.hidden = !exits;
+      clickerHint.textContent = exits
+        ? "Clicker ready. Right arrow or Page Down is In. Left arrow or Page Up is Out."
+        : "Clicker ready. Right arrow or Page Down is In.";
       var ratio = cap ? local.headcount / cap : 0;
       var level = ratio < 0.6 ? "easy" : ratio < 0.9 ? "busy" : "packed";
       capText.textContent = cap ? "of " + cap + " capacity · " + Math.round(ratio * 100) + "%" : "";
@@ -714,7 +866,14 @@
       fill.style.setProperty("width", Math.min(100, Math.round(ratio * 100)) + "%");
       capBar.setAttribute("aria-label", local.headcount + " of " + cap + " capacity, " + ui.CROWD_LABEL[level]);
       lineSeg.set(local.line_size);
+      crowdSeg.set(local.crowd);
+      drinkSeg.set(local.drink);
+      exitsSwitch.disabled = !server;
+      exitsSwitch.setAttribute("aria-checked", String(exits));
+      exitsSwitch.textContent = exits ? "On" : "Off";
       if (server) {
+        paintInside();
+        if (manager) paintStats();
         barName.textContent = server.bar_name;
         updated.textContent = "Line updated " + ui.fmtAgo(server.line_updated_at);
         var lv = server.live;
@@ -724,6 +883,7 @@
         timersVal.textContent = String(lv.basis.timers);
         waitBasis.textContent = lv.basis.text;
         tally.textContent = server.entries_tonight + " in · " + server.exits_tonight + " out tonight";
+        insideUpdated.textContent = insideAgoText();
       }
       if (queue.length && offline) {
         offlineNote.textContent = "Saving when back online (" + queue.length + ")";
@@ -734,11 +894,53 @@
       }
     }
 
+    // Count in only bars show entries tonight. An Undo there is saved as one Out, so entries
+    // minus exits is what the door counted. For a bar that counts exits it is the headcount.
+    function doorTotal(st) {
+      return st.counts_exits === false ? st.entries_tonight - st.exits_tonight : st.headcount;
+    }
+
     function reconcile(st) {
       server = st;
-      local.headcount = Math.max(0, st.headcount + queuedNet());
+      local.headcount = Math.max(0, doorTotal(st) + queuedNet());
       local.line_size = st.line_size;
+      if (st.inside) {
+        // The latest row may hold only one of the two answers. Keep the other one we know.
+        if (st.inside.crowd_level) local.crowd = st.inside.crowd_level;
+        if (st.inside.drink_wait) local.drink = st.inside.drink_wait;
+      }
       paint();
+    }
+
+    function insideAt() {
+      var t = server && server.inside ? new Date(server.inside.updated_at).getTime() : 0;
+      return Math.max(t, local.insideAt);
+    }
+
+    function insideAgoText() {
+      var t = insideAt();
+      return t ? "Updated " + ui.fmtAgo(new Date(t).toISOString()) : "Nothing reported inside yet tonight.";
+    }
+
+    function paintInside() {
+      var lv = server.live;
+      seeCrowd.textContent = lv.crowd_level ? ui.CROWD_LABEL[lv.crowd_level] : "Unknown";
+      seeDrink.textContent = lv.drink_wait_label || "No recent data";
+      seeBasis.textContent = lv.basis.text;
+    }
+
+    function paintStats() {
+      ui.clear(statsBox);
+      function row(label, value) {
+        statsBox.appendChild(h("li", { class: "stat" }, h("span", { class: "stat__label", text: label }), h("span", { class: "stat__value", text: value })));
+      }
+      row("Entries tonight", String(server.entries_tonight));
+      if (countsExits()) row("Exits tonight", String(server.exits_tonight));
+      var parts = [];
+      if (server.inside && server.inside.crowd_level) parts.push(ui.CROWD_LABEL[server.inside.crowd_level]);
+      if (server.inside && server.inside.drink_wait) parts.push("drinks " + ui.DRINK_LABEL[server.inside.drink_wait]);
+      row("Latest inside report", server.inside ? (parts.join(", ") || "Updated") + ", " + ui.fmtAgo(server.inside.updated_at) : "None yet");
+      row("Line checks", lastCheck ? Math.round(lastCheck.min) + " min, " + ui.fmtAgo(lastCheck.at) : "None yet");
     }
 
     // ----- door taps and the offline queue -----
@@ -802,6 +1004,7 @@
     }
 
     function tap(dir, n, btn) {
+      if (dir === "out" && !countsExits()) return;
       if (dir === "out" && local.headcount < 1) {
         ui.toast("The count is already 0.");
         return;
@@ -828,6 +1031,7 @@
       if (!lastTap || Date.now() - lastTap.ts > UNDO_MS) return;
       var t = lastTap;
       var dir = t.dir === "in" ? "out" : "in";
+      if (dir === "out" && !countsExits() && local.headcount < t.n) return;
       lastTap = null;
       clearTimeout(undoTimer);
       undoBtn.disabled = true;
@@ -913,7 +1117,6 @@
         wantWake();
         load();
         drain();
-        if (tab === "code") refreshCode(true);
       }
     }
     document.addEventListener("visibilitychange", onVisible);
@@ -1145,7 +1348,7 @@
     // ----- reminders -----
     function drawReminders() {
       ui.clear(remindBox);
-      function banner(text, actionLabel, dismiss) {
+      function banner(text, actionLabel, target, dismiss) {
         remindBox.appendChild(
           h(
             "div",
@@ -1157,7 +1360,7 @@
                 class: "btn btn--secondary reminder__btn",
                 type: "button",
                 onclick: function () {
-                  show("line");
+                  show(target);
                 }
               },
               actionLabel
@@ -1166,15 +1369,22 @@
           )
         );
       }
+      if (showInsideRemind) {
+        banner("Update inside: how busy and drink wait", "Update", "inside", function () {
+          showInsideRemind = false;
+          insideDismissed = Date.now();
+          drawReminders();
+        });
+      }
       if (showLineRemind) {
-        banner("Update the line size", "Update", function () {
+        banner("Update the line size", "Update", "line", function () {
           showLineRemind = false;
           lineDismissed = Date.now();
           drawReminders();
         });
       }
       if (showSampleRemind) {
-        banner("Time the line", "Start", function () {
+        banner("Time the line", "Start", "line", function () {
           showSampleRemind = false;
           sampleDismissed = Date.now();
           drawReminders();
@@ -1186,6 +1396,11 @@
       var now = Date.now();
       var lineAt = server && server.line_updated_at ? new Date(server.line_updated_at).getTime() : 0;
       var changed = false;
+      if (!showInsideRemind && now - Math.max(insideAt(), insideDismissed, opened) >= INSIDE_REMIND_MS) {
+        showInsideRemind = true;
+        insideDismissed = now;
+        changed = true;
+      }
       if (!showLineRemind && now - Math.max(lineAt, lineLocalSet, lineDismissed, opened) >= LINE_REMIND_MS) {
         showLineRemind = true;
         lineDismissed = now;
@@ -1203,43 +1418,10 @@
       }
     }
 
-    // ----- door code -----
-    function paintCode() {
-      if (code.value) {
-        codeDigits.textContent = code.value;
-        var left = Math.max(0, Math.ceil((code.expiresAt - Date.now()) / 1000));
-        codeLeft.textContent = "New code in " + ui.fmtClock(left);
-      } else {
-        codeDigits.textContent = "----";
-        codeLeft.textContent = code.failed ? "Could not load the code. Trying again." : "Loading";
-      }
-    }
-
-    function refreshCode(force) {
-      if (code.loading) return;
-      if (!force && code.value && Date.now() < code.expiresAt - 500) return;
-      code.loading = true;
-      api
-        .doorCode(barId)
-        .then(function (r) {
-          code.value = r.code;
-          code.expiresAt = Date.now() + r.expires_in * 1000;
-          code.failed = false;
-        })
-        .catch(function () {
-          code.failed = true;
-          code.expiresAt = Date.now() + 5000;
-        })
-        .then(function () {
-          code.loading = false;
-          paintCode();
-        });
-    }
-
     // ----- layout -----
     var outZone = h(
       "button",
-      { class: "zone zone--out", type: "button", "aria-label": "One person out", onclick: zoneClick("out", 1) },
+      { class: "btn btn--secondary btn--block door__out", type: "button", "aria-label": "One person out", onclick: zoneClick("out", 1) },
       ui.icon("minus"),
       h("span", { text: "OUT" })
     );
@@ -1253,14 +1435,16 @@
       return h("button", { class: "btn btn--secondary door__group", type: "button", "aria-label": word + " people in", onclick: zoneClick("in", n) }, "+" + n);
     }
 
+    var countSection = h("section", { class: "count", "aria-label": "Headcount" }, countLabel, num, capText, capBar);
+
     var doorView = h(
       "div",
       { class: "view view--door" },
-      h("section", { class: "count", "aria-label": "Headcount" }, h("p", { class: "count__label", text: "Inside now" }), num, capText, capBar),
-      h("div", { class: "zones" }, outZone, inZone),
+      countSection,
+      h("div", { class: "zones" }, inZone),
       h("div", { class: "door__row" }, groupBtn(2, "Two"), groupBtn(3, "Three"), groupBtn(4, "Four"), undoBtn),
-      h("div", { class: "door__tools" }, h("button", { class: "btn btn--secondary btn--block", type: "button", onclick: clickerSheet }, "Clicker total")),
-      h("p", { class: "clicker-hint", text: "Clicker ready. Right arrow or Page Down is In. Left arrow or Page Up is Out." }),
+      h("div", { class: "door__tools" }, outZone, entriesOnlyNote, clickerBtn),
+      clickerHint,
       h("div", { class: "staff__foot" }, tally)
     );
 
@@ -1292,22 +1476,45 @@
       )
     );
 
-    var codeView = h(
+    var insideView = h(
       "div",
-      { class: "view view--code", hidden: true },
+      { class: "view view--inside", hidden: true },
+      h("section", { class: "staff__section", "aria-label": "How busy inside" }, h("h2", { class: "section-title", text: "How busy inside?" }), crowdSeg.el),
+      h("section", { class: "staff__section", "aria-label": "How long for a drink" }, h("h2", { class: "section-title", text: "How long for a drink?" }), drinkSeg.el, insideUpdated),
       h(
         "section",
-        { class: "code", "aria-label": "Door code" },
-        h("h2", { class: "section-title", text: "Door code" }),
-        codeDigits,
-        codeLeft,
-        h("p", { class: "code__note", text: "Students in line enter this code when they get to the door. It proves their wait." })
+        { class: "staff__section", "aria-label": "What students see inside" },
+        h("h2", { class: "section-title", text: "What students see" }),
+        h(
+          "ul",
+          { class: "stats" },
+          h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Crowd" }), seeCrowd),
+          h("li", { class: "stat" }, h("span", { class: "stat__label", text: "Drinks" }), seeDrink)
+        ),
+        seeBasis
       )
     );
 
-    var specialsView = h("div", { class: "view view--specials", hidden: true }, specialsSection(barId));
-
-    var views = { door: doorView, line: lineView, code: codeView, specials: specialsView };
+    var views = { door: doorView, line: lineView, inside: insideView };
+    if (manager) {
+      views.manage = h(
+        "div",
+        { class: "view view--manage", hidden: true },
+        h(
+          "section",
+          { class: "staff__section", "aria-label": "Settings" },
+          h("h2", { class: "section-title", text: "Settings" }),
+          h(
+            "div",
+            { class: "setting-row" },
+            h("div", null, h("p", { class: "setting-row__title", text: "Count exits too" }), h("p", { class: "field__hint", text: "Off means the door counts entries only." })),
+            exitsSwitch
+          )
+        ),
+        h("section", { class: "staff__section", "aria-label": "Tonight so far" }, h("h2", { class: "section-title", text: "Tonight so far" }), statsBox),
+        specialsSection(barId)
+      );
+    }
     var tabBtns = {};
     function tabButton(name, label, iconName) {
       var b = h(
@@ -1337,12 +1544,18 @@
       });
       if (name === "door") wantWake();
       else dropWake();
-      if (name === "code") {
-        paintCode();
-        refreshCode(false);
-      }
       window.scrollTo(0, 0);
     }
+
+    var roleText = opts.admin ? "Admin" : manager ? "Manager" : "Door counter";
+    var tabInner = h(
+      "div",
+      { class: "tabbar__inner " + (manager ? "tabbar__inner--4" : "tabbar__inner--3") },
+      tabButton("door", "Door", "plus"),
+      tabButton("line", "Line", "list"),
+      tabButton("inside", "Inside", "check")
+    );
+    if (manager) tabInner.appendChild(tabButton("manage", "Manage", "gear"));
 
     root.appendChild(
       h(
@@ -1351,7 +1564,7 @@
         h(
           "div",
           { class: "staff__top" },
-          h("div", null, h("p", { class: "staff__role", text: "Door counter" + (api.isMock ? " · Demo" : "") }), barName),
+          h("div", null, h("p", { class: "staff__role", text: roleText + (api.isMock ? " · Demo" : "") }), barName),
           signOutBtn()
         ),
         offlineNote,
@@ -1359,24 +1572,11 @@
         chipBox,
         doorView,
         lineView,
-        codeView,
-        specialsView
+        insideView,
+        manager ? views.manage : null
       )
     );
-    root.appendChild(
-      h(
-        "nav",
-        { class: "tabbar", "aria-label": "Staff sections" },
-        h(
-          "div",
-          { class: "tabbar__inner tabbar__inner--4" },
-          tabButton("door", "Door", "plus"),
-          tabButton("line", "Line", "list"),
-          tabButton("code", "Code", "shield"),
-          tabButton("specials", "Specials", "gear")
-        )
-      )
-    );
+    root.appendChild(h("nav", { class: "tabbar", "aria-label": "Staff sections" }, tabInner));
 
     lastCheckEl.textContent = lastCheckText();
     if (queue.length) local.headcount = Math.max(0, queuedNet());
@@ -1396,10 +1596,7 @@
       tickChips();
       lastCheckEl.textContent = lastCheckText();
       if (server) updated.textContent = "Line updated " + ui.fmtAgo(server.line_updated_at);
-      if (tab === "code") {
-        paintCode();
-        if (Date.now() >= code.expiresAt) refreshCode(true);
-      }
+      if (server) insideUpdated.textContent = insideAgoText();
       reminderTick += 1;
       if (reminderTick % 15 === 0) checkReminders();
     }, 1000);
