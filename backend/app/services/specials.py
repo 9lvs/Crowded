@@ -55,6 +55,23 @@ def is_now(days: list[int], start_local: str, end_local: str, local_now: datetim
     return False
 
 
+EARLY_MORNING_HOUR = 6  # a window starting before 6 AM belongs to the night before
+
+
+def has_ended_tonight(start_local: str, end_local: str, local_now: datetime) -> bool:
+    """True once tonight's window for this special is over (it stays in the weekly schedule)."""
+    night_date = local_now.date()
+    if local_now.hour < NIGHT_START_HOUR:
+        night_date -= timedelta(days=1)
+    start_t, end_t = parse_hhmm(start_local), parse_hhmm(end_local)
+    begin_day = night_date + timedelta(days=1 if start_t.hour < EARLY_MORNING_HOUR else 0)
+    begin = datetime.combine(begin_day, start_t, tzinfo=local_now.tzinfo)
+    end = datetime.combine(begin_day, end_t, tzinfo=local_now.tzinfo)
+    if end <= begin:
+        end += timedelta(days=1)
+    return local_now >= end
+
+
 def to_out(s: BarSpecial) -> SpecialOut:
     return SpecialOut(
         id=s.id,
@@ -92,12 +109,10 @@ def tonight(
     for s in list_for_bar(db, bar.id, active_only=True):
         if not belongs_tonight(s.days, local_now):
             continue
-        items.append(
-            SpecialTonight(
-                **to_out(s).model_dump(),
-                is_now=is_now(s.days, s.start_local, s.end_local, local_now),
-            )
-        )
+        now_flag = is_now(s.days, s.start_local, s.end_local, local_now)
+        if not now_flag and has_ended_tonight(s.start_local, s.end_local, local_now):
+            continue  # already over tonight, still listed in the weekly schedule
+        items.append(SpecialTonight(**to_out(s).model_dump(), is_now=now_flag))
     items.sort(key=lambda s: (not s.is_now, s.start_local))
     cover = min(
         (s for s in items if s.kind == SpecialKind.cover),

@@ -257,3 +257,20 @@ def test_patch_null_price_clears_it(client: TestClient, admin: Auth, bar: Bar) -
     r = client.patch(f"{base}/{sp['id']}", json={"price_cents": None}, headers=admin.h)
     assert r.status_code == 200
     assert r.json()["price_cents"] is None
+
+
+def test_has_ended_tonight() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.services.specials import has_ended_tonight
+
+    ny = ZoneInfo("America/New_York")
+    late = datetime(2026, 11, 13, 23, 0, tzinfo=ny)  # Friday 11 PM
+    assert has_ended_tonight("17:00", "20:00", late)  # happy hour is over
+    assert not has_ended_tonight("21:00", "02:00", late)  # cover still running
+    assert not has_ended_tonight("23:30", "23:59", late)  # later tonight
+    after_midnight = datetime(2026, 11, 14, 1, 0, tzinfo=ny)  # still Friday night
+    assert not has_ended_tonight("00:30", "02:00", after_midnight)
+    assert has_ended_tonight("21:00", "00:30", after_midnight)
+    assert has_ended_tonight("11:00", "14:00", late)  # lunch earlier that day
