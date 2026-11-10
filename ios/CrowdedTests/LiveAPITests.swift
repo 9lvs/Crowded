@@ -86,7 +86,11 @@ final class LiveAPITests: XCTestCase {
         XCTAssertEqual(happy.items[3].category, .other)
         XCTAssertFalse(bars[0].specialsTonight[1].special.allDay)
         XCTAssertTrue(bars[0].specialsTonight[1].special.items.isEmpty)
+    }
 
+    // Separate test: StubURLProtocol keeps the first stub registered for a path in a test.
+    func testAllNightSpecialDecodesAndBuildsTonightLine() async throws {
+        try await signIn()
         StubURLProtocol.stub("GET", "/v1/bars", json: Fixtures.barsAllNight)
         let nightBars = try await api.bars()
         let night = nightBars[0].specialsTonight[0].special
