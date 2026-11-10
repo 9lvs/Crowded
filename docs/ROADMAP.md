@@ -39,7 +39,9 @@
 - [x] Team briefing deck, business model options (docs/BUSINESS.md)
 - [x] Door mode for staff (tap zones, clicker keys, undo, offline queue, count sync), staff line
       checks, rotating door code that verifies student timers (web and iOS, green CI)
-- [ ] Deals: owner picks a layout from the mockup, then structured deal items
+- [x] Deals: deal line on Tonight (A), price list menu on the bar page (C), structured items,
+      all night specials, staff menu editor (web and iOS)
+- [x] Phase 1.5 security review: H-1 race and all Mediums fixed (docs/security-review-phase1_5.md)
 
 ## Phase 2: hardening and deploy readiness
 - [ ] Close Phase 1 review findings
