@@ -274,3 +274,147 @@ def test_has_ended_tonight() -> None:
     assert not has_ended_tonight("00:30", "02:00", after_midnight)
     assert has_ended_tonight("21:00", "00:30", after_midnight)
     assert has_ended_tonight("11:00", "14:00", late)  # lunch earlier that day
+
+
+# ---------- deal items and all night specials ----------
+
+
+def item(**kw: Any) -> dict[str, Any]:
+    d: dict[str, Any] = {"name": "FAKE Lager drafts", "price_label": "$3", "category": "beer"}
+    d.update(kw)
+    return d
+
+
+def test_create_with_items_and_all_day(client: TestClient, admin: Auth, bar: Bar) -> None:
+    base = f"/v1/admin/bars/{bar.id}/specials"
+    wings = item(name="  FAKE Wings ", price_label="50¢", category="food", note="Dine in only")
+    r = client.post(
+        base,
+        json={
+            "kind": "drink",
+            "title": "FAKE All Night",
+            "days": ALL_DAYS,
+            "all_day": True,
+            "start_local": "09:00",
+            "end_local": "10:00",
+            "items": [item(), wings],
+        },
+        headers=admin.h,
+    )
+    assert r.status_code == 201, r.text
+    s = r.json()
+    assert s["all_day"] is True
+    assert (s["start_local"], s["end_local"]) == ("12:00", "04:00")
+    assert s["items"][0] == {
+        "name": "FAKE Lager drafts",
+        "price_label": "$3",
+        "category": "beer",
+        "note": "",
+    }
+    assert s["items"][1]["name"] == "FAKE Wings"
+    assert s["items"][1]["note"] == "Dine in only"
+    assert client.get(base, headers=admin.h).json()[0]["items"] == s["items"]
+
+
+def test_defaults_have_no_items(client: TestClient, admin: Auth, bar: Bar) -> None:
+    r = client.post(f"/v1/admin/bars/{bar.id}/specials", json=body(), headers=admin.h)
+    assert r.json()["items"] == []
+    assert r.json()["all_day"] is False
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"items": [item() for _ in range(21)]},
+        {"items": [item(category="bogus")]},
+        {"items": [item(name="x" * 61)]},
+        {"items": [item(name="  ")]},
+        {"items": [item(price_label="y" * 21)]},
+        {"items": [item(note="n" * 41)]},
+        {"items": [item(name="bad\x07name")]},
+        {"items": [item(extra=1)]},
+        {"start_local": None},
+        {"end_local": None},
+    ],
+)
+def test_item_validation(client: TestClient, admin: Auth, bar: Bar, bad: dict[str, Any]) -> None:
+    r = client.post(f"/v1/admin/bars/{bar.id}/specials", json=body(**bad), headers=admin.h)
+    assert r.status_code == 422, (bad, r.text)
+
+
+def test_twenty_items_ok(client: TestClient, admin: Auth, bar: Bar) -> None:
+    r = client.post(
+        f"/v1/admin/bars/{bar.id}/specials",
+        json=body(items=[item() for _ in range(20)]),
+        headers=admin.h,
+    )
+    assert r.status_code == 201
+
+
+def test_missing_times_error_code(client: TestClient, admin: Auth, bar: Bar) -> None:
+    b = body()
+    del b["start_local"]
+    del b["end_local"]
+    url = f"/v1/admin/bars/{bar.id}/specials"
+    r = client.post(url, json=b, headers=admin.h)
+    assert r.status_code == 422
+    assert "times_required" in r.text
+    b["all_day"] = True
+    assert client.post(url, json=b, headers=admin.h).status_code == 201
+
+
+def test_update_items_replaces_and_all_day(client: TestClient, admin: Auth, bar: Bar) -> None:
+    base = f"/v1/admin/bars/{bar.id}/specials"
+    s = client.post(base, json=body(items=[item(), item(name="FAKE B")]), headers=admin.h).json()
+    url = f"{base}/{s['id']}"
+    r = client.patch(url, json={"items": [item(name="FAKE Only")]}, headers=admin.h)
+    assert [i["name"] for i in r.json()["items"]] == ["FAKE Only"]
+    assert client.patch(url, json={"items": []}, headers=admin.h).json()["items"] == []
+    assert client.patch(url, json={"items": None}, headers=admin.h).status_code == 422
+    bad = client.patch(url, json={"items": [item(category="x")]}, headers=admin.h)
+    assert bad.status_code == 422
+    r = client.patch(url, json={"all_day": True, "start_local": "10:00"}, headers=admin.h)
+    assert (r.json()["start_local"], r.json()["end_local"]) == ("12:00", "04:00")
+    assert client.patch(url, json={"all_day": False}, headers=admin.h).status_code == 422
+    r = client.patch(
+        url, json={"all_day": False, "start_local": "17:00", "end_local": "20:00"}, headers=admin.h
+    )
+    assert r.status_code == 200
+    assert r.json()["all_day"] is False
+    assert r.json()["start_local"] == "17:00"
+
+
+def test_all_day_now_and_items_in_summary(
+    client: TestClient, admin: Auth, user: Auth, bar: Bar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC
+
+    from app.services import live
+
+    # Thursday 2026-11-12 at 22:00 New York.
+    monkeypatch.setattr(live, "utcnow", lambda: datetime(2026, 11, 13, 3, 0, tzinfo=UTC))
+    base = f"/v1/admin/bars/{bar.id}/specials"
+    sp = client.post(
+        base,
+        json={
+            "kind": "drink",
+            "title": "FAKE All Night",
+            "days": ALL_DAYS,
+            "all_day": True,
+            "items": [item()],
+        },
+        headers=admin.h,
+    ).json()
+    mine = next(b for b in client.get("/v1/bars", headers=user.h).json() if b["id"] == str(bar.id))
+    t = mine["specials_tonight"]
+    assert [x["id"] for x in t] == [sp["id"]]
+    assert t[0]["is_now"] is True
+    assert t[0]["all_day"] is True
+    assert t[0]["items"][0]["price_label"] == "$3"
+    d = client.get(f"/v1/bars/{bar.id}", headers=user.h).json()
+    assert d["specials_week"][0]["items"][0]["name"] == "FAKE Lager drafts"
+    assert d["specials_tonight"][0]["items"] == t[0]["items"]
+    # Still on at 01:00 the next morning, over after 04:00.
+    assert svc.is_now(ALL_DAYS, "12:00", "04:00", local(2026, 11, 13, 1))
+    assert not svc.is_now([3], "12:00", "04:00", local(2026, 11, 13, 5))
+    assert not svc.has_ended_tonight("12:00", "04:00", local(2026, 11, 13, 1))

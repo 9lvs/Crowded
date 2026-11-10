@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models import (
     CrowdLevel,
+    DealCategory,
     DistanceBucket,
     DoorDirection,
     LineSize,
@@ -137,14 +138,40 @@ def _clean_text(v: str) -> str:
     return v
 
 
+MAX_DEAL_ITEMS = 20
+ALL_DAY_START = "12:00"
+ALL_DAY_END = "04:00"
+
+
+class DealItem(Strict):
+    name: Annotated[str, Field(min_length=1, max_length=60)]
+    price_label: Annotated[str, Field(min_length=1, max_length=20)]
+    category: DealCategory
+    note: Annotated[str, Field(max_length=40)] = ""
+
+    @field_validator("name", "price_label", "note")
+    @classmethod
+    def _text(cls, v: str) -> str:
+        return _clean_text(v)
+
+
+class DealItemOut(DealItem):
+    pass
+
+
+DealItems = Annotated[list[DealItem], Field(max_length=MAX_DEAL_ITEMS)]
+
+
 class SpecialIn(Strict):
     kind: SpecialKind
     title: Annotated[str, Field(min_length=1, max_length=80)]
     details: Annotated[str, Field(max_length=200)] = ""
     days: Annotated[list[Annotated[int, Field(ge=0, le=6)]], Field(min_length=1, max_length=7)]
-    start_local: str
-    end_local: str
+    start_local: str | None = None
+    end_local: str | None = None
     price_cents: Annotated[int, Field(ge=0, le=100000)] | None = None
+    all_day: bool = False
+    items: DealItems = Field(default_factory=list)
 
     @field_validator("title", "details")
     @classmethod
@@ -160,14 +187,19 @@ class SpecialIn(Strict):
 
     @field_validator("start_local", "end_local")
     @classmethod
-    def _hhmm(cls, v: str) -> str:
-        if not TIME_HHMM.match(v):
+    def _hhmm(cls, v: str | None) -> str | None:
+        if v is not None and not TIME_HHMM.match(v):
             raise ValueError("time must be HH:MM, 24 hour")
         return v
 
     @model_validator(mode="after")
-    def _distinct(self) -> SpecialIn:
-        if self.start_local == self.end_local:
+    def _times(self) -> SpecialIn:
+        if self.all_day:
+            self.start_local = ALL_DAY_START
+            self.end_local = ALL_DAY_END
+        elif self.start_local is None or self.end_local is None:
+            raise ValueError("times_required")
+        elif self.start_local == self.end_local:
             raise ValueError("start and end must differ")
         return self
 
@@ -183,6 +215,8 @@ class SpecialUpdate(Strict):
     end_local: str | None = None
     price_cents: Annotated[int, Field(ge=0, le=100000)] | None = None
     is_active: bool | None = None
+    all_day: bool | None = None
+    items: DealItems | None = None
 
     @field_validator("title", "details")
     @classmethod
@@ -215,6 +249,8 @@ class SpecialOut(Strict):
     start_local: str
     end_local: str
     price_cents: int | None
+    all_day: bool
+    items: list[DealItemOut]
     is_active: bool
     posted_by: Literal["staff", "admin"]
     updated_at: datetime

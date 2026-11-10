@@ -424,6 +424,74 @@
         "title": "CrowdLevel",
         "type": "string"
       },
+      "DealCategory": {
+        "title": "DealCategory",
+        "type": "string"
+      },
+      "DealItem": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/DealCategory"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Note",
+            "type": "string"
+          },
+          "price_label": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Price Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "price_label",
+          "category"
+        ],
+        "title": "DealItem",
+        "type": "object"
+      },
+      "DealItemOut": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/DealCategory"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Note",
+            "type": "string"
+          },
+          "price_label": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Price Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "price_label",
+          "category"
+        ],
+        "title": "DealItemOut",
+        "type": "object"
+      },
       "DistanceBucket": {
         "title": "DistanceBucket",
         "type": "string"
@@ -1021,6 +1089,11 @@
       },
       "SpecialIn": {
         "properties": {
+          "all_day": {
+            "default": false,
+            "title": "All Day",
+            "type": "boolean"
+          },
           "days": {
             "items": {
               "type": "integer"
@@ -1039,6 +1112,14 @@
           "end_local": {
             "title": "End Local",
             "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealItem"
+            },
+            "maxItems": 20,
+            "title": "Items",
+            "type": "array"
           },
           "kind": {
             "$ref": "#/components/schemas/SpecialKind"
@@ -1061,9 +1142,7 @@
         "required": [
           "kind",
           "title",
-          "days",
-          "start_local",
-          "end_local"
+          "days"
         ],
         "title": "SpecialIn",
         "type": "object"
@@ -1074,6 +1153,10 @@
       },
       "SpecialOut": {
         "properties": {
+          "all_day": {
+            "title": "All Day",
+            "type": "boolean"
+          },
           "days": {
             "items": {
               "type": "integer"
@@ -1096,6 +1179,13 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealItemOut"
+            },
+            "title": "Items",
+            "type": "array"
           },
           "kind": {
             "$ref": "#/components/schemas/SpecialKind"
@@ -1129,6 +1219,8 @@
           "days",
           "start_local",
           "end_local",
+          "all_day",
+          "items",
           "is_active",
           "posted_by",
           "updated_at"
@@ -1138,6 +1230,10 @@
       },
       "SpecialTonight": {
         "properties": {
+          "all_day": {
+            "title": "All Day",
+            "type": "boolean"
+          },
           "days": {
             "items": {
               "type": "integer"
@@ -1165,6 +1261,13 @@
             "title": "Is Now",
             "type": "boolean"
           },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
           "kind": {
             "$ref": "#/components/schemas/SpecialKind"
           },
@@ -1197,6 +1300,8 @@
           "days",
           "start_local",
           "end_local",
+          "all_day",
+          "items",
           "is_active",
           "posted_by",
           "updated_at",
@@ -1207,6 +1312,10 @@
       },
       "SpecialUpdate": {
         "properties": {
+          "all_day": {
+            "title": "All Day",
+            "type": "boolean"
+          },
           "days": {
             "items": {
               "type": "integer"
@@ -1228,6 +1337,14 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealItem"
+            },
+            "maxItems": 20,
+            "title": "Items",
+            "type": "array"
           },
           "kind": {
             "$ref": "#/components/schemas/SpecialKind"

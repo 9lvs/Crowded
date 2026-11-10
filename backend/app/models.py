@@ -18,7 +18,9 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    text,
 )
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -92,6 +94,16 @@ class SpecialKind(enum.StrEnum):
     food = "food"
     cover = "cover"
     event = "event"
+
+
+class DealCategory(enum.StrEnum):
+    beer = "beer"
+    pitchers = "pitchers"
+    shots = "shots"
+    mixers = "mixers"
+    wine = "wine"
+    food = "food"
+    other = "other"
 
 
 class User(Base):
@@ -411,6 +423,10 @@ class BarSpecial(Base):
     start_local: Mapped[str] = mapped_column(String(5))
     end_local: Mapped[str] = mapped_column(String(5))
     price_cents: Mapped[int | None] = mapped_column(Integer)
+    all_day: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    items: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     posted_by_role: Mapped[str] = mapped_column(String(16))
     created_by: Mapped[uuid.UUID | None] = mapped_column(

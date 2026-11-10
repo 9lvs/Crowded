@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from app.core.audit import audit
 from app.core.deps import DB, AdminUser, CurrentUser, StaffBar, ip_key
 from app.models import Bar, BarSpecial, Role, User
-from app.schemas import SpecialIn, SpecialOut, SpecialUpdate
+from app.schemas import ALL_DAY_END, ALL_DAY_START, SpecialIn, SpecialOut, SpecialUpdate
 from app.services import specials as svc
 
 staff_router = APIRouter(prefix="/staff", tags=["staff"])
@@ -40,7 +40,10 @@ def _create(db: DB, bar: Bar, actor: User, request: Request, body: SpecialIn) ->
         bar_id=bar.id,
         created_by=actor.id,
         posted_by_role="admin" if actor.role == Role.admin else "staff",
-        **body.model_dump(),
+        **{
+            **body.model_dump(exclude={"items"}),
+            "items": body.model_dump(mode="json", include={"items"})["items"],
+        },
     )
     db.add(row)
     db.flush()
@@ -69,6 +72,19 @@ def _update(
             raise HTTPException(UNPROCESSABLE, detail=f"{field}_required")
     if "details" in changes and changes["details"] is None:
         changes["details"] = ""
+    for field in ("all_day", "items"):
+        if field in changes and changes[field] is None:
+            raise HTTPException(UNPROCESSABLE, detail=f"{field}_required")
+    if "items" in changes:
+        changes["items"] = body.model_dump(mode="json", include={"items"})["items"]
+    all_day = changes.get("all_day", row.all_day)
+    if all_day:
+        changes["start_local"] = ALL_DAY_START
+        changes["end_local"] = ALL_DAY_END
+    elif changes.get("all_day") is False and not (
+        changes.get("start_local") and changes.get("end_local")
+    ):
+        raise HTTPException(UNPROCESSABLE, detail="times_required")
     # An explicit null price clears it ("price_cents" stays in changes as None).
     if changes.get("start_local", row.start_local) == changes.get("end_local", row.end_local):
         raise HTTPException(UNPROCESSABLE, detail="start_equals_end")

@@ -550,6 +550,85 @@
         "title": "CrowdLevel",
         "type": "string"
       },
+      "DealCategory": {
+        "enum": [
+          "beer",
+          "pitchers",
+          "shots",
+          "mixers",
+          "wine",
+          "food",
+          "other"
+        ],
+        "title": "DealCategory",
+        "type": "string"
+      },
+      "DealItem": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/DealCategory"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Note",
+            "type": "string"
+          },
+          "price_label": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Price Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "price_label",
+          "category"
+        ],
+        "title": "DealItem",
+        "type": "object"
+      },
+      "DealItemOut": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/DealCategory"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 40,
+            "title": "Note",
+            "type": "string"
+          },
+          "price_label": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Price Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "price_label",
+          "category"
+        ],
+        "title": "DealItemOut",
+        "type": "object"
+      },
       "DistanceBucket": {
         "enum": [
           "at_door",
@@ -1458,6 +1537,11 @@
       "SpecialIn": {
         "additionalProperties": false,
         "properties": {
+          "all_day": {
+            "default": false,
+            "title": "All Day",
+            "type": "boolean"
+          },
           "days": {
             "items": {
               "maximum": 6.0,
@@ -1476,8 +1560,23 @@
             "type": "string"
           },
           "end_local": {
-            "title": "End Local",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Local"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealItem"
+            },
+            "maxItems": 20,
+            "title": "Items",
+            "type": "array"
           },
           "kind": {
             "$ref": "#/components/schemas/SpecialKind"
@@ -1496,8 +1595,15 @@
             "title": "Price Cents"
           },
           "start_local": {
-            "title": "Start Local",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Local"
           },
           "title": {
             "maxLength": 80,
@@ -1509,9 +1615,7 @@
         "required": [
           "kind",
           "title",
-          "days",
-          "start_local",
-          "end_local"
+          "days"
         ],
         "title": "SpecialIn",
         "type": "object"
@@ -1530,6 +1634,10 @@
       "SpecialOut": {
         "additionalProperties": false,
         "properties": {
+          "all_day": {
+            "title": "All Day",
+            "type": "boolean"
+          },
           "days": {
             "items": {
               "type": "integer"
@@ -1553,6 +1661,13 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealItemOut"
+            },
+            "title": "Items",
+            "type": "array"
           },
           "kind": {
             "$ref": "#/components/schemas/SpecialKind"
@@ -1599,6 +1714,8 @@
           "start_local",
           "end_local",
           "price_cents",
+          "all_day",
+          "items",
           "is_active",
           "posted_by",
           "updated_at"
@@ -1609,6 +1726,10 @@
       "SpecialTonight": {
         "additionalProperties": false,
         "properties": {
+          "all_day": {
+            "title": "All Day",
+            "type": "boolean"
+          },
           "days": {
             "items": {
               "type": "integer"
@@ -1637,6 +1758,13 @@
             "title": "Is Now",
             "type": "boolean"
           },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DealItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
           "kind": {
             "$ref": "#/components/schemas/SpecialKind"
           },
@@ -1682,6 +1810,8 @@
           "start_local",
           "end_local",
           "price_cents",
+          "all_day",
+          "items",
           "is_active",
           "posted_by",
           "updated_at",
@@ -1693,6 +1823,17 @@
       "SpecialUpdate": {
         "additionalProperties": false,
         "properties": {
+          "all_day": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "All Day"
+          },
           "days": {
             "anyOf": [
               {
@@ -1744,6 +1885,21 @@
               }
             ],
             "title": "Is Active"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DealItem"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
           },
           "kind": {
             "anyOf": [
