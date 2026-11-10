@@ -37,10 +37,9 @@ test("staff sign in, join a bar by invite, count the door and set the line", asy
   const inBtn = page.getByRole("button", { name: "One person in" });
   for (let i = 0; i < 3; i++) await inBtn.click();
   await expect(count.locator("p").nth(1)).toHaveText(String(before + 3));
-  // After the poll the server agrees.
-  const state = await page.evaluate(() => document.body.innerText);
-  expect(state).toContain("What students see");
 
+  await page.getByRole("button", { name: "Line", exact: true }).click();
+  await expect(page.getByText("What students see")).toBeVisible();
   await page.getByRole("radio", { name: /Medium/ }).click();
   await expect(page.getByText("Line set to medium")).toBeVisible();
   await expect(page.getByRole("radio", { name: /Medium/ })).toHaveAttribute("aria-checked", "true");

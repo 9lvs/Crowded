@@ -186,8 +186,10 @@
       if (location) body.location = location;
       return request("POST", "/v1/line-sessions", body);
     },
-    endSession: function (id, outcome) {
-      return request("POST", "/v1/line-sessions/" + encodeURIComponent(id) + "/end", { outcome: outcome });
+    endSession: function (id, outcome, doorCode) {
+      var body = { outcome: outcome };
+      if (doorCode) body.door_code = doorCode;
+      return request("POST", "/v1/line-sessions/" + encodeURIComponent(id) + "/end", body);
     },
     report: function (barId, crowdLevel, lineSize, location) {
       var body = { bar_id: barId };
@@ -224,6 +226,25 @@
     },
     deleteSpecial: function (barId, id) {
       return request("DELETE", "/v1/staff/bars/" + encodeURIComponent(barId) + "/specials/" + encodeURIComponent(id));
+    },
+    countSync: function (barId, insideNow) {
+      return request("POST", "/v1/staff/bars/" + encodeURIComponent(barId) + "/count-sync", { inside_now: insideNow });
+    },
+    doorCode: function (barId) {
+      return request("GET", "/v1/staff/bars/" + encodeURIComponent(barId) + "/door-code");
+    },
+    activeSamples: function (barId) {
+      return request("GET", "/v1/staff/bars/" + encodeURIComponent(barId) + "/line-samples/active");
+    },
+    startSample: function (barId) {
+      return request("POST", "/v1/staff/bars/" + encodeURIComponent(barId) + "/line-samples", {});
+    },
+    endSample: function (barId, id, outcome) {
+      return request(
+        "POST",
+        "/v1/staff/bars/" + encodeURIComponent(barId) + "/line-samples/" + encodeURIComponent(id) + "/end",
+        { outcome: outcome }
+      );
     },
     lineSize: function (barId, size) {
       return request("POST", "/v1/staff/bars/" + encodeURIComponent(barId) + "/line", { line_size: size });

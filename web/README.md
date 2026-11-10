@@ -6,7 +6,7 @@ No build step. Plain HTML, CSS and classic JavaScript. The backend serves this f
 | Who | URL | What they get |
 |---|---|---|
 | Students | `/` (`index.html`) | Tonight list, bar detail, crowd reports, line timer, settings |
-| Door staff | `/staff.html` | Staff sign in, invite code, door counter, outside line picker, what students see |
+| Door staff | `/staff.html` | Staff sign in, invite code, door mode, line checks, door code, outside line picker, specials |
 
 - Both use the same phone code sign in and the 21+ attestation.
 - The student welcome screen has a "Work at a bar? Staff sign in" link. The staff page links
@@ -15,6 +15,25 @@ No build step. Plain HTML, CSS and classic JavaScript. The backend serves this f
   door counter. Student features keep working.
 - A student account opening the staff page only gets the invite code step. The API also
   refuses staff routes for anyone who is not staff at that bar.
+
+## Door mode (staff)
+Bottom tabs: Door, Line, Code, Specials. Door mode is the default and stays uncluttered.
+- Two big tap zones: OUT on the left third, IN on the right two thirds. Each tap vibrates (15 ms)
+  and flashes. Group buttons +2, +3, +4 and Undo (30 seconds) sit under the zones.
+- Clicker keys: ArrowRight, PageDown, Space, Enter and "." count In. ArrowLeft, PageUp and ","
+  count Out. Key repeats are ignored. Keys only work on the Door tab with no sheet open.
+- Offline queue: a tap that fails on the network stays in an in memory queue (backup in
+  localStorage `crowded.door.queue.<bar>`), shows "Saving when back online" and retries with backoff.
+  The count is optimistic and reconciled with the server state.
+- The screen wake lock is requested on the Door tab and again when the page becomes visible.
+- "Clicker total" opens a number pad and calls `POST /v1/staff/bars/{id}/count-sync`.
+- Line tab: outside line size, "Time the line" (up to 2 running, shown as chips at the top of every
+  tab), last line check, and what students see.
+- Code tab: the 4 digit door code, large, with a countdown. It refreshes from `GET .../door-code`.
+- Reminders while the page is open: "Update the line size" after 15 minutes and "Time the line"
+  after 20 minutes. Dismissible, with vibration, no browser notifications.
+- Students can type the code when they tap "I'm inside". It is optional and never blocks ending
+  the timer. Mock mode has a FAKE code that changes every 2 minutes.
 
 ## Run it
 With the backend: open http://localhost:8000/ (students) or http://localhost:8000/staff.html.
@@ -75,7 +94,7 @@ into `tokens.css`.
 | `js/api.js` | Real or mock API calls, token refresh, 401 and 429 handling, mock gating. |
 | `js/auth.js` | Sign in flow shared by both pages (21+ attestation, phone, code). |
 | `js/app.js` | Student app router and screens, report sheet, staff banner. Polls every 15 s while visible. |
-| `js/staff.js` | Staff app: invite step, door counter with optimistic updates, and the Specials editor. |
+| `js/staff.js` | Staff app: invite step, door mode (tap zones, clicker keys, offline queue, wake lock), line checks, door code, reminders, and the Specials editor. |
 | `fonts/` | Bricolage Grotesque and DM Sans, latin subset, SIL OFL 1.1 (`OFL.txt`). |
 | `tools/bundle_preview.py` | Inlines everything into one HTML file in mock mode for a shareable preview. |
 
