@@ -55,10 +55,10 @@
 - [ ] Privacy and Support pages live on GitHub Pages (site/), URLs into App Store Connect
 - [ ] App icon, launch screen, App Store screenshots from demo data
 - [ ] TestFlight upload from CI (GitHub Actions or Xcode Cloud), internal testers
-- [ ] Admin console to set up bars and invites without code (in progress)
+- [x] Admin console to set up bars and invites without code (web/admin.html)
 
 ### Before pitching bars
-- [ ] Bar pitch deck and updated one pager (in progress)
+- [x] Bar pitch deck and updated one pager
 - [ ] A sample weekly bar summary (entries by hour, busiest hour, average wait, drink wait)
 - [ ] Pilot letter from counsel. Founding partner offer decided
 - [ ] Dry run night with a friend at the door, using the staging server
