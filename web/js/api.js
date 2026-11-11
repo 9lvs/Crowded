@@ -240,6 +240,35 @@
     adminBars: function () {
       return request("GET", "/v1/admin/bars");
     },
+
+    // admin console
+    adminCreateBar: function (body) {
+      return request("POST", "/v1/admin/bars", body);
+    },
+    adminUpdateBar: function (barId, body) {
+      return request("PATCH", "/v1/admin/bars/" + encodeURIComponent(barId), body);
+    },
+    adminSetPassPrice: function (barId, cents) {
+      return request("PUT", "/v1/admin/bars/" + encodeURIComponent(barId) + "/pass-price", { price_cents: cents });
+    },
+    adminCreateInvite: function (barId, level) {
+      return request("POST", "/v1/admin/bars/" + encodeURIComponent(barId) + "/invites", { level: level });
+    },
+    adminRevokeInvite: function (inviteId) {
+      return request("POST", "/v1/admin/invites/" + encodeURIComponent(inviteId) + "/revoke");
+    },
+    adminStaff: function (barId) {
+      return request("GET", "/v1/admin/bars/" + encodeURIComponent(barId) + "/staff");
+    },
+    adminRemoveStaff: function (barId, userId) {
+      return request("DELETE", "/v1/admin/bars/" + encodeURIComponent(barId) + "/staff/" + encodeURIComponent(userId));
+    },
+    adminAccuracy: function () {
+      return request("GET", "/v1/admin/metrics/accuracy");
+    },
+    adminAudit: function () {
+      return request("GET", "/v1/admin/audit?limit=100");
+    },
     activeSamples: function (barId) {
       return request("GET", "/v1/staff/bars/" + encodeURIComponent(barId) + "/line-samples/active");
     },
