@@ -125,8 +125,12 @@ consumed in ads (Meta's alcohol ad rules apply to paid posts, so organic is safe
 ## DM to a pilot bar manager
 > Hi, I'm [name], a student building Crowded. It shows students the live line and crowd at bars
 > downtown. We're piloting with two bars and would love yours to be one.
-> You get a free door counter on any phone (In, Out and line size) and a live read on your night.
-> We ask your door staff to count on pilot nights. We only show your name with your OK, and you
-> can stop any time. Can I stop by for 10 minutes this week? I'll bring a one pager.
+> You get a free door counter on any phone. Door staff count people in with one tap, set the
+> line, and tap how busy it is inside and the drink wait. Your manager posts specials once a
+> week so students see them. There is no door code and no hardware. The pilot is free for [6]
+> weeks. We never sell your data, paid promotions are always labeled and never change wait or
+> crowd numbers, and we never store a location trail. Your staff use their own phone with a
+> single-use invite, and you can remove them any time. We only show your name with your OK.
+> Can I stop by for 10 minutes this week? I'll bring a one pager.
 
 Attach `for-bars-one-pager.png` (fill in the contact lines first).
