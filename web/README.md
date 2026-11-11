@@ -6,6 +6,7 @@ No build step. Plain HTML, CSS and classic JavaScript. The backend serves this f
 | Who | URL | What they get |
 |---|---|---|
 | Students | `/` (`index.html`) | Tonight list, bar detail, crowd reports, line timer, settings |
+| Admins | `/admin.html` | Admin console: bars, pass price, staff invites, accuracy, audit log. Mock sign in is admin when the phone ends in 0001 |
 | Door staff | `/staff.html` | Staff sign in, invite code, door counter, line checks, inside conditions. Managers also get specials and settings |
 
 - Both use the same phone code sign in and the 21+ attestation.
@@ -102,6 +103,7 @@ into `tokens.css`.
 | `js/api.js` | Real or mock API calls, token refresh, 401 and 429 handling, mock gating. |
 | `js/auth.js` | Sign in flow shared by both pages (21+ attestation, phone, code). |
 | `js/app.js` | Student app router and screens, report sheet, staff banner. Polls every 15 s while visible. |
+| `js/admin.js` | Admin console (admins only). |
 | `js/staff.js` | Staff app: invite step, door mode (tap zones, clicker keys, offline queue, wake lock), line checks, inside conditions, Manage tab, reminders, and the Specials editor. |
 | `fonts/` | Bricolage Grotesque and DM Sans, latin subset, SIL OFL 1.1 (`OFL.txt`). |
 | `tools/bundle_preview.py` | Inlines everything into one HTML file in mock mode for a shareable preview. |

@@ -111,6 +111,16 @@
     }
   }
 
+  // Admin console changes survive a reload of the tab. Custom bars live in state.customBars and
+  // edits to the built in bars live in state.barEdits.
+  (state.customBars || []).forEach(function (cb) {
+    BARS.push(cb);
+  });
+  Object.keys(state.barEdits || {}).forEach(function (id) {
+    var eb = findBar(id);
+    if (eb) Object.assign(eb, state.barEdits[id]);
+  });
+
   function uuid() {
     var s = "";
     for (var i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16);
@@ -543,6 +553,207 @@
     return state.me.role === "staff" && state.me.staff_bar_id === barId;
   }
 
+  // ---------- admin console ----------
+  var CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+  function adminOut(x) {
+    return {
+      id: x.id,
+      slug: x.slug,
+      name: x.name,
+      address: x.address,
+      latitude: x.latitude,
+      longitude: x.longitude,
+      capacity: x.capacity,
+      timezone: x.timezone || "America/New_York",
+      is_active: x.is_active !== false,
+      counts_exits: staffFor(x).counts_exits !== false
+    };
+  }
+
+  function auditList() {
+    if (!state.audit) {
+      state.audit = [
+        { ts: new Date(Date.now() - 26 * 3600000).toISOString(), actor_role: "admin", action: "pass_price.set", target_type: "bar", target_id: BARS[0].id, bar_id: BARS[0].id, details: { price_cents: 1500 } },
+        { ts: new Date(Date.now() - 50 * 3600000).toISOString(), actor_role: "admin", action: "invite.create", target_type: "invite", target_id: uuid(), bar_id: BARS[1].id, details: { level: "manager" } }
+      ];
+    }
+    return state.audit;
+  }
+
+  function addAudit(action, targetType, targetId, barId, details) {
+    auditList().unshift({ ts: nowIso(), actor_role: "admin", action: action, target_type: targetType, target_id: targetId, bar_id: barId || null, details: details || {} });
+    state.audit = state.audit.slice(0, 500);
+  }
+
+  function editBar(bar, changes) {
+    Object.assign(bar, changes);
+    var custom = (state.customBars || []).indexOf(bar) !== -1;
+    if (!custom) {
+      if (!state.barEdits) state.barEdits = {};
+      state.barEdits[bar.id] = Object.assign(state.barEdits[bar.id] || {}, changes);
+    }
+  }
+
+  function numberIn(v, lo, hi) {
+    return typeof v === "number" && isFinite(v) && v >= lo && v <= hi;
+  }
+
+  function adminRoute(method, p, body) {
+    if (state.me.role !== "admin") return err(403, "forbidden");
+    var m;
+    var i;
+    if (!state.adminStaff) {
+      state.adminStaff = {};
+      state.adminStaff[BARS[0].id] = [
+        { user_id: uuid(), bar_id: BARS[0].id, level: "manager", phone_hint: "ending in 42", created_at: new Date(Date.now() - 9 * 86400000).toISOString() },
+        { user_id: uuid(), bar_id: BARS[0].id, level: "door", phone_hint: "ending in 17", created_at: new Date(Date.now() - 2 * 86400000).toISOString() }
+      ];
+    }
+
+    if (p === "/v1/admin/bars") {
+      if (method === "GET") return res(200, BARS.map(adminOut));
+      if (method === "POST") {
+        var bad = [];
+        if (typeof body.name !== "string" || !body.name.trim() || body.name.length > 120) bad.push("name");
+        if (typeof body.slug !== "string" || !/^[a-z0-9-]{2,64}$/.test(body.slug)) bad.push("slug");
+        if (!numberIn(body.latitude, -90, 90)) bad.push("latitude");
+        if (!numberIn(body.longitude, -180, 180)) bad.push("longitude");
+        if (!numberIn(body.capacity, 1, 10000) || Math.floor(body.capacity) !== body.capacity) bad.push("capacity");
+        if (body.timezone !== undefined && !/^[A-Za-z_]+(\/[A-Za-z_]+)?$/.test(body.timezone)) bad.push("timezone");
+        if (bad.length) {
+          return res(422, {
+            detail: "validation_error",
+            errors: bad.map(function (f) {
+              return { loc: ["body", f], msg: "invalid", type: "value_error" };
+            })
+          });
+        }
+        for (i = 0; i < BARS.length; i++) if (BARS[i].slug === body.slug) return err(409, "slug_taken");
+        var nb = {
+          id: uuid(),
+          slug: body.slug,
+          name: body.name.trim(),
+          address: body.address || "",
+          latitude: body.latitude,
+          longitude: body.longitude,
+          capacity: body.capacity,
+          timezone: body.timezone || "America/New_York",
+          is_active: true,
+          counts_exits: true,
+          pass_price_cents: null,
+          baseWait: 0,
+          swing: 0,
+          baseFill: 0,
+          reports: 0,
+          timers: 0,
+          hasData: false,
+          typical: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        };
+        if (!state.customBars) state.customBars = [];
+        state.customBars.push(nb);
+        BARS.push(nb);
+        addAudit("bar.create", "bar", nb.id, nb.id, { slug: nb.slug });
+        save();
+        return res(201, adminOut(nb));
+      }
+    }
+
+    if (method === "GET" && p === "/v1/admin/metrics/accuracy") {
+      var fake = [
+        [14, 3.4, 1.2],
+        [6, 2.1, -0.8]
+      ];
+      return res(
+        200,
+        BARS.map(function (x, idx) {
+          var row = fake[idx];
+          return {
+            bar_id: x.id,
+            bar_name: x.name,
+            samples: row ? row[0] : 0,
+            mean_abs_error_min: row ? row[1] : null,
+            mean_bias_min: row ? row[2] : null
+          };
+        })
+      );
+    }
+    if (method === "GET" && p === "/v1/admin/audit") return res(200, auditList().slice(0, 100));
+
+    if ((m = p.match(/^\/v1\/admin\/invites\/([^/]+)\/revoke$/)) && method === "POST") {
+      var inv = (state.invites || {})[m[1]];
+      if (!inv) return err(404, "not_found");
+      inv.revoked = true;
+      addAudit("invite.revoke", "invite", m[1], inv.bar_id, {});
+      save();
+      return res(204);
+    }
+
+    if ((m = p.match(/^\/v1\/admin\/bars\/([^/]+)(?:\/(pass-price|invites|staff))?(?:\/([^/]+))?$/))) {
+      var bar = findBar(m[1]);
+      if (!bar) return err(404, "not_found");
+      if (!m[2] && method === "PATCH") {
+        var changes = {};
+        if (body.name !== undefined && body.name !== null) {
+          if (typeof body.name !== "string" || !body.name.trim() || body.name.length > 120) return invalid("invalid name", ["body", "name"]);
+          changes.name = body.name.trim();
+        }
+        if (body.address !== undefined && body.address !== null) changes.address = String(body.address).slice(0, 200);
+        if (body.capacity !== undefined && body.capacity !== null) {
+          if (!numberIn(body.capacity, 1, 10000)) return invalid("invalid capacity", ["body", "capacity"]);
+          changes.capacity = body.capacity;
+        }
+        if (typeof body.is_active === "boolean") changes.is_active = body.is_active;
+        if (typeof body.counts_exits === "boolean") {
+          changes.counts_exits = body.counts_exits;
+          staffFor(bar).counts_exits = body.counts_exits;
+        }
+        editBar(bar, changes);
+        addAudit("bar.update", "bar", bar.id, bar.id, changes);
+        save();
+        return res(200, adminOut(bar));
+      }
+      if (m[2] === "pass-price" && method === "PUT") {
+        var cents = body.price_cents;
+        if (cents !== null && (!numberIn(cents, 0, 100000) || Math.floor(cents) !== cents)) return invalid("invalid price", ["body", "price_cents"]);
+        editBar(bar, { pass_price_cents: cents });
+        addAudit("pass_price.set", "bar", bar.id, bar.id, { price_cents: cents });
+        save();
+        return res(200, { bar_id: bar.id, price_cents: cents, currency: "usd", created_at: nowIso() });
+      }
+      if (m[2] === "invites" && method === "POST") {
+        var level = body.level === "manager" ? "manager" : "door";
+        var raw = "";
+        for (i = 0; i < 5; i++) raw += CODE_CHARS.charAt(Math.floor(Math.random() * CODE_CHARS.length));
+        var iid = uuid();
+        if (!state.invites) state.invites = {};
+        state.invites[iid] = { bar_id: bar.id, level: level, revoked: false };
+        addAudit("invite.create", "invite", iid, bar.id, { level: level });
+        save();
+        return res(201, {
+          id: iid,
+          bar_id: bar.id,
+          level: level,
+          code: (level === "manager" ? "MANAGER-" : "DOOR-") + raw,
+          expires_at: new Date(Date.now() + 3 * 86400000).toISOString()
+        });
+      }
+      if (m[2] === "staff") {
+        var members = state.adminStaff[bar.id] || [];
+        if (method === "GET" && !m[3]) return res(200, members);
+        if (method === "DELETE" && m[3]) {
+          for (i = 0; i < members.length; i++) if (members[i].user_id === m[3]) break;
+          if (i === members.length) return err(404, "not_found");
+          members.splice(i, 1);
+          addAudit("staff.remove", "user", m[3], bar.id, {});
+          save();
+          return res(204);
+        }
+      }
+    }
+    return err(404, "Not found");
+  }
+
   // ---------- router ----------
   function route(method, path, body) {
     var p = path.split("?")[0];
@@ -558,6 +769,12 @@
       if (!body.age_attested && !state.me) return err(403, "age_gate");
       if (!state.me) state.me = newMe();
       var digits = String(body.phone || "").replace(/\D/g, "");
+      // FAKE admin: a phone ending in 0001 signs in as an admin, like the seeded dev admin.
+      if (/0001$/.test(digits)) {
+        state.me.role = "admin";
+        state.me.staff_level = null;
+        state.me.staff_bar_id = null;
+      }
       state.me.phone_hint = "•• " + (digits.slice(-2) || "00");
       save();
       return res(200, tokens());
@@ -588,7 +805,14 @@
       }
     }
 
-    if (method === "GET" && p === "/v1/bars") return res(200, BARS.map(summary));
+    if (method === "GET" && p === "/v1/bars") {
+      return res(
+        200,
+        BARS.filter(function (x) {
+          return x.is_active !== false;
+        }).map(summary)
+      );
+    }
     if (method === "GET" && (m = p.match(/^\/v1\/bars\/([^/]+)$/))) {
       var b = findBar(m[1]);
       return b ? res(200, detail(b)) : err(404, "Bar not found");
@@ -670,12 +894,7 @@
       save();
       return res(200, state.me);
     }
-    if (method === "GET" && p === "/v1/admin/bars") {
-      if (state.me.role !== "admin") return err(403, "Forbidden");
-      return res(200, BARS.map(function (x) {
-        return { id: x.id, slug: x.slug, name: x.name, address: x.address, latitude: 0, longitude: 0, capacity: x.capacity, timezone: "America/New_York", is_active: true, counts_exits: staffFor(x).counts_exits !== false };
-      }));
-    }
+    if (p.indexOf("/v1/admin/") === 0) return adminRoute(method, p, body);
     if ((m = p.match(/^\/v1\/staff\/bars\/([^/]+)\/specials(?:\/([^/]+))?$/))) {
       if (!canStaff(m[1])) return err(403, "Forbidden");
       if (!isManager()) return err(403, "manager_only");
