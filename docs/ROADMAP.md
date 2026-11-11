@@ -55,7 +55,7 @@
 - [ ] Privacy and Support pages live on GitHub Pages (site/), URLs into App Store Connect
 - [ ] App icon, launch screen, App Store screenshots from demo data
 - [ ] TestFlight upload from CI (GitHub Actions or Xcode Cloud), internal testers
-- [x] Admin console to set up bars and invites without code (in progress)
+- [ ] Admin console to set up bars and invites without code (in progress)
 
 ### Before pitching bars
 - [ ] Bar pitch deck and updated one pager (in progress)
