@@ -12,6 +12,7 @@ FAKE (seeded bars, +1555 phone numbers).
 | `tests/mock.spec.ts` | any server on localhost | mock mode student and staff flows with zero console errors, mock storage isolation |
 | `tests/levels.spec.ts` | real backend | door staff tabs and Inside tab, Drinks on the student bar page, manager Count exits too, count in only bar, admin bar picker |
 | `tests/mock-staff.spec.ts` | any server on localhost | mock staff levels, count in only bar, manager, student drink wait, zero console errors |
+| `tests/motion.spec.ts` | any server on localhost | edge swipe back (finish, spring back, no vertical hijack, off on tab roots and in Safari tabs), push and crossfade, press scale, sheet swipe down, Reduce Motion, zero console errors |
 | `tests/a11y.spec.ts` | any server on localhost | accessible names, labels, alt text, 44px targets, crowd level not color only |
 
 ## Run locally

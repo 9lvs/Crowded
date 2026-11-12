@@ -73,6 +73,29 @@ buttons with a small radius, and the numbers as the hero.
 - Wordmark is plain type ("Crowded", or "Crowded for staff").
 - Crowd level never relies on color. Destructive actions are bold, not red.
 
+## Motion
+Native feel, one motion language. The timing lives in `css/tokens.css` and is shared with the
+iOS app, so keep the values exact: press 120ms, screen 240ms, sheet 300ms, fade 160ms, enter
+easing `cubic-bezier(0.2, 0, 0, 1)`, exit easing `cubic-bezier(0.4, 0, 1, 1)`.
+
+- Press: every button, row, chip, tab and summary gets `.tap` from `ui.h()`. Pressed, it scales
+  to 0.97 and dims a little, then springs back. The door IN zone uses 0.98 plus its flash.
+  Primary buttons vibrate 8 ms where the phone supports it. The door keeps its own 15 ms.
+- Screens: each student screen lives in a `.layer`. A push (Tonight to a bar, a bar to the
+  timer) slides the new screen in from the right while the old one moves left 25% and dims.
+  Back is the reverse. Tonight and Settings are tab roots and crossfade. Staff tabs fade.
+- Back: pushed screens keep a 44px back button. A touch that starts within 24px of the left edge
+  and moves right drags the screen. Past 35% of the width, or a fast flick, goes back. Less springs
+  back. Never on Tonight, Settings or the staff Door tab. Vertical scrolls are never taken.
+- iOS Safari in a browser tab has its own edge swipe, so ours turns off there
+  (`<html data-edge-swipe="native">`). It runs as a home screen app or on other touch devices
+  (`custom`). Any history back still plays the back slide, except right after Safari's own swipe.
+- Sheets slide up over a fading scrim. Drag a sheet down to dismiss it.
+- Numbers that change on a poll fade in over 160ms. Lists have no staggered entrance.
+- Reduce Motion: no slides and no scale. Everything that moved becomes the 160ms fade.
+- Only transform and opacity animate. `will-change` is set only while a layer moves.
+- Code: `js/motion.js`. Tests: `e2e/tests/motion.spec.ts`.
+
 ## Change the look
 Every visual value lives in `css/tokens.css`. You should rarely need to touch `css/app.css`.
 
@@ -85,7 +108,7 @@ Every visual value lives in `css/tokens.css`. You should rarely need to touch `c
 | Light theme | the bare `:root` block (white, black text, neutral greys). |
 | Dark theme | the `@media (prefers-color-scheme: dark)` block and the `:root[data-theme="dark"]` block. Keep them identical. |
 | Chart | `--chart-typ` (typical bars) and `--chart-now` (tonight). |
-| Motion speed | `--dur-fast`, `--dur-base`, `--dur-slow`. Reduce Motion sets them to 0. |
+| Motion | `--motion-press`, `--motion-screen`, `--motion-sheet`, `--motion-fade`, `--ease-enter`, `--ease-exit`, `--press-scale`. Shared with iOS, change both together. |
 | Type sizes | `--text-xs` through `--text-hero`. |
 
 Tip: open the page in a desktop browser, use the device toolbar for an iPhone size, and
@@ -98,6 +121,7 @@ into `tokens.css`.
 | `css/tokens.css` | Design tokens for both themes. |
 | `css/app.css` | Component and screen styles. |
 | `js/theme.js` | Applies the saved theme before first paint. |
+| `js/motion.js` | Press feedback, screen push and back, edge swipe back, sheet drag to dismiss, number fades. |
 | `js/ui.js` | DOM helper, icons, wordmark, formatters, components (crowd meter, verdict line, sheet, toast, segmented control, timer ring), one shot location read. |
 | `js/mock.js` | Fake API. Every bar is named "FAKE ...". |
 | `js/api.js` | Real or mock API calls, token refresh, 401 and 429 handling, mock gating. |
