@@ -6,37 +6,227 @@
   var api = C.api;
   var h = ui.h;
 
-  var root = document.getElementById("app");
+  var app = document.getElementById("app");
+  var root = null; // the layer the screen being built appends to
+  var layer = null; // the layer on screen now
+  var shown = null; // the route on screen now
   var current = null; // {refresh?, destroy?}
   var state = { session: null, barsById: {}, ready: false };
   var POLL_MS = 15000;
+  var motion = C.motion;
 
   // ---------- routing ----------
-  function parseHash() {
-    var parts = (window.location.hash || "").replace(/^#\/?/, "").split("/");
-    return { name: parts[0] || "tonight", param: parts[1] ? decodeURIComponent(parts[1]) : null };
+  // Tab roots crossfade. Pushed screens slide in from the right and can be swiped back.
+  var DEPTH = { welcome: 0, tonight: 0, settings: 0, bar: 1, timer: 2 };
+  var screens = { welcome: Welcome, tonight: Tonight, bar: BarDetail, timer: Timer, settings: Settings };
+
+  function parseHash(hash) {
+    var parts = (hash === undefined ? window.location.hash || "" : hash).replace(/^#\/?/, "").split("/");
+    var name = screens[parts[0]] ? parts[0] : "tonight";
+    return { name: name, param: parts[1] ? decodeURIComponent(parts[1]) : null };
+  }
+
+  function sameRoute(a, b) {
+    return !!a && !!b && a.name === b.name && a.param === b.param;
+  }
+
+  // Our own record of the history stack, so we know if a hash change went back or forward
+  // and which screen sits under the current one. history.state holds the index.
+  var nav = { idx: 0, entries: [], scroll: [] };
+  var replacing = false;
+  var forceDir = null;
+  try {
+    window.history.scrollRestoration = "manual";
+  } catch (e) {
+    /* ignore */
+  }
+  (function initNav() {
+    var st = window.history.state;
+    var saved = null;
+    try {
+      saved = JSON.parse(window.sessionStorage.getItem("crowded.nav") || "null");
+    } catch (e) {
+      saved = null;
+    }
+    nav.idx = st && typeof st.crowdedNav === "number" ? st.crowdedNav : 0;
+    if (saved && Array.isArray(saved.entries)) nav.entries = saved.entries.slice(0, nav.idx);
+    nav.entries[nav.idx] = window.location.hash;
+    stamp();
+  })();
+
+  function stamp() {
+    try {
+      window.history.replaceState({ crowdedNav: nav.idx }, "");
+      window.sessionStorage.setItem("crowded.nav", JSON.stringify({ entries: nav.entries }));
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   function go(path) {
-    if (window.location.hash === "#" + path) render();
+    if (window.location.hash === "#" + path) render(null);
     else window.location.hash = path;
   }
 
-  function render() {
-    if (!state.ready) return;
-    var r = parseHash();
-    if (!api.me && r.name !== "welcome") return go("/welcome");
-    if (api.me && r.name === "welcome") return go("/tonight");
-    if (current && current.destroy) current.destroy();
-    current = null;
-    ui.clear(root);
-    window.scrollTo(0, 0);
-    var screens = { welcome: Welcome, tonight: Tonight, bar: BarDetail, timer: Timer, settings: Settings };
-    var screen = screens[r.name] || Tonight;
-    current = screen(r.param) || null;
+  // Change the screen without adding a history entry (redirects).
+  function replace(path, dir) {
+    if (window.location.hash === "#" + path) return render(dir || null);
+    replacing = true;
+    forceDir = dir || null;
+    window.location.replace("#" + path);
   }
 
-  window.addEventListener("hashchange", render);
+  // Where Back goes: the previous history entry if we know it, else the parent screen.
+  function backTarget() {
+    var prev = nav.idx > 0 ? nav.entries[nav.idx - 1] : null;
+    var r = prev ? parseHash(prev) : null;
+    if (r && r.name !== "welcome") return { route: r, history: true };
+    return { route: { name: "tonight", param: null }, history: false, path: "/tonight" };
+  }
+
+  function back() {
+    var t = backTarget();
+    if (t.history) window.history.back();
+    else replace(t.path, "back");
+  }
+
+  function onHashChange() {
+    var st = window.history.state;
+    var idx = st && typeof st.crowdedNav === "number" ? st.crowdedNav : null;
+    var dir;
+    nav.scroll[nav.idx] = window.scrollY;
+    if (replacing) {
+      replacing = false;
+      dir = forceDir;
+      forceDir = null;
+    } else if (idx === null) {
+      idx = nav.idx + 1;
+      nav.entries.length = idx;
+      nav.scroll.length = idx;
+      nav.idx = idx;
+      dir = "forward";
+    } else {
+      dir = idx < nav.idx ? "back" : idx > nav.idx ? "forward" : null;
+      nav.idx = idx;
+    }
+    nav.entries[nav.idx] = window.location.hash;
+    stamp();
+    render(dir);
+  }
+
+  function transitionType(from, to, dir) {
+    if (!from || sameRoute(from, to)) return "none";
+    if (from.name === "welcome" || to.name === "welcome") return "fade";
+    var df = DEPTH[from.name] || 0;
+    var dt = DEPTH[to.name] || 0;
+    if (dir === "back") {
+      // iOS Safari already animated its own edge swipe. Do not slide a second time.
+      if (motion.nativeBackSwipe()) return "none";
+      return df === 0 && dt === 0 ? "fade" : "back";
+    }
+    if (dt > df) return "push";
+    if (dt < df) return to.name === "tonight" ? "back" : "fade";
+    return dt === 0 ? "fade" : "push";
+  }
+
+  function newLayer() {
+    return h("div", { class: "layer" });
+  }
+
+  function hideLayer(l) {
+    l.setAttribute("aria-hidden", "true");
+    l.inert = true;
+  }
+
+  function showLayer(l) {
+    l.removeAttribute("aria-hidden");
+    l.inert = false;
+  }
+
+  // Build a screen into its own layer. Screens append to `root`.
+  function build(r, into) {
+    var prev = root;
+    root = into;
+    var view = null;
+    try {
+      view = screens[r.name](r.param) || null;
+    } finally {
+      root = prev;
+    }
+    return view;
+  }
+
+  // A swipe back renders the previous screen under the current one before history moves.
+  var under = null; // {route, layer, view}
+
+  function render(dir) {
+    if (!state.ready) return;
+    var r = parseHash();
+    if (!api.me && r.name !== "welcome") return replace("/welcome");
+    if (api.me && r.name === "welcome") return replace("/tonight");
+    if (under && under.committed && sameRoute(under.route, r)) {
+      // The edge swipe already showed this screen. Adopt it, the gesture finishes the motion.
+      if (current && current.destroy) current.destroy();
+      if (layer) hideLayer(layer);
+      current = under.view;
+      layer = under.layer;
+      showLayer(layer);
+      shown = r;
+      under = null;
+      return;
+    }
+    dropUnder();
+    var type = transitionType(shown, r, dir);
+    var oldLayer = layer;
+    var fromScroll = window.scrollY;
+    if (current && current.destroy) current.destroy();
+    current = null;
+    layer = newLayer();
+    if (oldLayer) hideLayer(oldLayer);
+    if (oldLayer && type === "back") app.insertBefore(layer, oldLayer);
+    else app.appendChild(layer);
+    shown = r;
+    current = build(r, layer);
+    var toScroll = dir === "back" ? nav.scroll[nav.idx] || 0 : 0;
+    motion.swap(oldLayer, layer, type, { fromScroll: fromScroll, toScroll: toScroll });
+  }
+
+  function dropUnder() {
+    if (!under) return;
+    if (under.view && under.view.destroy) under.view.destroy();
+    under.layer.remove();
+    under = null;
+  }
+
+  window.addEventListener("hashchange", onHashChange);
+
+  // Edge swipe back on pushed screens only. Never on Tonight or Settings.
+  motion.edgeSwipe({
+    canStart: function () {
+      return !!shown && (DEPTH[shown.name] || 0) > 0 && !document.querySelector(".sheet");
+    },
+    layer: function () {
+      return layer;
+    },
+    begin: function () {
+      dropUnder();
+      var t = backTarget();
+      var ul = newLayer();
+      hideLayer(ul);
+      app.insertBefore(ul, layer);
+      under = { route: t.route, target: t, layer: ul, view: build(t.route, ul), committed: false };
+      return ul;
+    },
+    commit: function () {
+      if (!under) return;
+      under.committed = true;
+      if (under.target.history) window.history.back();
+      else replace(under.target.path, "back");
+    },
+    cancel: function () {
+      dropUnder();
+    }
+  });
 
   // ---------- polling (only while visible) ----------
   setInterval(function () {
@@ -335,6 +525,7 @@
     }
 
     var meFresh = false;
+    var lastWait = {};
     function refresh() {
       // Re-read the account once per visit so a new staff role shows up without a reload.
       var meP = meFresh ? Promise.resolve(api.me) : api.getMe().catch(function () { return api.me; });
@@ -350,7 +541,13 @@
             list.appendChild(h("li", { class: "empty", text: "No bars yet. Check back soon." }));
           }
           bars.forEach(function (b) {
-            list.appendChild(barRow(b));
+            var row = barRow(b);
+            list.appendChild(row);
+            // A wait that changed since the last poll fades in. No list entrance animation.
+            var w = row.querySelector(".row-wait");
+            var text = w ? w.textContent : "";
+            if (lastWait[b.id] !== undefined && lastWait[b.id] !== text) motion.tick(w);
+            lastWait[b.id] = text;
           });
           ui.clear(bannerSlot);
           ui.append(bannerSlot, staffBanner());
@@ -531,9 +728,7 @@
             class: "icon-btn",
             type: "button",
             "aria-label": "Back to Tonight",
-            onclick: function () {
-              go("/tonight");
-            }
+            onclick: back
           },
           ui.icon("back")
         )
@@ -545,6 +740,7 @@
     root.appendChild(cta);
     var heroNum = null;
     var bar = null;
+    var lastKpis = null;
 
     function draw(b) {
       bar = b;
@@ -645,6 +841,18 @@
             )
           : null
       );
+
+      // Numbers that changed since the last poll fade in.
+      var kpiValues = hero.querySelectorAll(".kpi__value");
+      var texts = Array.prototype.map.call(kpiValues, function (el) {
+        return el.textContent;
+      });
+      if (lastKpis) {
+        texts.forEach(function (t, i) {
+          if (lastKpis[i] !== undefined && lastKpis[i] !== t) motion.tick(kpiValues[i]);
+        });
+      }
+      lastKpis = texts;
 
       ui.append(body, [
         h("h1", { class: "detail__name", text: b.name }),
@@ -869,10 +1077,7 @@
               class: "icon-btn",
               type: "button",
               "aria-label": "Back",
-              onclick: function () {
-                if (window.history.length > 1) window.history.back();
-                else go("/tonight");
-              }
+              onclick: back
             },
             ui.icon("back")
           )

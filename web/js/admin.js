@@ -213,6 +213,7 @@
         main
       )
     );
+    if (C.motion && main) C.motion.fadeIn(main);
     window.scrollTo(0, 0);
   }
 

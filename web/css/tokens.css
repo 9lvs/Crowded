@@ -13,6 +13,7 @@
    - Fonts ................ --font-display, --font-body, --font-num
    - Corner roundness ..... --radius-scale (1 = default, 0 = square)
    - Density .............. --density (1 = default, 0.9 = tighter)
+   - Motion ............... --motion-*, --ease-*, --press-* (shared with iOS)
    ===================================================================== */
 
 :root {
@@ -71,10 +72,24 @@
   --radius-lg: calc(12px * var(--radius-scale));
 
   /* ---------- Motion ---------- */
-  --dur-fast: 120ms;
-  --dur-base: 200ms;
-  --dur-slow: 300ms;
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Shared with the iOS app. Keep these exact values in both places. */
+  --motion-press: 120ms;   /* press feedback on anything tappable */
+  --motion-screen: 240ms;  /* screen push and back */
+  --motion-sheet: 300ms;   /* bottom sheet up and down */
+  --motion-fade: 160ms;    /* tab crossfade, number updates, reduced motion */
+  --ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --press-scale: 0.97;      /* buttons, rows, chips, tabs */
+  --press-scale-zone: 0.98; /* the door IN zone */
+  --press-dim: 0.82;        /* opacity while pressed */
+  --push-shift: -25%;       /* how far the old screen moves left on a push */
+  --push-dim: 0.12;         /* black shade over the old screen on a push */
+
+  /* Older names, kept so existing rules keep working. */
+  --dur-fast: var(--motion-press);
+  --dur-base: var(--motion-screen);
+  --dur-slow: var(--motion-sheet);
+  --ease-out: var(--ease-enter);
 
   /* ---------- Light theme (default) ---------- */
   --bg: #ffffff;
@@ -153,11 +168,14 @@
   color-scheme: dark;
 }
 
-/* Reduce Motion: kill durations everywhere. */
+/* Reduce Motion: no movement and no scale. Everything that moved becomes the 160ms fade.
+   app.css swaps sheet and toast slides for fades, and js/motion.js swaps screen slides. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --dur-fast: 0ms;
-    --dur-base: 0ms;
-    --dur-slow: 0ms;
+    --press-scale: 1;
+    --press-scale-zone: 1;
+    --dur-fast: var(--motion-fade);
+    --dur-base: var(--motion-fade);
+    --dur-slow: var(--motion-fade);
   }
 }

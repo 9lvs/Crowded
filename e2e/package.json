@@ -4,7 +4,7 @@
   "description": "End to end tests for the Crowded web client and API. All data is FAKE.",
   "scripts": {
     "test": "playwright test --trace off",
-    "test:mock": "playwright test --trace off tests/mock.spec.ts tests/a11y.spec.ts",
+    "test:mock": "playwright test --trace off tests/mock.spec.ts tests/a11y.spec.ts tests/motion.spec.ts",
     "report": "playwright show-report playwright-report"
   },
   "devDependencies": {
