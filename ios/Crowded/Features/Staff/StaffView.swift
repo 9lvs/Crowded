@@ -139,7 +139,7 @@ struct StaffView: View {
                 .frame(minHeight: Spacing.touch)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle())
             .accessibilityIdentifier("staffSpecialsLink")
 
             Toggle(isOn: countsExitsBinding(barId: barId)) {

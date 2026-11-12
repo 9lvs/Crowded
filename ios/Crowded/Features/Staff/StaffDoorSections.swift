@@ -94,6 +94,8 @@ struct DoorCounterSection: View {
             Text("\(vm.displayedHeadcount)")
                 .font(.crowdedNumber(96))
                 .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(Motion.fadeAnimation, value: vm.displayedHeadcount)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .accessibilityIdentifier("staffHeadcount")
@@ -117,6 +119,8 @@ struct DoorCounterSection: View {
             Text("\(vm.displayedEntries)")
                 .font(.crowdedNumber(96))
                 .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(Motion.fadeAnimation, value: vm.displayedEntries)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .accessibilityIdentifier("staffEntries")
@@ -144,7 +148,8 @@ struct DoorCounterSection: View {
                 Text("OUT")
             }
         }
-        .buttonStyle(SecondaryButtonStyle())
+        // tap() already plays the door haptic, so the style adds none.
+        .buttonStyle(SecondaryButtonStyle(haptic: .none, scale: 0.98))
         .accessibilityLabel("Count one person out")
         .accessibilityIdentifier("doorOutButton")
     }
@@ -171,7 +176,7 @@ struct DoorCounterSection: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.98))
         .accessibilityLabel(label)
     }
 
@@ -179,7 +184,7 @@ struct DoorCounterSection: View {
         HStack(spacing: Spacing.s3) {
             ForEach([2, 3, 4], id: \.self) { size in
                 Button("+\(size)") { tap(.entry, by: size) }
-                    .buttonStyle(ChipButtonStyle())
+                    .buttonStyle(ChipButtonStyle(haptic: .none))
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel("Count a group of \(size) in")
                     .accessibilityIdentifier("doorGroup\(size)")
@@ -194,7 +199,7 @@ struct DoorCounterSection: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 Task { await vm.undo(barId: barId) }
             }
-            .buttonStyle(ChipButtonStyle())
+            .buttonStyle(ChipButtonStyle(haptic: .none))
             .disabled(!allowed)
             .opacity(allowed ? 1 : 0.5)
             .accessibilityLabel("Undo last tap")

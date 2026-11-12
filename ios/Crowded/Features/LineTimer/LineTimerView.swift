@@ -19,7 +19,7 @@ struct LineTimerView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
                 .accessibilityLabel("Minimize timer")
                 Spacer()
             }
@@ -33,6 +33,10 @@ struct LineTimerView: View {
         .padding(.horizontal, Spacing.gutter)
         .padding(.top, Spacing.s2)
         .crowdedScreen()
+        .sensoryFeedback(trigger: vm.finished != nil) { _, isFinished in
+            isFinished ? SensoryFeedback.success : nil
+        }
+        .animation(Motion.fadeAnimation, value: vm.finished != nil)
         .onAppear { vm.startTicking() }
         .onDisappear { vm.stopTicking() }
     }
@@ -98,6 +102,8 @@ struct LineTimerView: View {
                     Text("\(vm.resultMinutes)")
                         .font(.crowdedNumber(CrowdedFont.giant))
                         .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(Motion.fadeAnimation, value: vm.resultMinutes)
                     Text("min")
                         .font(.crowdedBody)
                         .foregroundStyle(Colors.text2)

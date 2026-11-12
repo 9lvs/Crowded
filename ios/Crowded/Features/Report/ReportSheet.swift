@@ -29,7 +29,13 @@ struct ReportSheet: View {
                 }
             }
         }
-        .presentationDetents([.large])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        // Do not lose a report that is being sent.
+        .interactiveDismissDisabled(vm.isSending)
+        .sensoryFeedback(trigger: vm.result != nil) { _, sent in
+            sent ? SensoryFeedback.success : nil
+        }
     }
 
     private var form: some View {
@@ -167,7 +173,7 @@ struct OptionButton: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(haptic: .selection))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

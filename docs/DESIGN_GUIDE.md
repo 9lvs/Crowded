@@ -35,3 +35,15 @@ Today: DM Sans for all text, Bricolage Grotesque only for big numbers. Both are 
 ## See every component at once
 - Web: run with `?mock=1` and walk the screens.
 - iOS: Settings > Component gallery (debug builds), or the SwiftUI previews in each component file.
+
+## Motion
+Same values on web and iOS (`Motion` in `Tokens.swift`).
+- press 120 ms, screen 240 ms, sheet 300 ms, fade 160 ms.
+- Every tappable control uses one press style: scale 0.97 and opacity 0.9 over the press time.
+  Door zones use 0.98. With Reduce Motion on there is no scale, only the opacity change.
+- iOS: `PressableStyle` (and the primary, secondary and chip styles, which share its effect).
+- Haptics on iOS: light impact on primary actions, selection on chips and segments, the door
+  keeps its own impact, success when a report or timer ends. Never two haptics on one tap.
+- Numbers that change (wait minutes, headcount) use a numeric transition over the fade time.
+- Screens use the system push with the left edge swipe back. Sheets use system presentation.
+  No stagger animations on lists.

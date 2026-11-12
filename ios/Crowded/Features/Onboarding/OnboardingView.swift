@@ -65,7 +65,7 @@ struct OnboardingView: View {
                 .background(RoundedRectangle(cornerRadius: Radius.md).stroke(Colors.border, lineWidth: 1))
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle(haptic: .selection))
             .accessibilityIdentifier("ageToggle")
             .accessibilityLabel("I'm 21 or older")
             .accessibilityAddTraits(vm.ageAttested ? [.isSelected] : [])
@@ -120,7 +120,7 @@ struct OnboardingView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .frame(width: 44, height: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle())
             .accessibilityLabel("Back")
 
             Text("Enter your code")
@@ -144,6 +144,7 @@ struct OnboardingView: View {
                 Button("Dev code: \(dev). Tap to fill") {
                     vm.useDevCode()
                 }
+                .buttonStyle(PressableStyle(haptic: .selection))
                 .font(.crowdedSmall)
                 .foregroundStyle(Colors.text2)
                 .frame(minHeight: 44)

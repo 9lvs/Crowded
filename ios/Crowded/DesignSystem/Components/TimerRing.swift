@@ -27,7 +27,7 @@ struct TimerRing: View {
                 .trim(from: 0, to: progress)
                 .stroke(Colors.accent, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(Motion.animation(Motion.slow, reduceMotion: reduceMotion), value: progress)
+                .animation(Motion.animation(Motion.sheet, reduceMotion: reduceMotion), value: progress)
             VStack(spacing: Spacing.s1) {
                 Text(clock)
                     .font(.crowdedNumber(CrowdedFont.giant))

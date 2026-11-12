@@ -107,10 +107,21 @@ enum Radius {
     static let lg: CGFloat = 12 * Knobs.radiusScale
 }
 
+/// Motion spec, shared with web (`--motion-*` in web/css/tokens.css). Durations are seconds.
 enum Motion {
-    static let fast: Double = 0.12
-    static let base: Double = 0.2
-    static let slow: Double = 0.3
+    /// Button press feedback: 120 ms.
+    static let press: Double = 0.12
+    /// Screen level changes: 240 ms.
+    static let screen: Double = 0.24
+    /// Sheets: 300 ms.
+    static let sheet: Double = 0.3
+    /// Fades and number changes: 160 ms.
+    static let fade: Double = 0.16
+
+    static var pressAnimation: Animation { .snappy(duration: press, extraBounce: 0) }
+    static var screenAnimation: Animation { .snappy(duration: screen, extraBounce: 0) }
+    static var sheetAnimation: Animation { .snappy(duration: sheet, extraBounce: 0) }
+    static var fadeAnimation: Animation { .easeOut(duration: fade) }
 
     /// Animation that collapses to none when Reduce Motion is on.
     static func animation(_ duration: Double, reduceMotion: Bool) -> Animation? {
