@@ -57,10 +57,6 @@ final class CoreFlowUITests: XCTestCase {
         let inside = app.buttons["imInsideButton"]
         XCTAssertTrue(inside.waitForExistence(timeout: 5))
         inside.tap()
-        // The optional door code sheet appears. Skip it.
-        let skip = app.buttons["doorCodeSkip"]
-        XCTAssertTrue(skip.waitForExistence(timeout: 5))
-        skip.tap()
         let resultTitle = app.staticTexts["resultTitle"]
         XCTAssertTrue(resultTitle.waitForExistence(timeout: 5))
         app.buttons["resultDone"].tap()

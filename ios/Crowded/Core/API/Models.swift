@@ -14,6 +14,51 @@ enum Role: String, Sendable, Equatable {
     }
 }
 
+/// Staff level. Door staff do the fast door work. Managers also edit specials and settings.
+enum StaffLevel: String, Sendable, Equatable {
+    case door
+    case manager
+
+    init?(api value: String?) {
+        guard let value else { return nil }
+        self.init(rawValue: value)
+    }
+}
+
+/// How long a drink takes. Raw values match the API.
+enum DrinkWait: String, CaseIterable, Sendable, Equatable, Identifiable {
+    case under5 = "under_5"
+    case fiveToTen = "5_to_10"
+    case tenToTwenty = "10_to_20"
+    case over20 = "over_20"
+
+    var id: String { rawValue }
+
+    init?(api value: String?) {
+        guard let value else { return nil }
+        self.init(rawValue: value)
+    }
+
+    var label: String {
+        switch self {
+        case .under5: return "Under 5 min"
+        case .fiveToTen: return "5 to 10"
+        case .tenToTwenty: return "10 to 20"
+        case .over20: return "Over 20"
+        }
+    }
+
+    /// Full phrase, the same words the server uses for `drink_wait_label`.
+    var fullLabel: String {
+        switch self {
+        case .under5: return "Under 5 min"
+        case .fiveToTen: return "5 to 10 min"
+        case .tenToTwenty: return "10 to 20 min"
+        case .over20: return "Over 20 min"
+        }
+    }
+}
+
 enum CrowdLevel: String, CaseIterable, Sendable, Equatable, Identifiable {
     case easy
     case busy
@@ -142,10 +187,11 @@ struct Basis: Sendable, Equatable {
     var timers: Int
     var doorEvents: Int
     var staffLineUpdates: Int
+    var insideUpdates: Int = 0
 
     static let empty = Basis(
         text: "No recent data", windowMin: 30, reports: 0, timers: 0, doorEvents: 0,
-        staffLineUpdates: 0
+        staffLineUpdates: 0, insideUpdates: 0
     )
 }
 
@@ -161,12 +207,22 @@ struct Live: Sendable, Equatable {
     var basis: Basis
     var flags: [String]
     var updatedAt: Date?
+    var drinkWait: DrinkWait? = nil
+    var drinkWaitLabel: String? = nil
 
     static let noData = Live(
         hasRecentData: false, waitMin: nil, waitLowMin: nil, waitHighMin: nil, crowdLevel: nil,
         headcount: nil, capacityRatio: nil, confidence: .none, basis: .empty, flags: [],
-        updatedAt: nil
+        updatedAt: nil, drinkWait: nil, drinkWaitLabel: nil
     )
+
+    /// Text for the Drinks stat. Never a stale value.
+    var drinkText: String {
+        if let drinkWaitLabel, !drinkWaitLabel.isEmpty {
+            return drinkWaitLabel
+        }
+        return "No recent data"
+    }
 }
 
 struct Verdict: Sendable, Equatable {
@@ -236,8 +292,14 @@ struct Me: Sendable, Equatable {
     var waitThresholdMin: Int
     var staffBarId: String?
     var phoneHint: String?
+    var staffLevel: StaffLevel? = nil
 
     var isStaff: Bool { role == .staff && staffBarId != nil }
+
+    /// Managers and admins can edit specials and bar settings. Door staff cannot.
+    var isManager: Bool {
+        return role == .admin || (isStaff && staffLevel == .manager)
+    }
 }
 
 struct LineSession: Sendable, Equatable, Identifiable {
@@ -298,10 +360,19 @@ struct StaffState: Sendable, Equatable {
     var lineSize: LineSize?
     var lineUpdatedAt: Date?
     var live: Live
+    var countsExits: Bool = true
+    var inside: InsideStatus? = nil
 
     var fillRatio: Double {
         capacity > 0 ? Double(headcount) / Double(capacity) : 0
     }
+}
+
+/// What door staff last said about conditions inside.
+struct InsideStatus: Sendable, Equatable {
+    var crowdLevel: CrowdLevel?
+    var drinkWait: DrinkWait?
+    var updatedAt: Date?
 }
 
 enum Money {

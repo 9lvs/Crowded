@@ -47,7 +47,7 @@ test("staff counter in mock mode", async ({ page }) => {
   await page.getByRole("button", { name: "One person in" }).click();
   await page.getByRole("button", { name: "Line", exact: true }).click();
   await page.getByRole("radio", { name: /Short/ }).click();
-  await expect(page.getByText("What students see")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What students see" })).toBeVisible();
   expect(errors).toEqual([]);
 });
 

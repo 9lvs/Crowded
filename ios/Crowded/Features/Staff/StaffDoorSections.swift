@@ -7,8 +7,8 @@ func formatMinSec(_ totalSeconds: Int) -> String {
     return String(format: "%d:%02d", safe / 60, safe % 60)
 }
 
-/// High volume door mode: headcount on top, two huge tap zones (OUT left third, IN right two
-/// thirds), group buttons and Undo. Works with a Bluetooth clicker or keyboard.
+/// High volume door mode: one huge IN zone, group buttons and Undo. OUT is a smaller secondary
+/// button, shown only at bars that count exits. Works with a Bluetooth clicker or keyboard.
 struct DoorCounterSection: View {
     let vm: StaffViewModel
     let barId: String
@@ -22,7 +22,11 @@ struct DoorCounterSection: View {
             if let reminder = vm.reminder {
                 ReminderBanner(reminder: reminder) { vm.dismissReminder() }
             }
-            headcount
+            if vm.countsExits {
+                headcount
+            } else {
+                entriesOnly
+            }
             if vm.isSavingOffline {
                 HStack(spacing: Spacing.s2) {
                     Image(systemName: "arrow.triangle.2.circlepath")
@@ -36,14 +40,25 @@ struct DoorCounterSection: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("staffSavingOffline")
             }
-            zones
+            inZone
             groupRow
+            if vm.countsExits {
+                outButton
+            } else {
+                Text("This bar counts entries only.")
+                    .font(.crowdedSmall)
+                    .foregroundStyle(Colors.text2)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("entriesOnlyNote")
+            }
             HStack(spacing: Spacing.s3) {
                 undoButton
-                Button("Set inside now") { onSetTotal() }
-                    .buttonStyle(ChipButtonStyle())
-                    .accessibilityHint("Type the total from your clicker")
-                    .accessibilityIdentifier("staffSetTotal")
+                if vm.countsExits {
+                    Button("Clicker total") { onSetTotal() }
+                        .buttonStyle(ChipButtonStyle())
+                        .accessibilityHint("Type the total from your clicker")
+                        .accessibilityIdentifier("staffSetTotal")
+                }
             }
         }
         .focusable()
@@ -58,6 +73,10 @@ struct DoorCounterSection: View {
     }
 
     private func keyTap(_ direction: DoorDirection) -> KeyPress.Result {
+        // Out keys are ignored at bars that count entries only.
+        if direction == .exit && !vm.countsExits {
+            return .ignored
+        }
         tap(direction, by: 1)
         return .handled
     }
@@ -90,24 +109,44 @@ struct DoorCounterSection: View {
         .accessibilityLabel("Inside now \(vm.displayedHeadcount), \(vm.capacityPercent) percent of capacity")
     }
 
-    private var zones: some View {
-        GeometryReader { geo in
-            let gap = Spacing.s3
-            let usable = max(0, geo.size.width - gap)
-            HStack(spacing: gap) {
-                zone(title: "OUT", symbol: "minus", filled: false, label: "Count one person out") {
-                    tap(.exit, by: 1)
-                }
-                .frame(width: usable / 3)
-                .accessibilityIdentifier("doorOutZone")
-                zone(title: "IN", symbol: "plus", filled: true, label: "Count one person in") {
-                    tap(.entry, by: 1)
-                }
-                .frame(width: usable * 2 / 3)
-                .accessibilityIdentifier("doorInZone")
+    private var entriesOnly: some View {
+        VStack(spacing: Spacing.s1) {
+            Text("Entries tonight")
+                .font(.crowdedSmall)
+                .foregroundStyle(Colors.text2)
+            Text("\(vm.displayedEntries)")
+                .font(.crowdedNumber(96))
+                .monospacedDigit()
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .accessibilityIdentifier("staffEntries")
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Entries tonight: \(vm.displayedEntries)")
+    }
+
+    private var inZone: some View {
+        zone(title: "IN", symbol: "plus", filled: true, label: "Count one person in") {
+            tap(.entry, by: 1)
+        }
+        .frame(height: 300)
+        .accessibilityIdentifier("doorInZone")
+    }
+
+    private var outButton: some View {
+        Button {
+            tap(.exit, by: 1)
+        } label: {
+            HStack(spacing: Spacing.s2) {
+                Image(systemName: "minus")
+                    .accessibilityHidden(true)
+                Text("OUT")
             }
         }
-        .frame(height: 340)
+        .buttonStyle(SecondaryButtonStyle())
+        .accessibilityLabel("Count one person out")
+        .accessibilityIdentifier("doorOutButton")
     }
 
     private func zone(
@@ -254,42 +293,59 @@ struct LineSamplePanel: View {
     }
 }
 
-/// The rotating 4 digit door code students type when they get inside.
-struct DoorCodePanel: View {
+/// Two one tap questions for door staff: how busy inside and how long a drink takes.
+struct InsidePanel: View {
     let vm: StaffViewModel
+    let barId: String
+    let state: StaffState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Door code")
-                .font(.crowdedSection)
-            TimelineView(.periodic(from: Date(), by: 1)) { context in
-                let left = vm.doorCodeSecondsLeft(at: context.date)
-                VStack(spacing: Spacing.s1) {
-                    if let code = vm.doorCode?.code, left > 0 {
-                        Text(code)
-                            .font(.crowdedNumber(88))
-                            .monospacedDigit()
-                            .minimumScaleFactor(0.5)
-                            .lineLimit(1)
-                            .accessibilityLabel("Door code \(code.map { String($0) }.joined(separator: " "))")
-                            .accessibilityIdentifier("doorCodeValue")
-                        Text("Changes in \(formatMinSec(left))")
-                            .font(.crowdedLabel)
-                            .foregroundStyle(Colors.text2)
-                    } else {
-                        Text("----")
-                            .font(.crowdedNumber(88))
-                            .accessibilityHidden(true)
-                        Text("Getting a new code")
-                            .font(.crowdedLabel)
-                            .foregroundStyle(Colors.text2)
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("How busy inside?")
+                    .font(.crowdedLabel)
+                    .foregroundStyle(Colors.text2)
+                HStack(spacing: Spacing.s2) {
+                    ForEach(CrowdLevel.allCases) { level in
+                        OptionButton(
+                            title: level.label,
+                            subtitle: level.detail,
+                            isSelected: state.inside?.crowdLevel == level
+                        ) {
+                            Task { await vm.postInside(barId: barId, crowd: level) }
+                        }
+                        .accessibilityIdentifier("inside-crowd-\(level.rawValue)")
                     }
                 }
-                .frame(maxWidth: .infinity)
             }
-            Text("Students in line enter this code when they get to the door. It proves their wait.")
-                .font(.crowdedSmall)
-                .foregroundStyle(Colors.text2)
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("How long for a drink?")
+                    .font(.crowdedLabel)
+                    .foregroundStyle(Colors.text2)
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: Spacing.s2)],
+                    spacing: Spacing.s2
+                ) {
+                    ForEach(DrinkWait.allCases) { wait in
+                        OptionButton(
+                            title: wait.label,
+                            isSelected: state.inside?.drinkWait == wait
+                        ) {
+                            Task { await vm.postInside(barId: barId, drinkWait: wait) }
+                        }
+                        .accessibilityLabel(wait.fullLabel)
+                        .accessibilityIdentifier("inside-drink-\(wait.rawValue)")
+                    }
+                }
+            }
+            TimelineView(.periodic(from: Date(), by: 30)) { context in
+                if let text = vm.insideUpdatedText(at: context.date) {
+                    Text(text)
+                        .font(.crowdedCaption)
+                        .foregroundStyle(Colors.text2)
+                        .accessibilityIdentifier("insideUpdated")
+                }
+            }
         }
     }
 }

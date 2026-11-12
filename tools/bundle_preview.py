@@ -49,7 +49,7 @@ def build(page: str) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("out")
-    ap.add_argument("--page", choices=["index", "staff"], default="index")
+    ap.add_argument("--page", choices=["index", "staff", "admin"], default="index")
     args = ap.parse_args()
     Path(args.out).write_text(build(args.page))
     print(f"wrote {args.out}")

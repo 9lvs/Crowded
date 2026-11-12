@@ -21,10 +21,12 @@ protocol CrowdedAPI: AnyObject, Sendable {
     // Sourcing: line timers and crowd reports
     func activeSession() async throws -> LineSession?
     func startSession(barId: String, location: Coordinate?) async throws -> LineSession
-    /// `doorCode` is the optional 4 digit code from the door. A wrong code never fails the call.
+    /// `doorCode` is the optional 4 digit code from the door. The feature is off on the server by
+    /// default, so the app passes nil. A wrong code never fails the call.
     func endSession(id: String, outcome: EndOutcome, doorCode: String?) async throws -> LineSession
     func report(
-        barId: String, crowd: CrowdLevel?, line: LineSize?, location: Coordinate?
+        barId: String, crowd: CrowdLevel?, line: LineSize?, drinkWait: DrinkWait?,
+        location: Coordinate?
     ) async throws -> ReportResult
 
     // Staff
@@ -32,8 +34,12 @@ protocol CrowdedAPI: AnyObject, Sendable {
     func staffState(barId: String) async throws -> StaffState
     func door(barId: String, direction: DoorDirection, count: Int) async throws -> StaffState
     func setLine(barId: String, size: LineSize) async throws -> StaffState
+    /// Inside conditions from door staff. Send only the field that changed.
+    func postInside(barId: String, crowd: CrowdLevel?, drinkWait: DrinkWait?) async throws -> StaffState
+    /// Manager only. Turns exit counting on or off for the bar.
+    func setCountsExits(barId: String, value: Bool) async throws -> StaffState
 
-    // Staff: line samples, door code, clicker sync
+    // Staff: line samples, door code (off by default), clicker sync
     func startLineSample(barId: String) async throws -> LineSample
     func endLineSample(barId: String, sampleId: String, outcome: SampleOutcome) async throws -> LineSample
     func activeLineSamples(barId: String) async throws -> [LineSample]

@@ -80,7 +80,7 @@ def test_lunch_belongs_to_that_days_night_start_date() -> None:
 
 
 def test_staff_crud(client: TestClient, admin: Auth, bar: Bar, db: Session) -> None:
-    staff = make_staff(client, admin, str(bar.id))
+    staff = make_staff(client, admin, str(bar.id), "manager")
     base = f"/v1/staff/bars/{bar.id}/specials"
     r = client.post(base, json=body(price_cents=500), headers=staff.h)
     assert r.status_code == 201, r.text
@@ -128,8 +128,8 @@ def test_students_cannot_write(client: TestClient, user: Auth, bar: Bar) -> None
 
 
 def test_bola(client: TestClient, admin: Auth, bar: Bar, other_bar: Bar) -> None:
-    staff_a = make_staff(client, admin, str(bar.id))
-    staff_b = make_staff(client, admin, str(other_bar.id))
+    staff_a = make_staff(client, admin, str(bar.id), "manager")
+    staff_b = make_staff(client, admin, str(other_bar.id), "manager")
     sb = client.post(
         f"/v1/staff/bars/{other_bar.id}/specials", json=body(), headers=staff_b.h
     ).json()

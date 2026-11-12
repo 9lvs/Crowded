@@ -44,6 +44,15 @@ LINE_SIZE_PEOPLE: Mapping[str, int] = {
 }
 
 
+# Representative minutes for each drink wait bucket. Also used to map back to a bucket.
+DRINK_WAIT_MIN: Mapping[str, float] = {
+    "under_5": 3.0,
+    "5_to_10": 8.0,
+    "10_to_20": 15.0,
+    "over_20": 25.0,
+}
+
+
 @dataclass(frozen=True)
 class DoorEventIn:
     ts: datetime
@@ -58,6 +67,16 @@ class LineStatusIn:
 
     ts: datetime
     line_size: str  # key of LINE_SIZE_PEOPLE
+    reporter_id: str | None = None  # staff user id, for per staff reliability
+
+
+@dataclass(frozen=True)
+class InsideStatusIn:
+    """Staff report of conditions inside. Either field may be missing."""
+
+    ts: datetime
+    crowd_level: str | None = None  # Crowd value
+    drink_wait: str | None = None  # key of DRINK_WAIT_MIN
     reporter_id: str | None = None  # staff user id, for per staff reliability
 
 
@@ -79,6 +98,7 @@ class ReportIn:
     crowd_level: str | None = None  # Crowd value
     line_size: str | None = None  # key of LINE_SIZE_PEOPLE
     near_bar: bool = False
+    drink_wait: str | None = None  # key of DRINK_WAIT_MIN
 
 
 @dataclass(frozen=True)
@@ -130,6 +150,10 @@ class EstimateInput:
     line_statuses: Sequence[LineStatusIn] = ()
     timers: Sequence[TimerIn] = ()
     reports: Sequence[ReportIn] = ()
+    inside_statuses: Sequence[InsideStatusIn] = ()
+    # False for bars that only count people in. Then headcount and capacity ratio are not
+    # computed from door events and capacity mode is off. Entry rate still uses IN events.
+    counts_exits: bool = True
     reliability: Mapping[str, float] = field(default_factory=dict)  # user_id -> [0, 1]
     calibration: float = 1.0  # from calibration_factor()
     params: Params = field(default_factory=Params)
@@ -145,6 +169,15 @@ class Basis:
     door_events: int
     staff_line_updates: int
     text: str  # e.g. "Based on 6 reports and 2 timers in the last 30 min"
+    inside_updates: int = 0  # staff inside statuses in the window
+
+
+@dataclass(frozen=True)
+class DrinkWaitBasis:
+    """How many readings the drink wait comes from."""
+
+    staff_updates: int = 0
+    reports: int = 0
 
 
 @dataclass(frozen=True)
@@ -164,6 +197,8 @@ class Estimate:
     method: str  # "formula", "timers", "blend", "reports", "none"
     basis: Basis
     flags: tuple[str, ...] = ()  # e.g. ("staff_report_mismatch",)
+    drink_wait: str | None = None  # key of DRINK_WAIT_MIN, None without recent data
+    drink_wait_basis: DrinkWaitBasis = field(default_factory=DrinkWaitBasis)
 
 
 @dataclass(frozen=True)

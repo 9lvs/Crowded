@@ -8,6 +8,7 @@ final class ReportViewModel {
     let barName: String
     var crowd: CrowdLevel?
     var line: LineSize?
+    var drinkWait: DrinkWait?
     var isSending: Bool = false
     var result: ReportResult?
     var errorMessage: String?
@@ -21,7 +22,7 @@ final class ReportViewModel {
     }
 
     var canSend: Bool {
-        return (crowd != nil || line != nil) && !isSending
+        return (crowd != nil || line != nil || drinkWait != nil) && !isSending
     }
 
     var thanksText: String {
@@ -39,7 +40,9 @@ final class ReportViewModel {
         defer { isSending = false }
         let coordinate = await location.currentLocation(timeout: 6)
         do {
-            result = try await api.report(barId: barId, crowd: crowd, line: line, location: coordinate)
+            result = try await api.report(
+                barId: barId, crowd: crowd, line: line, drinkWait: drinkWait, location: coordinate
+            )
         } catch {
             errorMessage = APIError.wrap(error).errorDescription
         }

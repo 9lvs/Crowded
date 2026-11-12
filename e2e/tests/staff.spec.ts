@@ -39,7 +39,7 @@ test("staff sign in, join a bar by invite, count the door and set the line", asy
   await expect(count.locator("p").nth(1)).toHaveText(String(before + 3));
 
   await page.getByRole("button", { name: "Line", exact: true }).click();
-  await expect(page.getByText("What students see")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What students see" })).toBeVisible();
   await page.getByRole("radio", { name: /Medium/ }).click();
   await expect(page.getByText("Line set to medium")).toBeVisible();
   await expect(page.getByRole("radio", { name: /Medium/ })).toHaveAttribute("aria-checked", "true");

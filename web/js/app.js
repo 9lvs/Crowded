@@ -179,7 +179,7 @@
     var hasWait = lv.has_recent_data && lv.wait_min !== null;
     var crowdLabel = lv.crowd_level ? ui.CROWD_LABEL[lv.crowd_level] : "Crowd unknown";
     var label = b.name + ". " + (lv.crowd_level ? "Crowd " + crowdLabel + ". " : "Crowd unknown. ") +
-      waitLabel(lv) + ". " + (lv.has_recent_data ? lv.basis.text + "." : "Nobody has reported in the last 30 min.") +
+      waitLabel(lv) + ". " + (lv.drink_wait_label ? "Drinks " + lv.drink_wait_label + ". " : "") + (lv.has_recent_data ? lv.basis.text + "." : "Nobody has reported in the last 30 min.") +
       (deal ? " " + ui.dealsLineText(deal) + "." : "");
     var right = hasWait
       ? h("span", { class: "row-wait" }, h("span", { class: "num row-wait__num", text: String(lv.wait_min) }), h("span", { class: "row-wait__unit", text: "min" }))
@@ -201,7 +201,12 @@
           "span",
           { class: "bar-row__text" },
           h("span", { class: "bar-row__name", text: b.name }),
-          h("span", { class: "bar-row__crowd" }, lv.crowd_level ? ui.crowd(lv.crowd_level) : h("span", { class: "faint", text: "Crowd unknown" })),
+          h(
+            "span",
+            { class: "bar-row__crowd" },
+            lv.crowd_level ? ui.crowd(lv.crowd_level) : h("span", { class: "faint", text: "Crowd unknown" }),
+            lv.drink_wait_label ? h("span", { class: "bar-row__drinks", text: "· drinks " + lv.drink_wait_label }) : null
+          ),
           h("span", { class: "bar-row__basis", text: lv.has_recent_data ? lv.basis.text : "Nobody has reported in the last 30 min" }),
           deal
             ? h(
@@ -248,9 +253,10 @@
       onChange: sync
     });
     var lineSeg = ui.segmented({ label: "Line outside", toggle: true, options: ui.LINE_SIZES, onChange: sync });
+    var drinkSeg = ui.segmented({ label: "How long for a drink", toggle: true, wrap: true, cols: 2, options: ui.DRINK_WAITS, onChange: sync });
     var send = h("button", { class: "btn btn--primary btn--block btn--lg", type: "button", disabled: true }, "Send report");
     function sync() {
-      send.disabled = !(crowdSeg.get() || lineSeg.get());
+      send.disabled = !(crowdSeg.get() || lineSeg.get() || drinkSeg.get());
     }
     var content = h(
       "div",
@@ -259,6 +265,8 @@
       crowdSeg.el,
       h("p", { class: "sheet__label", text: "Line outside" }),
       lineSeg.el,
+      h("p", { class: "sheet__label", text: "How long for a drink? (optional)" }),
+      drinkSeg.el,
       h("div", { class: "btn-stack" }, send),
       h("p", { class: "xs muted", text: "We check once if you're near the bar, then forget your location." })
     );
@@ -268,7 +276,7 @@
       send.textContent = "Sending";
       ui.locationOnce()
         .then(function (loc) {
-          return api.report(b.id, crowdSeg.get(), lineSeg.get(), loc);
+          return api.report(b.id, crowdSeg.get(), lineSeg.get(), loc, drinkSeg.get());
         })
         .then(function (r) {
           ui.clear(content);
@@ -569,11 +577,23 @@
         heroNum,
         h("p", { class: "kpi__sub", text: hasWait ? (lv.wait_min === 0 ? "Walk right in" : lv.wait_low_min + " to " + lv.wait_high_min + " min") : "No recent timers" })
       );
+      var drinkCol = h(
+        "div",
+        { class: "kpi" },
+        h("p", { class: "kpi__label", text: "Drinks" }),
+        h(
+          "p",
+          { class: "kpi__value kpi__value--sm", "aria-live": "polite" },
+          lv.drink_wait_label ? lv.drink_wait_label : h("span", { class: "faint", text: "No recent data" })
+        ),
+        h("p", { class: "kpi__sub", text: lv.drink_wait_label ? "At the bar" : "Not reported yet" })
+      );
       var hero = h(
         "section",
         { class: "kpis", "aria-label": "Right now" },
         crowdCol,
-        lineCol
+        lineCol,
+        drinkCol
       );
       var basis = h(
         "p",
@@ -815,12 +835,12 @@
       var left = h("button", { class: "btn btn--secondary btn--block btn--lg", type: "button" }, "Left the line");
       var stack = h("div", { class: "btn-stack" }, inside, left);
       var hint = h("p", { class: "xs muted", text: "Tap I'm inside the moment you get in. Your time sharpens the estimate for everyone." });
-      function end(outcome, btn, doorCode, onFail) {
+      function end(outcome, btn) {
         inside.disabled = true;
         left.disabled = true;
         if (btn) btn.textContent = "Saving";
         api
-          .endSession(s.id, outcome, doorCode)
+          .endSession(s.id, outcome)
           .then(function (out) {
             state.session = null;
             result(out, outcome);
@@ -830,63 +850,12 @@
             left.disabled = false;
             inside.textContent = "I'm inside";
             left.textContent = "Left the line";
-            if (onFail) onFail();
             if (e.status !== 429) ui.toast(e.detail || "Could not save");
           });
       }
-      // Optional door code. Never blocks ending the timer.
-      function askCode() {
-        var input = h("input", {
-          class: "input input--code",
-          id: "door-code",
-          type: "text",
-          inputmode: "numeric",
-          pattern: "[0-9]*",
-          maxlength: "4",
-          autocomplete: "off",
-          placeholder: "0000"
-        });
-        var done = h("button", { class: "btn btn--primary btn--lg", type: "button", disabled: true }, "Done");
-        var skip = h("button", { class: "btn btn--secondary btn--lg", type: "button" }, "Skip");
-        function restore() {
-          done.disabled = !/^\d{4}$/.test(input.value);
-          skip.disabled = false;
-          done.textContent = "Done";
-          skip.textContent = "Skip";
-        }
-        function finish(codeValue, btn) {
-          done.disabled = true;
-          skip.disabled = true;
-          end("inside", btn, codeValue, restore);
-        }
-        input.addEventListener("input", function () {
-          input.value = input.value.replace(/\D/g, "").slice(0, 4);
-          done.disabled = input.value.length !== 4;
-        });
-        input.addEventListener("keydown", function (e) {
-          if (e.key === "Enter" && !done.disabled) done.click();
-        });
-        done.addEventListener("click", function () {
-          finish(input.value, done);
-        });
-        skip.addEventListener("click", function () {
-          finish(null, skip);
-        });
-        ui.clear(stack);
-        ui.clear(hint);
-        stack.appendChild(
-          h(
-            "div",
-            { class: "doorcode" },
-            h("label", { class: "field__label", for: "door-code", text: "Door code, shown by staff at the door" }),
-            input,
-            h("div", { class: "doorcode__btns" }, skip, done)
-          )
-        );
-        hint.textContent = "A right code shows you really waited. You earn more points.";
-        input.focus();
-      }
-      inside.addEventListener("click", askCode);
+      inside.addEventListener("click", function () {
+        end("inside", inside);
+      });
       left.addEventListener("click", function () {
         end("gave_up", left);
       });

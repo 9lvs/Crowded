@@ -57,6 +57,22 @@ class CrowdLevel(enum.StrEnum):
     packed = "packed"
 
 
+class StaffLevel(enum.StrEnum):
+    """door: door counter work only. manager: also specials and bar settings."""
+
+    door = "door"
+    manager = "manager"
+
+
+class DrinkWait(enum.StrEnum):
+    """How long it takes to get a drink at the bar. Shared by staff and student reports."""
+
+    under_5 = "under_5"
+    m5_to_10 = "5_to_10"
+    m10_to_20 = "10_to_20"
+    over_20 = "over_20"
+
+
 class LineSize(enum.StrEnum):
     """Outside line size buckets. Shared by the staff picker and user reports."""
 
@@ -181,6 +197,8 @@ class Bar(Base):
     capacity: Mapped[int] = mapped_column(Integer)
     timezone: Mapped[str] = mapped_column(String(64), default="America/New_York")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # False for bars that only count people in. Headcount is then not computed from the door.
+    counts_exits: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
 
     __table_args__ = (CheckConstraint("capacity > 0", name="capacity_positive"),)
@@ -199,6 +217,9 @@ class BarStaff(Base):
     invite_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("staff_invites.id", ondelete="SET NULL")
     )
+    level: Mapped[StaffLevel] = mapped_column(
+        _enum(StaffLevel, "staff_level"), default=StaffLevel.door, server_default="door"
+    )
     created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
 
     bar: Mapped[Bar] = relationship()
@@ -210,6 +231,9 @@ class StaffInvite(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_uuid)
     bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"))
     code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    level: Mapped[StaffLevel] = mapped_column(
+        _enum(StaffLevel, "staff_level"), default=StaffLevel.door, server_default="door"
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
@@ -275,6 +299,7 @@ class CrowdReport(Base):
     created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
     crowd_level: Mapped[CrowdLevel | None] = mapped_column(_enum(CrowdLevel, "crowd_level"))
     line_size: Mapped[LineSize | None] = mapped_column(_enum(LineSize, "line_size"))
+    drink_wait: Mapped[DrinkWait | None] = mapped_column(_enum(DrinkWait, "drink_wait"))
     near_bar: Mapped[bool] = mapped_column(Boolean, default=False)
     distance_bucket: Mapped[DistanceBucket] = mapped_column(
         _enum(DistanceBucket, "distance_bucket"), default=DistanceBucket.unknown
@@ -341,6 +366,23 @@ class OutsideLineStatus(Base):
     line_size: Mapped[LineSize] = mapped_column(_enum(LineSize, "line_size"))
 
     __table_args__ = (Index("ix_outside_line_bar_ts", "bar_id", "ts"),)
+
+
+class InsideStatus(Base):
+    """Staff report of conditions inside: how full it feels and how long a drink takes."""
+
+    __tablename__ = "inside_status"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=_uuid)
+    bar_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bars.id", ondelete="CASCADE"))
+    staff_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    ts: Mapped[datetime] = mapped_column(TS, default=utcnow)
+    crowd_level: Mapped[CrowdLevel | None] = mapped_column(_enum(CrowdLevel, "crowd_level"))
+    drink_wait: Mapped[DrinkWait | None] = mapped_column(_enum(DrinkWait, "drink_wait"))
+
+    __table_args__ = (Index("ix_inside_status_bar_ts", "bar_id", "ts"),)
 
 
 class BarSnapshot(Base):

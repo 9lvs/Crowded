@@ -42,6 +42,31 @@
 - [x] Deals: deal line on Tonight (A), price list menu on the bar page (C), structured items,
       all night specials, staff menu editor (web and iOS)
 - [x] Phase 1.5 security review: H-1 race and all Mediums fixed (docs/security-review-phase1_5.md)
+- [x] Staff side rework (owner feedback): door staff count IN, line and inside conditions only,
+      manager role edits specials, drink wait estimate, count-entries-only bars, door code off
+
+## Launch plan (2026-11-11)
+
+### Before TestFlight (team only)
+- [ ] Owner: Apple Developer Program, bundle id, signing team
+- [ ] Owner approves a host (Render or Fly, about $10 to $25 a month) and an SMS provider
+      (for example Twilio Verify, a few cents per code). Without these nobody outside can sign in
+- [ ] Deploy staging: Postgres, secrets, migrations, daily retention job, smoke test (docs/DEPLOY.md)
+- [ ] Privacy and Support pages live on GitHub Pages (site/), URLs into App Store Connect
+- [ ] App icon, launch screen, App Store screenshots from demo data
+- [ ] TestFlight upload from CI (GitHub Actions or Xcode Cloud), internal testers
+- [x] Admin console to set up bars and invites without code (web/admin.html)
+
+### Before pitching bars
+- [x] Bar pitch deck and updated one pager
+- [ ] A sample weekly bar summary (entries by hour, busiest hour, average wait, drink wait)
+- [ ] Pilot letter from counsel. Founding partner offer decided
+- [ ] Dry run night with a friend at the door, using the staging server
+
+### Before external TestFlight and the pilot
+- [ ] Phase 2 security review of the deployed setup (hosting, secrets, SMS fraud limits)
+- [ ] Real bar entered through the admin console with its permission
+- [ ] Ambassadors lined up for pilot nights. Instagram handle and "Coming soon" grid
 
 ## Phase 2: hardening and deploy readiness
 - [ ] Close Phase 1 review findings

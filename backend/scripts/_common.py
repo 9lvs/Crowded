@@ -30,6 +30,8 @@ class FakeBarSpec:
     # Simulator knobs: relative demand and door speed (people per minute).
     popularity: float
     service_rate: float
+    # False means staff only count people in, so there is no headcount from the door.
+    counts_exits: bool = True
 
 
 # A made up spot in the open ocean (near 0.5 N, 0.5 E), far from any real town, so the public
@@ -67,6 +69,7 @@ FAKE_BARS: tuple[FakeBarSpec, ...] = (
         None,
         0.9,
         5.0,
+        counts_exits=False,
     ),
 )
 FAKE_SLUGS = tuple(b.slug for b in FAKE_BARS)

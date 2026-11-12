@@ -17,6 +17,10 @@ actor MockAPI: CrowdedAPI {
         var timers: Int
         var hasData: Bool
         var typical: [Int]
+        /// False for bars that only count entries at the door.
+        var countsExits: Bool = true
+        /// FAKE starting drink wait, replaced once staff or a student reports one.
+        var drinkWait: DrinkWait? = nil
     }
 
     static let hours: [Int] = [18, 19, 20, 21, 22, 23, 0, 1, 2, 3]
@@ -26,13 +30,15 @@ actor MockAPI: CrowdedAPI {
             id: "00000000-0000-4000-8000-000000000001", slug: "fake-tipsy-owl",
             name: "FAKE The Tipsy Owl", address: "101 Fake College Ave", capacity: 220,
             passPriceCents: 1500, baseWait: 28, swing: 7, baseFill: 0.93, reports: 7, timers: 3,
-            hasData: true, typical: [2, 5, 12, 22, 30, 34, 31, 24, 14, 6]
+            hasData: true, typical: [2, 5, 12, 22, 30, 34, 31, 24, 14, 6],
+            countsExits: true, drinkWait: .tenToTwenty
         ),
         FakeBar(
             id: "00000000-0000-4000-8000-000000000002", slug: "fake-copper-lantern",
             name: "FAKE Copper Lantern", address: "22 Pretend St", capacity: 150,
             passPriceCents: 1000, baseWait: 11, swing: 4, baseFill: 0.71, reports: 4, timers: 1,
-            hasData: true, typical: [0, 2, 5, 9, 13, 15, 14, 10, 6, 2]
+            hasData: true, typical: [0, 2, 5, 9, 13, 15, 14, 10, 6, 2],
+            countsExits: false, drinkWait: .fiveToTen
         ),
         FakeBar(
             id: "00000000-0000-4000-8000-000000000003", slug: "fake-night-heron",
@@ -53,16 +59,27 @@ actor MockAPI: CrowdedAPI {
     private var clockOffset: TimeInterval = 0
     private var offline: Bool = false
     private var samples: [String: [LineSample]] = [:]
-    private var wrongCodes: Int = 0
+    /// What door staff last said about the inside, per bar.
+    private var insideStatus: [String: InsideStatus] = [:]
+    /// Latest drink wait from staff or a student report, per bar.
+    private var drinkOverride: [String: DrinkWait] = [:]
 
-    init(signedIn: Bool = false, role: Role = .user) {
+    /// `staffLevel` only matters for staff. It defaults to manager so the specials editor works
+    /// in demos. Pass `.door` to preview the door staff view.
+    init(signedIn: Bool = false, role: Role = .user, staffLevel: StaffLevel = .manager) {
         self.signedIn = signedIn
         self.specials = Self.seedSpecials()
         let staffBar: String? = role == .staff ? "00000000-0000-4000-8000-000000000001" : nil
         self.meValue = Me(
             id: "fake-user", role: role, waitThresholdMin: 20, staffBarId: staffBar,
-            phoneHint: "ending in 00"
+            phoneHint: "ending in 00",
+            staffLevel: role == .staff ? staffLevel : nil
         )
+    }
+
+    /// Lets previews and tests switch the mock staff user between door and manager.
+    func setStaffLevel(_ level: StaffLevel) {
+        meValue.staffLevel = level
     }
 
     private var now: Date { Date().addingTimeInterval(clockOffset) }
@@ -80,17 +97,6 @@ actor MockAPI: CrowdedAPI {
         if offline {
             throw APIError.network
         }
-    }
-
-    /// FAKE door code. Changes every 2 minutes. Not a real HMAC.
-    private func code(barId: String, bucket: Int) -> String {
-        let seed = barId.unicodeScalars.reduce(0) { ($0 &+ Int($1.value)) % 9973 }
-        let value = (bucket &* 7919 &+ seed &* 31) % 10000
-        return String(format: "%04d", value)
-    }
-
-    private var currentBucket: Int {
-        return Int(now.timeIntervalSince1970) / 120
     }
 
     private func requireSignedIn() throws {
@@ -148,15 +154,22 @@ actor MockAPI: CrowdedAPI {
         signedIn = false
         session = nil
         meValue = Me(
-            id: "fake-user", role: .user, waitThresholdMin: 20, staffBarId: nil, phoneHint: nil
+            id: "fake-user", role: .user, waitThresholdMin: 20, staffBarId: nil, phoneHint: nil,
+            staffLevel: nil
         )
     }
 
     // MARK: Bars
 
     private func liveFor(_ bar: FakeBar) -> Live {
+        let drink = drinkOverride[bar.id] ?? bar.drinkWait
         guard bar.hasData else {
-            return Live.noData
+            var empty = Live.noData
+            if let reported = drinkOverride[bar.id] {
+                empty.drinkWait = reported
+                empty.drinkWaitLabel = reported.fullLabel
+            }
+            return empty
         }
         let wobble = bar.swing == 0 ? 0 : (tick % (bar.swing * 2 + 1)) - bar.swing
         let wait = max(0, bar.baseWait + wobble)
@@ -168,7 +181,8 @@ actor MockAPI: CrowdedAPI {
             headcount = Int(Double(bar.capacity) * bar.baseFill)
         }
         let ratio = Double(headcount) / Double(bar.capacity)
-        let crowd: CrowdLevel = ratio >= 0.9 ? .packed : (ratio >= 0.6 ? .busy : .easy)
+        let computed: CrowdLevel = ratio >= 0.9 ? .packed : (ratio >= 0.6 ? .busy : .easy)
+        let crowd: CrowdLevel = insideStatus[bar.id]?.crowdLevel ?? computed
         var parts: [String] = []
         parts.append("\(bar.reports) report\(bar.reports == 1 ? "" : "s")")
         parts.append("\(bar.timers) timer\(bar.timers == 1 ? "" : "s")")
@@ -187,7 +201,9 @@ actor MockAPI: CrowdedAPI {
                 doorEvents: 12, staffLineUpdates: 1
             ),
             flags: [],
-            updatedAt: now
+            updatedAt: now,
+            drinkWait: drink,
+            drinkWaitLabel: drink?.fullLabel
         )
     }
 
@@ -376,20 +392,9 @@ actor MockAPI: CrowdedAPI {
         if outcome == .inside && minutes >= 0.5 {
             current.status = .completed
             current.actualWaitMin = (minutes * 10).rounded() / 10
-            var verified = false
-            if let entered = doorCode, wrongCodes < 5 {
-                let good = [
-                    code(barId: current.barId, bucket: currentBucket),
-                    code(barId: current.barId, bucket: currentBucket - 1),
-                ]
-                if good.contains(entered) {
-                    verified = true
-                } else {
-                    wrongCodes += 1
-                }
-            }
-            current.verified = verified
-            current.pointsAwarded = current.nearBar ? (verified ? 20 : 10) : 0
+            // The door code is off. A typed code is ignored, like the server does.
+            current.verified = false
+            current.pointsAwarded = current.nearBar ? 10 : 0
         } else {
             current.status = .abandoned
             current.pointsAwarded = 0
@@ -399,16 +404,20 @@ actor MockAPI: CrowdedAPI {
     }
 
     func report(
-        barId: String, crowd: CrowdLevel?, line: LineSize?, location: Coordinate?
+        barId: String, crowd: CrowdLevel?, line: LineSize?, drinkWait: DrinkWait?,
+        location: Coordinate?
     ) async throws -> ReportResult {
         try requireSignedIn()
-        if crowd == nil && line == nil {
+        if crowd == nil && line == nil && drinkWait == nil {
             throw APIError.http(status: 422, detail: "validation_error")
         }
         guard let index = fakeBars.firstIndex(where: { $0.id == barId }) else {
             throw APIError.http(status: 404, detail: "not_found")
         }
         fakeBars[index].reports += 1
+        if let drinkWait {
+            drinkOverride[barId] = drinkWait
+        }
         let near = location != nil
         return ReportResult(nearBar: near, pointsAwarded: near ? 2 : 0)
     }
@@ -423,6 +432,9 @@ actor MockAPI: CrowdedAPI {
         }
         meValue.role = .staff
         meValue.staffBarId = fakeBars[0].id
+        if meValue.staffLevel == nil {
+            meValue.staffLevel = .door
+        }
         return meValue
     }
 
@@ -434,13 +446,23 @@ actor MockAPI: CrowdedAPI {
         return bar
     }
 
+    /// Mirrors the server: specials and settings are manager only.
+    private func requireManager(_ barId: String) throws -> FakeBar {
+        let bar = try requireStaff(barId)
+        if meValue.staffLevel != .manager && meValue.role != .admin {
+            throw APIError.http(status: 403, detail: "manager_only")
+        }
+        return bar
+    }
+
     private func staffStateFor(_ bar: FakeBar) -> StaffState {
         let counts = staffCounts[bar.id] ?? (ins: Int(Double(bar.capacity) * bar.baseFill), outs: 0)
         return StaffState(
             barId: bar.id, barName: bar.name, capacity: bar.capacity,
             headcount: max(0, counts.ins - counts.outs), entriesTonight: counts.ins,
             exitsTonight: counts.outs, lineSize: staffLine[bar.id],
-            lineUpdatedAt: staffLine[bar.id] == nil ? nil : now, live: liveFor(bar)
+            lineUpdatedAt: staffLine[bar.id] == nil ? nil : now, live: liveFor(bar),
+            countsExits: bar.countsExits, inside: insideStatus[bar.id]
         )
     }
 
@@ -471,6 +493,33 @@ actor MockAPI: CrowdedAPI {
         let bar = try requireStaff(barId)
         staffLine[bar.id] = size
         return staffStateFor(bar)
+    }
+
+    func postInside(barId: String, crowd: CrowdLevel?, drinkWait: DrinkWait?) async throws -> StaffState {
+        try requireOnline()
+        let bar = try requireStaff(barId)
+        if crowd == nil && drinkWait == nil {
+            throw APIError.http(status: 422, detail: "validation_error")
+        }
+        var status = insideStatus[bar.id] ?? InsideStatus(crowdLevel: nil, drinkWait: nil, updatedAt: nil)
+        if let crowd { status.crowdLevel = crowd }
+        if let drinkWait {
+            status.drinkWait = drinkWait
+            drinkOverride[bar.id] = drinkWait
+        }
+        status.updatedAt = now
+        insideStatus[bar.id] = status
+        return staffStateFor(bar)
+    }
+
+    func setCountsExits(barId: String, value: Bool) async throws -> StaffState {
+        try requireOnline()
+        let bar = try requireManager(barId)
+        guard let index = fakeBars.firstIndex(where: { $0.id == bar.id }) else {
+            throw APIError.http(status: 404, detail: "not_found")
+        }
+        fakeBars[index].countsExits = value
+        return staffStateFor(fakeBars[index])
     }
 
     // MARK: Staff line samples, door code, clicker sync
@@ -520,9 +569,9 @@ actor MockAPI: CrowdedAPI {
 
     func doorCode(barId: String) async throws -> DoorCode {
         try requireOnline()
-        let bar = try requireStaff(barId)
-        let remaining = 120 - (Int(now.timeIntervalSince1970) % 120)
-        return DoorCode(code: code(barId: bar.id, bucket: currentBucket), expiresIn: remaining)
+        _ = try requireStaff(barId)
+        // The door code is off by default on the server.
+        throw APIError.http(status: 404, detail: "door_code_disabled")
     }
 
     func countSync(barId: String, insideNow: Int) async throws -> StaffState {
@@ -580,12 +629,12 @@ actor MockAPI: CrowdedAPI {
     }
 
     func listSpecials(barID: String) async throws -> [Special] {
-        let bar = try requireStaff(barID)
+        let bar = try requireManager(barID)
         return Self.sortedSpecials(specials[bar.id] ?? [])
     }
 
     func createSpecial(barID: String, input: SpecialInput) async throws -> Special {
-        let bar = try requireStaff(barID)
+        let bar = try requireManager(barID)
         try checkSpecial(
             days: input.days, start: input.startLocal, end: input.endLocal, title: input.title,
             items: input.items)
@@ -610,7 +659,7 @@ actor MockAPI: CrowdedAPI {
     }
 
     func updateSpecial(barID: String, specialID: String, update: SpecialPatch) async throws -> Special {
-        let bar = try requireStaff(barID)
+        let bar = try requireManager(barID)
         var list = specials[bar.id] ?? []
         guard let index = list.firstIndex(where: { $0.id == specialID }) else {
             throw APIError.http(status: 404, detail: "not_found")
@@ -643,7 +692,7 @@ actor MockAPI: CrowdedAPI {
     }
 
     func deleteSpecial(barID: String, specialID: String) async throws {
-        let bar = try requireStaff(barID)
+        let bar = try requireManager(barID)
         var list = specials[bar.id] ?? []
         guard let index = list.firstIndex(where: { $0.id == specialID }) else {
             throw APIError.http(status: 404, detail: "not_found")

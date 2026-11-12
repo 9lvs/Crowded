@@ -106,6 +106,12 @@ def relogin(client: TestClient, auth: Auth) -> Auth:
 
 
 @pytest.fixture
+def door_code_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The rotating door code is off by default (D-030). Turn it on for the door code tests."""
+    monkeypatch.setattr(get_settings(), "door_code_enabled", True)
+
+
+@pytest.fixture
 def user(client: TestClient) -> Auth:
     return login(client)
 
@@ -146,8 +152,8 @@ def other_bar(db: Session) -> Bar:
     return make_bar(db, slug="fake-fox", name="FAKE Fox")
 
 
-def make_staff(client: TestClient, admin: Auth, bar_id: str) -> Auth:
-    r = client.post(f"/v1/admin/bars/{bar_id}/invites", headers=admin.h)
+def make_staff(client: TestClient, admin: Auth, bar_id: str, level: str = "door") -> Auth:
+    r = client.post(f"/v1/admin/bars/{bar_id}/invites", json={"level": level}, headers=admin.h)
     assert r.status_code == 201, r.text
     s = login(client)
     r = client.post("/v1/staff/invites/redeem", json={"code": r.json()["code"]}, headers=s.h)

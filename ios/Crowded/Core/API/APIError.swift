@@ -34,6 +34,8 @@ enum APIError: Error, Equatable, LocalizedError {
         case "invalid_invite": return "That invite code didn't work. Ask your manager for a new one."
         case "already_staff": return "This account already works at a bar."
         case "headcount_below_zero": return "Nobody left to count out."
+        case "manager_only": return "Only managers can change this."
+        case "door_code_disabled": return "The door code is turned off."
         case "not_found": return "We couldn't find that."
         case "not_authenticated", "invalid_refresh": return "Please sign in again."
         case "network": return "You're offline or the server is unreachable."

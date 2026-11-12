@@ -67,7 +67,7 @@ struct BarDetailView: View {
             }
             .padding(.top, Spacing.s2)
 
-            // Crowd and line side by side, the core of the product.
+            // Crowd, line and drinks side by side, the core of the product.
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text("Crowd")
@@ -111,6 +111,22 @@ struct BarDetailView: View {
                             .font(.crowdedBodyStrong)
                             .foregroundStyle(Colors.text3)
                     }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, Spacing.s4)
+                .padding(.leading, Spacing.s4)
+
+                Rectangle().fill(Colors.border).frame(width: 1)
+
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Text("Drinks")
+                        .font(.crowdedLabel)
+                        .foregroundStyle(Colors.text2)
+                    Text(bar.live.drinkText)
+                        .font(.crowdedBodyStrong)
+                        .foregroundStyle(bar.live.drinkWaitLabel == nil ? Colors.text3 : Colors.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("drinksStat")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, Spacing.s4)

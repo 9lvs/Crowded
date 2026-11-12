@@ -1,4 +1,4 @@
-"""Bar specials, happy hours, cover and events. Posted by the bar (staff or admin) only."""
+"""Bar specials, happy hours, cover and events. Posted by a bar manager or an admin only."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 
 from app.core.audit import audit
-from app.core.deps import DB, AdminUser, CurrentUser, StaffBar, ip_key
+from app.core.deps import DB, AdminUser, CurrentUser, ManagerBar, ip_key
 from app.models import Bar, BarSpecial, Role, User
 from app.schemas import ALL_DAY_END, ALL_DAY_START, SpecialIn, SpecialOut, SpecialUpdate
 from app.services import specials as svc
@@ -132,7 +132,7 @@ def _admin_bar(db: DB, bar_id: uuid.UUID) -> Bar:
 
 
 @staff_router.get("/bars/{bar_id}/specials", response_model=list[SpecialOut])
-def staff_list(bar: StaffBar, db: DB) -> list[SpecialOut]:
+def staff_list(bar: ManagerBar, db: DB) -> list[SpecialOut]:
     return _list(db, bar)
 
 
@@ -140,7 +140,7 @@ def staff_list(bar: StaffBar, db: DB) -> list[SpecialOut]:
     "/bars/{bar_id}/specials", response_model=SpecialOut, status_code=status.HTTP_201_CREATED
 )
 def staff_create(
-    body: SpecialIn, bar: StaffBar, user: CurrentUser, request: Request, db: DB
+    body: SpecialIn, bar: ManagerBar, user: CurrentUser, request: Request, db: DB
 ) -> SpecialOut:
     return _create(db, bar, user, request, body)
 
@@ -149,7 +149,7 @@ def staff_create(
 def staff_update(
     special_id: uuid.UUID,
     body: SpecialUpdate,
-    bar: StaffBar,
+    bar: ManagerBar,
     user: CurrentUser,
     request: Request,
     db: DB,
@@ -159,7 +159,7 @@ def staff_update(
 
 @staff_router.delete("/bars/{bar_id}/specials/{special_id}", status_code=204)
 def staff_delete(
-    special_id: uuid.UUID, bar: StaffBar, user: CurrentUser, request: Request, db: DB
+    special_id: uuid.UUID, bar: ManagerBar, user: CurrentUser, request: Request, db: DB
 ) -> Response:
     return _delete(db, bar, user, request, special_id)
 

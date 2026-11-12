@@ -177,12 +177,14 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
     }
 
     func report(
-        barId: String, crowd: CrowdLevel?, line: LineSize?, location: Coordinate?
+        barId: String, crowd: CrowdLevel?, line: LineSize?, drinkWait: DrinkWait?,
+        location: Coordinate?
     ) async throws -> ReportResult {
         return try await run {
             let input = Components.Schemas.ReportCreate(
                 bar_id: barId,
                 crowd_level: crowd?.rawValue,
+                drink_wait: drinkWait?.rawValue,
                 line_size: line?.rawValue,
                 location: Self.mapLocation(location)
             )
@@ -227,6 +229,30 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             let output = try await client.line_v1_staff_bars__bar_id__line_post(
                 path: .init(bar_id: barId),
                 body: .json(Components.Schemas.LineSizeIn(line_size: size.rawValue))
+            )
+            return Self.mapStaff(try output.ok.body.json)
+        }
+    }
+
+    func postInside(barId: String, crowd: CrowdLevel?, drinkWait: DrinkWait?) async throws -> StaffState {
+        return try await run {
+            let input = Components.Schemas.InsideIn(
+                crowd_level: crowd?.rawValue,
+                drink_wait: drinkWait?.rawValue
+            )
+            let output = try await client.inside_v1_staff_bars__bar_id__inside_post(
+                path: .init(bar_id: barId),
+                body: .json(input)
+            )
+            return Self.mapStaff(try output.ok.body.json)
+        }
+    }
+
+    func setCountsExits(barId: String, value: Bool) async throws -> StaffState {
+        return try await run {
+            let output = try await client.update_settings_v1_staff_bars__bar_id__settings_patch(
+                path: .init(bar_id: barId),
+                body: .json(Components.Schemas.BarSettingsIn(counts_exits: value))
             )
             return Self.mapStaff(try output.ok.body.json)
         }
@@ -407,7 +433,8 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             role: Role(api: s.role),
             waitThresholdMin: s.wait_threshold_min,
             staffBarId: s.staff_bar_id,
-            phoneHint: s.phone_hint
+            phoneHint: s.phone_hint,
+            staffLevel: StaffLevel(api: s.staff_level)
         )
     }
 
@@ -418,7 +445,8 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             reports: s.reports,
             timers: s.timers,
             doorEvents: s.door_events,
-            staffLineUpdates: s.staff_line_updates
+            staffLineUpdates: s.staff_line_updates,
+            insideUpdates: s.inside_updates ?? 0
         )
     }
 
@@ -434,7 +462,9 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             confidence: Confidence(api: s.confidence),
             basis: mapBasis(s.basis),
             flags: s.flags,
-            updatedAt: APIDate.parse(s.updated_at)
+            updatedAt: APIDate.parse(s.updated_at),
+            drinkWait: DrinkWait(api: s.drink_wait),
+            drinkWaitLabel: s.drink_wait_label
         )
     }
 
@@ -529,7 +559,17 @@ final class LiveAPI: CrowdedAPI, @unchecked Sendable {
             exitsTonight: s.exits_tonight,
             lineSize: LineSize(api: s.line_size),
             lineUpdatedAt: APIDate.parse(s.line_updated_at),
-            live: mapLive(s.live)
+            live: mapLive(s.live),
+            countsExits: s.counts_exits ?? true,
+            inside: s.inside.map { Self.mapInside($0) }
+        )
+    }
+
+    private static func mapInside(_ s: Components.Schemas.InsideStatusOut) -> InsideStatus {
+        return InsideStatus(
+            crowdLevel: CrowdLevel(api: s.crowd_level),
+            drinkWait: DrinkWait(api: s.drink_wait),
+            updatedAt: APIDate.parse(s.updated_at)
         )
     }
 }

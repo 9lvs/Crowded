@@ -44,7 +44,9 @@ from app.models import (
     DistanceBucket,
     DoorDirection,
     DoorEvent,
+    DrinkWait,
     EstimateError,
+    InsideStatus,
     LineSession,
     LineSize,
     OutsideLineStatus,
@@ -73,6 +75,8 @@ PEAK_MINUTE = 210  # 11:30pm
 LAST_ADMIT_MINUTE = 330  # door closes at 1:30am
 ESTIMATE_EVERY = 3  # simulated minutes between production estimate calls
 STAFF_LINE_EVERY = 10
+STAFF_INSIDE_EVERY = 15
+STUDENT_DRINK_SHARE = 0.4  # share of student reports that include a drink wait
 TIMER_SHARE = 0.07  # share of arrivals who run a timer
 FAR_TIMER_SHARE = 0.10
 GIVE_UP_SHARE = 0.07  # of timer users
@@ -96,6 +100,7 @@ NIGHT_NAMES = {"thu": 3, "fri": 4, "sat": 5}
 WEEKDAY_FACTOR = {0: 0.3, 1: 0.35, 2: 0.45, 3: 0.55, 4: 0.85, 5: 1.0, 6: 0.35}
 LINE_ORDER = [LineSize.none, LineSize.short, LineSize.medium, LineSize.long, LineSize.very_long]
 CROWD_ORDER = [CrowdLevel.easy, CrowdLevel.busy, CrowdLevel.packed]
+DRINK_ORDER = [DrinkWait.under_5, DrinkWait.m5_to_10, DrinkWait.m10_to_20, DrinkWait.over_20]
 
 
 def intensity(minute: float) -> float:
@@ -141,6 +146,18 @@ def crowd_for(ratio: float) -> CrowdLevel:
     if ratio < 0.90:
         return CrowdLevel.busy
     return CrowdLevel.packed
+
+
+def drink_bucket(rng: random.Random, ratio: float) -> DrinkWait:
+    """Drink waits rise with how full the room is. A little noise on the minutes."""
+    minutes = 2.0 + 22.0 * min(1.0, ratio) ** 2 + rng.gauss(0, 1.5)
+    if minutes < 5:
+        return DrinkWait.under_5
+    if minutes < 10:
+        return DrinkWait.m5_to_10
+    if minutes < 20:
+        return DrinkWait.m10_to_20
+    return DrinkWait.over_20
 
 
 @dataclass
@@ -216,6 +233,10 @@ def shift(order: list[LineSize] | list[CrowdLevel], value: LineSize | CrowdLevel
     return max(0, min(len(order) - 1, idx + by))
 
 
+def shift_idx(order: list[DrinkWait], value: DrinkWait, by: int) -> int:
+    return max(0, min(len(order) - 1, order.index(value) + by))
+
+
 class Simulator:
     def __init__(
         self,
@@ -242,6 +263,7 @@ class Simulator:
         self.calibrated: set[tuple[uuid.UUID, uuid.UUID]] = set()
         self.states: list[BarState] = []
         for i, (bar, spec) in enumerate(zip(self.bars, FAKE_BARS, strict=True)):
+            bar.counts_exits = spec.counts_exits
             staff = get_or_create_user(db, staff_phone(i), Role.staff)
             if db.scalar(select(BarStaff).where(BarStaff.user_id == staff.id)) is None:
                 db.add(BarStaff(bar_id=bar.id, user_id=staff.id))
@@ -367,7 +389,8 @@ class Simulator:
 
         # Staff tap the door counter in small groups.
         self.door_events(s, DoorDirection.in_, len(admitted), t)
-        self.door_events(s, DoorDirection.out, exits, t)
+        if s.spec.counts_exits:  # count-in-only bars record no outs
+            self.door_events(s, DoorDirection.out, exits, t)
         biased = self.staff_bias != "none" and s.spec.slug == BIASED_SLUG
         lazy_skip = biased and self.staff_bias == "lazy" and s.lazy_done
         if m % STAFF_LINE_EVERY == 0 and not lazy_skip:
@@ -380,6 +403,26 @@ class Simulator:
                 OutsideLineStatus(bar_id=s.bar.id, staff_user_id=s.staff.id, ts=ts, line_size=size)
             )
             s.last_staff = (ts, size)
+
+        # Staff report conditions inside every so often (crowd level and drink wait).
+        if m % STAFF_INSIDE_EVERY == 5 and s.inside > 0 and m < LAST_ADMIT_MINUTE + 15:
+            ratio = s.inside / cap
+            crowd_in = CROWD_ORDER[
+                shift(
+                    CROWD_ORDER,
+                    crowd_for(ratio),
+                    rng.choice([-1, 1]) if rng.random() < 0.1 else 0,
+                )
+            ]
+            db.add(
+                InsideStatus(
+                    bar_id=s.bar.id,
+                    staff_user_id=s.staff.id,
+                    ts=t + timedelta(seconds=50),
+                    crowd_level=crowd_in,
+                    drink_wait=drink_bucket(rng, ratio),
+                )
+            )
 
         # Crowd reports.
         for _ in range(poisson(rng, (0.04 + 0.2 * level) * self.report_rate)):
@@ -525,6 +568,13 @@ class Simulator:
         kind = rng.random()
         report_crowd: CrowdLevel | None = crowd if kind < 0.85 else None
         report_line: LineSize | None = line if kind > 0.15 else None
+        report_drink: DrinkWait | None = None
+        if rng.random() < STUDENT_DRINK_SHARE:
+            report_drink = drink_bucket(rng, s.inside / s.spec.capacity)
+            if rng.random() < noise_p:
+                report_drink = DRINK_ORDER[
+                    shift_idx(DRINK_ORDER, report_drink, rng.choice([-1, 1]))
+                ]
         self.db.add(
             CrowdReport(
                 user_id=user.id,
@@ -532,6 +582,7 @@ class Simulator:
                 created_at=at,
                 crowd_level=report_crowd,
                 line_size=report_line,
+                drink_wait=report_drink,
                 near_bar=near,
                 distance_bucket=bucket,
             )
@@ -608,6 +659,7 @@ def reset(db: Session) -> None:
     for model in (
         DoorEvent,
         OutsideLineStatus,
+        InsideStatus,
         LineSession,
         CrowdReport,
         BarSnapshot,

@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import estimation as est
+from app.config import get_settings
 from app.core.location import bucket_for, haversine_m
 from app.core.ratelimit import door_code_try
 from app.models import (
@@ -109,7 +110,7 @@ def start_session(db: Session, user: User, bar: Bar, loc: LocationIn | None) -> 
 
 def _door_code_ok(user: User, bar_id: uuid.UUID, code: str | None) -> bool:
     """Check a typed door code. Wrong codes are counted. Over the limit, codes are ignored."""
-    if code is None:
+    if code is None or not get_settings().door_code_enabled:
         return False
     return door_code_try(str(user.id), lambda: door_svc.code_matches(bar_id, code))
 
@@ -293,6 +294,7 @@ def submit_report(db: Session, user: User, bar: Bar, body: ReportCreate) -> Repo
         created_at=now,
         crowd_level=body.crowd_level,
         line_size=body.line_size,
+        drink_wait=body.drink_wait,
         near_bar=near,
         distance_bucket=bucket,
     )

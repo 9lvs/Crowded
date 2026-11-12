@@ -39,7 +39,6 @@ struct StaffView: View {
             guard let barId = app.me?.staffBarId else { return }
             await vm.loadSamples(barId: barId)
             while !Task.isCancelled {
-                await vm.refreshDoorCodeIfNeeded(barId: barId)
                 if vm.evaluateReminders() {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 }
@@ -47,6 +46,7 @@ struct StaffView: View {
             }
         }
         .onAppear {
+            vm.staffLevel = app.me?.isManager == true ? .manager : .door
             vm.doorOpened()
             // The door stays awake while this tab is visible.
             UIApplication.shared.isIdleTimerDisabled = true
@@ -62,6 +62,9 @@ struct StaffView: View {
                 }
                 .presentationDetents([.medium])
             }
+        }
+        .onChange(of: app.me?.staffLevel) { _, _ in
+            vm.staffLevel = app.me?.isManager == true ? .manager : .door
         }
         .onChange(of: scenePhase) { _, phase in
             guard let barId = app.me?.staffBarId else { return }
@@ -107,6 +110,96 @@ struct StaffView: View {
         }
     }
 
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.crowdedSection)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Managers only: the specials editor, the exit counting switch and tonight's numbers.
+    private func manage(barId: String, state: StaffState) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            sectionTitle("Manage")
+
+            NavigationLink {
+                StaffSpecialsView(api: app.api, barId: barId)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Specials")
+                            .font(.crowdedBodyStrong)
+                        Text("Happy hours, cover, food and events")
+                            .font(.crowdedSmall)
+                            .foregroundStyle(Colors.text2)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: Spacing.touch)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("staffSpecialsLink")
+
+            Toggle(isOn: countsExitsBinding(barId: barId)) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Count exits too")
+                        .font(.crowdedBodyStrong)
+                    Text("Off means door staff only count people in.")
+                        .font(.crowdedSmall)
+                        .foregroundStyle(Colors.text2)
+                }
+            }
+            .tint(Colors.primary)
+            .frame(minHeight: Spacing.touch)
+            .accessibilityIdentifier("countsExitsToggle")
+
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                Text("Tonight so far")
+                    .font(.crowdedLabel)
+                    .foregroundStyle(Colors.text2)
+                statRow("Entries", "\(vm.displayedEntries)")
+                if vm.countsExits {
+                    statRow("Exits", "\(state.exitsTonight)")
+                    statRow("Inside now", "\(vm.displayedHeadcount) of \(state.capacity)")
+                }
+                statRow("Line outside", lineText(state.lineSize))
+                statRow("Busy inside", state.inside?.crowdLevel?.label ?? "Not reported")
+                statRow("Drink wait", state.inside?.drinkWait?.fullLabel ?? "Not reported")
+            }
+            .accessibilityIdentifier("tonightSoFar")
+        }
+    }
+
+    private func countsExitsBinding(barId: String) -> Binding<Bool> {
+        return Binding<Bool>(
+            get: { vm.countsExits },
+            set: { value in
+                Task { await vm.setCountsExits(barId: barId, value: value) }
+            }
+        )
+    }
+
+    private func lineText(_ size: LineSize?) -> String {
+        guard let size else { return "Not reported" }
+        return "\(size.label), \(size.range)"
+    }
+
+    private func statRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.crowdedBody)
+                .foregroundStyle(Colors.text2)
+            Spacer()
+            Text(value)
+                .font(.crowdedBodyStrong)
+        }
+        .frame(minHeight: Spacing.touch)
+        .hairlineBottom()
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder
     private func counter(barId: String) -> some View {
         if let state = vm.state {
@@ -114,6 +207,7 @@ struct StaffView: View {
                 Text(state.barName)
                     .font(.crowdedSection)
 
+                sectionTitle("Door")
                 DoorCounterSection(vm: vm, barId: barId, state: state) {
                     showSync = true
                 }
@@ -123,8 +217,10 @@ struct StaffView: View {
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.s3) {
+                    sectionTitle("Line")
                     Text("Outside line")
-                        .font(.crowdedSection)
+                        .font(.crowdedLabel)
+                        .foregroundStyle(Colors.text2)
                     LazyVGrid(
                         columns: [GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: Spacing.s2)],
                         spacing: Spacing.s2
@@ -144,28 +240,14 @@ struct StaffView: View {
 
                 LineSamplePanel(vm: vm, barId: barId)
 
-                DoorCodePanel(vm: vm)
-
-                NavigationLink {
-                    StaffSpecialsView(api: app.api, barId: barId)
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Specials")
-                                .font(.crowdedSection)
-                            Text("Happy hours, cover, food and events")
-                                .font(.crowdedSmall)
-                                .foregroundStyle(Colors.text2)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .accessibilityHidden(true)
-                    }
-                    .frame(minHeight: Spacing.touch)
-                    .contentShape(Rectangle())
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    sectionTitle("Inside")
+                    InsidePanel(vm: vm, barId: barId, state: state)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("staffSpecialsLink")
+
+                if vm.canManage {
+                    manage(barId: barId, state: state)
+                }
 
                 VStack(alignment: .leading, spacing: Spacing.s3) {
                     Text("What students see")
@@ -188,7 +270,7 @@ struct StaffView: View {
 
 #Preview("Staff counter") {
     let model = AppModel(api: MockAPI(signedIn: true, role: .staff), location: FixedLocation(), isMock: true)
-    model.me = Me(id: "fake", role: .staff, waitThresholdMin: 20, staffBarId: "00000000-0000-4000-8000-000000000001", phoneHint: nil)
+    model.me = Me(id: "fake", role: .staff, waitThresholdMin: 20, staffBarId: "00000000-0000-4000-8000-000000000001", phoneHint: nil, staffLevel: .manager)
     return NavigationStack { StaffView(api: model.api) }
         .environment(model)
 }

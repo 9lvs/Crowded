@@ -19,6 +19,7 @@ from app.schemas import (
     BarAdminOut,
     BarCreate,
     BarUpdate,
+    InviteCreate,
     InviteOut,
     PassPriceIn,
     PassPriceOut,
@@ -116,11 +117,19 @@ def set_pass_price(
 @router.post(
     "/bars/{bar_id}/invites", response_model=InviteOut, status_code=status.HTTP_201_CREATED
 )
-def create_invite(bar_id: uuid.UUID, admin: AdminUser, request: Request, db: DB) -> InviteOut:
+def create_invite(
+    bar_id: uuid.UUID,
+    admin: AdminUser,
+    request: Request,
+    db: DB,
+    body: InviteCreate | None = None,
+) -> InviteOut:
     bar = _bar(db, bar_id)
+    level = (body or InviteCreate()).level
     code = new_invite_code()
     inv = StaffInvite(
         bar_id=bar.id,
+        level=level,
         code_hash=invite_hash(code),
         created_by=admin.id,
         expires_at=datetime.now(UTC) + INVITE_TTL,
@@ -135,9 +144,10 @@ def create_invite(bar_id: uuid.UUID, admin: AdminUser, request: Request, db: DB)
         target_id=inv.id,
         bar_id=bar.id,
         ip_hash=ip_key(request),
+        details={"level": level.value},
     )
     db.commit()
-    return InviteOut(id=inv.id, bar_id=bar.id, code=code, expires_at=inv.expires_at)
+    return InviteOut(id=inv.id, bar_id=bar.id, level=level, code=code, expires_at=inv.expires_at)
 
 
 @router.get("/bars/{bar_id}/staff", response_model=list[StaffMemberOut])
@@ -153,6 +163,7 @@ def list_staff(bar_id: uuid.UUID, admin: AdminUser, db: DB) -> list[StaffMemberO
         StaffMemberOut(
             user_id=m.user_id,
             bar_id=m.bar_id,
+            level=m.level,
             phone_hint=f"ending in {last2}" if last2 else None,
             created_at=m.created_at,
         )

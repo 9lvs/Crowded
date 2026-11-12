@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     min_age_years: int = 21
     default_wait_threshold_min: int = 20
 
+    # The rotating door code is off for now (docs/DECISIONS.md D-030). The code stays in place.
+    door_code_enabled: bool = False
+
     serve_web: bool = True
     web_dir: str = ""  # defaults to ../web next to backend/
 

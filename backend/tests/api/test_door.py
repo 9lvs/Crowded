@@ -27,6 +27,8 @@ from app.models import (
 from app.services import door as door_svc
 from tests.api.conftest import Auth, login, make_staff
 
+pytestmark = pytest.mark.usefixtures("door_code_on")
+
 
 def _prime(client: TestClient, staff: Auth, bar: Bar) -> None:
     """Give the bar a rate and a line so a started sample records a prediction."""
