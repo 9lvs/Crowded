@@ -92,8 +92,9 @@ final class CoreFlowUITests: XCTestCase {
         owl.tap()
         XCTAssertTrue(app.buttons["reportCrowdButton"].waitForExistence(timeout: 5))
 
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        // Start right at the left edge, in the middle of the screen, and drag most of the way.
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.0, dy: 0.5))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
         start.press(forDuration: 0.05, thenDragTo: end)
 
         // The detail screen is gone and Tonight is back.
