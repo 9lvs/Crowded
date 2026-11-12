@@ -3,7 +3,8 @@
 These are explorations, not a final logo. Nothing here replaces the current app look yet.
 Black and white only (D-033). The one accent test lives in the design canvas and is optional.
 
-Design canvas: "Crowded Logo Explorations" (claude.ai artifact, private until shared).
+Design canvas: "Crowded Logo Explorations", https://claude.ai/artifact/8qfhyfGkgGDT3xxP6kUsT4
+(private until the owner shares it).
 
 ## Concepts
 
