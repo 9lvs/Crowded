@@ -76,3 +76,5 @@ Newest at the bottom. Format: ID, date, decision, why, revisit when.
 - **D-032 (2026-11-10) Count in only bars.** A bar can skip exit counting (`counts_exits` false).
   No headcount or capacity mode from the door. Entry rate still comes from IN events and crowd
   level comes from the inside reports.
+- **D-033 (2026-11-12) Black and white theme stays for now** (owner). Color is held back for brand
+  moments only (logo, marketing) if we add one later. Data never uses color to carry meaning.
