@@ -79,7 +79,7 @@ struct SettingsView: View {
                             .font(.crowdedButton)
                             .frame(maxWidth: .infinity, minHeight: Spacing.touch)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle())
                     .accessibilityIdentifier("deleteAccountButton")
                 }
 
@@ -87,6 +87,7 @@ struct SettingsView: View {
                 NavigationLink("Component gallery") {
                     ComponentGallery()
                 }
+                .buttonStyle(PressableStyle())
                 .font(.crowdedSmall)
                 .foregroundStyle(Colors.text2)
                 #endif

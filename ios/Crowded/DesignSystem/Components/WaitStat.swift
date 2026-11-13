@@ -13,6 +13,8 @@ struct WaitStat: View {
                     Text("\(wait)")
                         .font(.crowdedNumber(size))
                         .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(Motion.fadeAnimation, value: wait)
                     Text("min")
                         .font(.crowdedSmall)
                         .foregroundStyle(Colors.text2)

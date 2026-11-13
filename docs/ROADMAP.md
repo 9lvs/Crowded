@@ -45,6 +45,13 @@
 - [x] Staff side rework (owner feedback): door staff count IN, line and inside conditions only,
       manager role edits specials, drink wait estimate, count-entries-only bars, door code off
 
+## Owner notes (2026-11-12)
+- [ ] Improve the one page roadmap for the team (owner wants a clearer, shareable version)
+- [x] Theme stays black and white for now (owner decision, D-033)
+- [ ] App motion pass: tactile buttons, consistent transitions, iOS style edge swipe back
+- [ ] Social media playbook and campus creator program
+- [ ] Logo explorations, then pick one
+
 ## Launch plan (2026-11-11)
 
 ### Before TestFlight (team only)

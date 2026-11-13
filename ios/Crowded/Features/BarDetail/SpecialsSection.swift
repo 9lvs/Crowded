@@ -49,7 +49,7 @@ struct SpecialsSection: View {
             .frame(minHeight: Spacing.touch)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(haptic: .selection))
         .accessibilityLabel("This week")
         .accessibilityValue(weekExpanded ? "Expanded" : "Collapsed")
         .accessibilityHint("Shows the weekly deals")

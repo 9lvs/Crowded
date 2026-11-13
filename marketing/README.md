@@ -1,5 +1,8 @@
 # Marketing kit
 
+Start here: [SOCIAL_PLAYBOOK.md](SOCIAL_PLAYBOOK.md) (Instagram, TikTok and Threads plan) and
+[CAMPUS_CREATORS.md](CAMPUS_CREATORS.md) (campus creator and ambassador program).
+
 Black and white launch kit for Instagram and other social, plus a one pager for bars.
 
 | Path | What | Size |

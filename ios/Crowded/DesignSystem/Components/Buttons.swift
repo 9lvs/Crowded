@@ -3,6 +3,11 @@ import SwiftUI
 /// Solid black (light) or white (dark) button. One per screen at most.
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    var haptic: PressHaptic
+
+    init(haptic: PressHaptic = .light) {
+        self.haptic = haptic
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -13,15 +18,23 @@ struct PrimaryButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: Radius.md)
                     .fill(Colors.primary)
-                    .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35)
+                    .opacity(isEnabled ? 1 : 0.35)
             )
             .contentShape(Rectangle())
+            .modifier(PressEffect(isPressed: configuration.isPressed, haptic: haptic))
     }
 }
 
 /// Outlined button for the second action.
 struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    var haptic: PressHaptic
+    var scale: CGFloat
+
+    init(haptic: PressHaptic = .light, scale: CGFloat = 0.97) {
+        self.haptic = haptic
+        self.scale = scale
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -33,13 +46,20 @@ struct SecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: Radius.md)
                     .stroke(Colors.borderStrong, lineWidth: 1.5)
             )
-            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.35)
+            .opacity(isEnabled ? 1 : 0.35)
             .contentShape(Rectangle())
+            .modifier(PressEffect(isPressed: configuration.isPressed, scale: scale, haptic: haptic))
     }
 }
 
 /// Small grey button used inside list rows ("Report").
 struct ChipButtonStyle: ButtonStyle {
+    var haptic: PressHaptic
+
+    init(haptic: PressHaptic = .selection) {
+        self.haptic = haptic
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.crowdedLabel)
@@ -49,9 +69,9 @@ struct ChipButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: Radius.md)
                     .fill(Colors.surface)
-                    .opacity(configuration.isPressed ? 0.7 : 1)
             )
             .contentShape(Rectangle())
+            .modifier(PressEffect(isPressed: configuration.isPressed, haptic: haptic))
     }
 }
 

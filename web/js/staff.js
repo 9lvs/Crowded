@@ -863,7 +863,7 @@
       var level = ratio < 0.6 ? "easy" : ratio < 0.9 ? "busy" : "packed";
       capText.textContent = cap ? "of " + cap + " capacity · " + Math.round(ratio * 100) + "%" : "";
       fill.setAttribute("data-level", level);
-      fill.style.setProperty("width", Math.min(100, Math.round(ratio * 100)) + "%");
+      fill.style.setProperty("transform", "scaleX(" + Math.min(1, ratio) + ")");
       capBar.setAttribute("aria-label", local.headcount + " of " + cap + " capacity, " + ui.CROWD_LABEL[level]);
       lineSeg.set(local.line_size);
       crowdSeg.set(local.crowd);
@@ -1536,6 +1536,8 @@
     }
 
     function show(name) {
+      // Tabs crossfade, no slide.
+      if (name !== tab && views[name] && C.motion) C.motion.fadeIn(views[name]);
       tab = name;
       Object.keys(views).forEach(function (k) {
         views[k].hidden = k !== name;

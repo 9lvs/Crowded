@@ -111,7 +111,7 @@ struct ActiveSessionBar: View {
             .foregroundStyle(Colors.primaryInk)
             .background(RoundedRectangle(cornerRadius: Radius.lg).fill(Colors.primary))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(haptic: .light))
         .accessibilityIdentifier("activeSessionBar")
         .accessibilityLabel("In line at \(barName). Open timer")
     }

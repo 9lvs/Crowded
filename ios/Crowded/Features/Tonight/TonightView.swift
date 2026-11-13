@@ -32,7 +32,7 @@ struct TonightView: View {
                         BarRow(bar: bar)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle())
                     .accessibilityIdentifier("barRow-\(bar.slug)")
                 }
                 if app.isMock {

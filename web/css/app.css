@@ -130,7 +130,6 @@ button {
   padding: max(var(--space-6), env(safe-area-inset-top, 0px)) max(var(--gutter), env(safe-area-inset-right, 0px))
     calc(var(--tabbar-h) + var(--space-8) + env(safe-area-inset-bottom, 0px))
     max(var(--gutter), env(safe-area-inset-left, 0px));
-  animation: screen-in var(--dur-base) var(--ease-out);
 }
 
 .screen--bare {
@@ -139,15 +138,6 @@ button {
 
 .screen--with-session {
   padding-bottom: calc(var(--tabbar-h) + 84px + env(safe-area-inset-bottom, 0px));
-}
-
-@keyframes screen-in {
-  from {
-    opacity: 0.4;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 .head {
@@ -198,10 +188,6 @@ button {
   color: var(--text);
 }
 
-.icon-btn:active {
-  background: var(--surface);
-}
-
 .empty {
   padding-block: var(--space-10);
   color: var(--text-2);
@@ -242,11 +228,6 @@ button {
   font-size: var(--text-md);
   text-decoration: none;
   white-space: nowrap;
-  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast);
-}
-
-.btn:active:not(:disabled) {
-  transform: scale(0.98);
 }
 
 .btn:disabled {
@@ -325,10 +306,6 @@ button {
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1.5px;
-}
-
-.text-btn:active {
-  background: var(--surface);
 }
 
 /* ---------- Welcome and sign in ---------- */
@@ -531,10 +508,6 @@ button {
   background: none;
   text-align: left;
   color: inherit;
-}
-
-.bar-row__main:active {
-  opacity: 0.6;
 }
 
 .bar-row__text {
@@ -1039,11 +1012,12 @@ button {
   z-index: 40;
   background: var(--scrim);
   opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out);
+  transition: opacity var(--motion-sheet) var(--ease-exit);
 }
 
 .scrim.is-open {
   opacity: 1;
+  transition-timing-function: var(--ease-enter);
 }
 
 .sheet {
@@ -1062,11 +1036,20 @@ button {
   background: var(--elevated);
   box-shadow: var(--shadow-sheet);
   transform: translateY(100%);
-  transition: transform var(--dur-slow) var(--ease-out);
+  transition: transform var(--motion-sheet) var(--ease-exit);
+  overscroll-behavior: contain;
 }
 
 .sheet.is-open {
   transform: translateY(0);
+  transition-timing-function: var(--ease-enter);
+}
+
+/* While a finger drags the sheet down, it follows the finger with no lag. */
+.sheet.is-dragging,
+.scrim.is-dragging {
+  transition: none;
+  will-change: transform, opacity;
 }
 
 .sheet__grab {
@@ -1143,12 +1126,13 @@ button {
   font-weight: var(--weight-medium);
   font-size: var(--text-sm);
   transform: translate(-50%, -150%);
-  transition: transform var(--dur-slow) var(--ease-out);
+  transition: transform var(--motion-sheet) var(--ease-exit);
   pointer-events: none;
 }
 
 .toast.is-open {
   transform: translate(-50%, 0);
+  transition-timing-function: var(--ease-enter);
 }
 
 /* ---------- Timer ---------- */
@@ -1459,9 +1443,11 @@ button {
 
 .cap__fill {
   height: 100%;
-  width: 0;
+  width: 100%;
   background: var(--text);
-  transition: width var(--dur-base) var(--ease-out);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--motion-screen) var(--ease-enter);
 }
 
 .door {
@@ -1480,16 +1466,11 @@ button {
   border-radius: var(--radius-lg);
   font-size: var(--text-xl);
   font-weight: var(--weight-bold);
-  transition: transform var(--dur-fast) var(--ease-out);
 }
 
 .door__btn svg {
   width: 32px;
   height: 32px;
-}
-
-.door__btn:active {
-  transform: scale(0.97);
 }
 
 .door__btn--out {
@@ -1927,7 +1908,9 @@ button.tab {
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-  transition: transform var(--dur-fast) var(--ease-out);
+  /* The IN zone presses a little less and keeps its flash. No dim, the flash is the feedback. */
+  --press-scale: var(--press-scale-zone);
+  --press-dim: 1;
 }
 
 .zone svg {
@@ -1942,10 +1925,6 @@ button.tab {
 
 .zone--in {
   font-size: 4.5rem;
-}
-
-.zone:active {
-  transform: scale(0.98);
 }
 
 .zone--out {
@@ -2193,10 +2172,6 @@ button.tab {
   font-size: var(--text-xl);
   font-weight: var(--weight-bold);
   touch-action: manipulation;
-}
-
-.pad__key:active {
-  background: var(--border);
 }
 
 .pad__key--small {
@@ -2548,4 +2523,119 @@ button.tab {
 
 .adm-code {
   font-size: clamp(1.5rem, 7.5vw, 2.25rem);
+}
+
+/* =====================================================================
+   Motion. Values come from the motion tokens in tokens.css.
+   ===================================================================== */
+
+/* Press feedback. ui.h() adds .tap to every button, summary and tappable link, so this is
+   the one press animation in the app. :active covers mouse and keyboard, .is-pressed is set
+   from pointer events in js/motion.js so a quick touch still shows the press. */
+.tap {
+  transition: transform var(--motion-press) var(--ease-enter), opacity var(--motion-press) var(--ease-enter);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.tap:active:not(:disabled),
+.tap.is-pressed {
+  transform: scale(var(--press-scale));
+  opacity: var(--press-dim);
+}
+
+.tap:disabled {
+  transition: none;
+}
+
+/* Screen layers. js/motion.js wraps each student screen in a .layer. At rest a layer is
+   plain flow and the window scrolls. While it moves it is pinned to the viewport. */
+.layer.is-moving {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--bg);
+  will-change: transform, opacity;
+  z-index: 1;
+}
+
+.layer.is-moving.is-top {
+  z-index: 3;
+  box-shadow: -1px 0 0 var(--border);
+}
+
+.layer.is-moving.is-under {
+  z-index: 2;
+}
+
+.layer.is-moving.is-fade {
+  box-shadow: none;
+}
+
+.layer__shade {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: #000000;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+/* Numbers that change in place fade in quickly. Set by C.motion.tick. */
+@keyframes num-tick {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.is-ticking {
+  animation: num-tick var(--motion-fade) var(--ease-enter);
+}
+
+/* Reduce Motion: fades only. No slides, no scale. */
+@media (prefers-reduced-motion: reduce) {
+  .tap {
+    transition: opacity var(--motion-fade) var(--ease-enter);
+  }
+
+  .tap:active:not(:disabled),
+  .tap.is-pressed {
+    transform: none;
+  }
+
+  .sheet,
+  .sheet.is-open {
+    transform: none;
+    opacity: 0;
+    transition: opacity var(--motion-fade) var(--ease-exit);
+  }
+
+  .sheet.is-open {
+    opacity: 1;
+    transition-timing-function: var(--ease-enter);
+  }
+
+  .scrim {
+    transition-duration: var(--motion-fade);
+  }
+
+  .toast,
+  .toast.is-open {
+    transform: translate(-50%, 0);
+    opacity: 0;
+    transition: opacity var(--motion-fade) var(--ease-exit);
+  }
+
+  .toast.is-open {
+    opacity: 1;
+  }
 }

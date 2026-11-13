@@ -136,7 +136,7 @@ struct StaffSpecialsView: View {
                 .frame(minHeight: Spacing.touch)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle())
             .accessibilityHint("Edit this special")
 
             Toggle(
@@ -319,7 +319,7 @@ struct SpecialEditorSheet: View {
                     .frame(minHeight: Spacing.touch)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle())
             .disabled(draft.items.count >= SpecialDraft.maxItems)
             .accessibilityIdentifier("addDealItemButton")
             Text("\(draft.items.count) of \(SpecialDraft.maxItems) items")
@@ -353,7 +353,7 @@ struct SpecialEditorSheet: View {
                         .frame(minWidth: Spacing.touch, minHeight: Spacing.touch)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
                 .accessibilityLabel("Delete item")
             }
             itemField("Note, like Dine in only (optional)", text: item.note)

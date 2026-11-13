@@ -66,4 +66,44 @@ final class CoreFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["deleteAccountButton"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["signOutButton"].exists)
     }
+
+    /// Swiping from the left edge goes back from bar detail to Tonight, like any iOS app.
+    func testEdgeSwipeBackFromBarDetail() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mockAPI"]
+        app.launch()
+
+        let ageToggle = app.buttons["ageToggle"]
+        XCTAssertTrue(ageToggle.waitForExistence(timeout: 10))
+        let phone = app.textFields["phoneField"]
+        phone.tap()
+        phone.typeText("5550101234")
+        ageToggle.tap()
+        app.buttons["continueButton"].tap()
+        let devCode = app.buttons["useDevCode"]
+        XCTAssertTrue(devCode.waitForExistence(timeout: 5))
+        devCode.tap()
+        app.buttons["verifyButton"].tap()
+
+        let tonight = app.staticTexts["Tonight"]
+        XCTAssertTrue(tonight.waitForExistence(timeout: 10))
+        let owl = app.buttons["barRow-fake-tipsy-owl"]
+        XCTAssertTrue(owl.waitForExistence(timeout: 5))
+        owl.tap()
+        XCTAssertTrue(app.buttons["reportCrowdButton"].waitForExistence(timeout: 5))
+
+        // Start right at the left edge, in the middle of the screen, and drag most of the way.
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.0, dy: 0.5))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        // The detail screen is gone and Tonight is back.
+        let gone = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: app.buttons["reportCrowdButton"]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed)
+        XCTAssertTrue(tonight.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["barRow-fake-tipsy-owl"].waitForExistence(timeout: 5))
+    }
 }

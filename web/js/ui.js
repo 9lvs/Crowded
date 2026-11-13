@@ -6,6 +6,8 @@
 
   // ---------- DOM builder ----------
   // h("div", {class: "x", onclick: fn, "aria-label": "y"}, child, "text", [more])
+  // Every button, summary and tappable link gets the shared .tap press feedback (app.css).
+  var TAP_LINK = /(^|\s)(btn|tab|banner|text-btn|adm-tab)(\s|$)/;
   function h(tag, attrs) {
     var svgTags = { svg: 1, path: 1, rect: 1, circle: 1, line: 1, g: 1, text: 1, polyline: 1 };
     var el = svgTags[tag]
@@ -30,6 +32,9 @@
           el.setAttribute(k, String(v));
         }
       });
+    }
+    if (tag === "button" || tag === "summary" || (tag === "a" && TAP_LINK.test(el.getAttribute("class") || ""))) {
+      el.classList.add("tap");
     }
     for (var i = 2; i < arguments.length; i++) append(el, arguments[i]);
     return el;
@@ -423,6 +428,8 @@
     }
     scrim.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
+    // Swipe the sheet down to dismiss it.
+    if (C.motion) C.motion.sheetDrag(panel, scrim, close);
     document.body.appendChild(scrim);
     document.body.appendChild(panel);
     void panel.offsetWidth;
@@ -556,7 +563,7 @@
 
   function haptic() {
     try {
-      if (navigator.vibrate) navigator.vibrate(10);
+      if (navigator.vibrate) navigator.vibrate(8);
     } catch (e) {
       /* ignore */
     }
