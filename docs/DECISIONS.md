@@ -78,3 +78,8 @@ Newest at the bottom. Format: ID, date, decision, why, revisit when.
   level comes from the inside reports.
 - **D-033 (2026-11-12) Black and white theme stays for now** (owner). Color is held back for brand
   moments only (logo, marketing) if we add one later. Data never uses color to carry meaning.
+- **D-034 (2026-11-13) Logo direction: Meter C plus Packed.** Owner pick. The icon is Meter C, the
+  app's 3 segment crowd meter bent into a C. The wordmark is Packed, tight tracked DM Sans Bold.
+  Door Gap is the back pocket alternate. Black and white only (D-033). This is the leading
+  direction, not final. It waits on a sign off from the marketing and social friend. Finals live in
+  `marketing/brand/final/`. The iOS app icon, web and site favicons and the Instagram kit use them.

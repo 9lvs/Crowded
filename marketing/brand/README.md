@@ -1,7 +1,50 @@
-# Crowded logo explorations
+# Crowded brand
 
-These are explorations, not a final logo. Nothing here replaces the current app look yet.
-Black and white only (D-033). The one accent test lives in the design canvas and is optional.
+**Leading direction (D-034, 2026-11-13): Meter C icon plus the Packed wordmark.** Door Gap is the
+back pocket alternate. This is not final yet. It still needs a sign off from the marketing and
+social friend. Black and white only (D-033).
+
+## Finals
+
+Artwork lives in `final/`. Start with `final/brand-sheet.png`.
+
+| File | What |
+|---|---|
+| `final/meter-c-master.svg` | Meter C with optical corrections. Mark only, viewBox 1024 |
+| `final/meter-c-small.svg` | Variant for 16 to 32 px. Wider gaps, thicker ring |
+| `final/icon-dark.svg`, `icon-light.svg` | Full bleed square icons. White on ink is the main one |
+| `final/icon-dark-small.svg`, `icon-light-small.svg` | Same with the small mark |
+| `final/wordmark.svg`, `wordmark-white.svg` | Packed, outlined, no font needed |
+| `final/lockup-horizontal*.svg`, `lockup-stacked*.svg` | Icon plus wordmark. `-white` is for dark grounds |
+| `final/favicon.svg` | Small mark on a rounded square. Flips in dark mode. Copied to `web/` and `site/` |
+| `final/png/` | icon-dark at 1024, 512, 180, 64, 32, 16 and the wordmark at 2x |
+| `final/brand-sheet.png` | One page guide for marketing |
+
+Also used from here: `ios/Crowded/Resources/Assets.xcassets/AppIcon.appiconset/` (1024 icon with
+dark and tinted variants, no alpha), `web/` and `site/` (`favicon.svg`, `apple-touch-icon.png`) and
+`marketing/templates/kit.html` (Instagram kit).
+
+Optical corrections in the master: the ring is 3 percent taller than the flat letter height
+(overshoot), both gaps share one angle, segment ends sit on radial lines, and the C is centered by
+box then nudged right by 3 percent of its radius. Clear space is one segment width, the thickness
+of the ring. The small variant is for anything under 40 px.
+
+## Re-render
+```bash
+python3 marketing/brand/final/build.py
+```
+This rewrites the SVGs, the PNGs and `brand-sheet.png`. It needs Pillow and Node with Playwright.
+The sheet template is `final/sheet.html`. To redo only the PNGs and sheet, run
+`node marketing/brand/final/render.js`. To redo the iOS icon set after a change, run
+`python3 marketing/brand/final/ios_icons.py`. Then run `node marketing/render.js` for Instagram.
+
+## Explorations
+The folders in `concepts/` are the original explorations. Each holds `mark.svg`, `icon-dark.svg`,
+`icon-light.svg` and `wordmark.svg`. Icons use `viewBox="0 0 1024 1024"` with a rounded square.
+Ink is `#0B0B0C`, paper is `#FFFFFF`.
+
+Design canvas: "Crowded Logo Explorations", https://claude.ai/artifact/8qfhyfGkgGDT3xxP6kUsT4
+(private until the owner shares it).
 
 Design canvas: "Crowded Logo Explorations", https://claude.ai/artifact/8qfhyfGkgGDT3xxP6kUsT4
 (private until the owner shares it).
@@ -22,7 +65,10 @@ Icons use `viewBox="0 0 1024 1024"` with a rounded square. Ink is `#0B0B0C`, pap
 | 7 | `ticket` | Stub | A ticket stub with a perforation of 3 slots. |
 | 8 | `block-c` | Block C | A solid venue block with one way in. A monogram. |
 
-## Recommendation
+## Picked
+
+Leading pair: Meter C and Packed. Door Gap (`doorframe`) is the alternate. The notes below are the
+original recommendation.
 
 1. **Meter C.** It turns the meter people already read in the app into the letter C. It holds up
    at 16 px in one color and is ownable as an app icon.
@@ -36,6 +82,8 @@ Wordmarks in these files are DM Sans Bold, converted to outlines with fontTools 
 Bricolage Grotesque and Outfit. If a different face wins, outline it again before final.
 
 ## Before final
-- Pick one direction and redraw it with optical corrections (overshoot, gap widths at small sizes).
-- Make a 16 px and 29 px hinted variant if the master gets too fine.
-- Export PNGs for the App Store icon and Instagram avatar from the final master.
+- [x] Redraw Meter C with optical corrections.
+- [x] 16 px variant (`meter-c-small.svg`). A separate 29 px hinted cut was not needed.
+- [x] Export PNGs for the App Store icon and the Instagram avatar from the final master.
+- [ ] Marketing and social friend signs off on Meter C plus Packed.
+- [ ] If a different typeface wins for the wordmark, outline it again and re-run `build.py`.

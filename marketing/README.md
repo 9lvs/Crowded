@@ -7,12 +7,13 @@ Black and white launch kit for Instagram and other social, plus a one pager for 
 
 | Path | What | Size |
 |---|---|---|
-| `instagram/profile-1080.png` | Profile picture (reads at a 110 px circle) | 1080 x 1080 |
+| `instagram/profile-1080.png` | Profile picture, Meter C white on ink (reads at a 110 px circle) | 1080 x 1080 |
 | `instagram/post-1` to `post-6b` | Launch grid, alternating black and white | 1080 x 1350 |
 | `instagram/carousel-1` to `3` | Line timer explainer | 1080 x 1350 |
 | `instagram/story-1` to `4` | Stories with safe zones (no text in the top 250 or bottom 340 px) | 1080 x 1920 |
-| `instagram/highlight-*` | Highlight covers: How it works, Privacy, Bars, Beta | 1080 x 1920 |
+| `instagram/highlight-*` | Highlight covers: How it works, Privacy, Bars, Beta. Small Meter C plus line art | 1080 x 1920 |
 | `for-bars-one-pager.png` | Print ready one pager for bar managers | 2550 x 3300 (US letter at 300 dpi) |
+| `brand/final/brand-sheet.png` | Brand sheet for the marketing friend. Leading direction, pending sign off. See `brand/README.md` | 2400 x 1600 |
 | `COPY.md` | Bios, handles, captions, story text, 2 week plan, DMs | |
 
 ## Edit and re-render
@@ -28,6 +29,11 @@ node marketing/render.js
 node marketing/render.js post-6
 ```
 Needs Playwright with Chromium. Locally: `npm i -g playwright`, then `npx playwright install chromium`.
+
+## Brand
+Posts, stories and the one pager use the Packed wordmark from `brand/final/`. The kit loads the SVGs
+by relative path, so keep `templates/` and `brand/final/` in place. Brand details are in
+[brand/README.md](brand/README.md).
 
 ## Rules
 - Bar names in the illustrations are FAKE. Use a real bar only with that bar's written OK.
