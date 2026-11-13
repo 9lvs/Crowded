@@ -22,7 +22,7 @@ header p { font-size: 24px; color: var(--grey); text-align: right; line-height: 
 .b { grid-template-columns: 1.5fr 0.8fr 0.8fr; }
 .c { grid-template-columns: 2fr 1fr; }
 .panel { border: 2px solid var(--ink); position: relative; display: flex; flex-direction: column; min-height: 0; }
-.panel > h2 { font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; padding: 16px 22px 0; }
+.panel > h2, .half > div > h2 { font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; padding: 16px 22px 0; }
 .panel > .cap { font-size: 20px; color: var(--grey); }
 .body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 36px; padding: 18px 22px 22px; min-height: 0; }
 .cap { font-size: 20px; color: var(--grey); line-height: 1.3; }
@@ -105,11 +105,11 @@ header p { font-size: 24px; color: var(--grey); text-align: right; line-height: 
   </section>
   <section class="panel half">
     <div>
-      <h2 style="padding-top:16px">Wordmark. Ink</h2>
+      <h2>Wordmark. Ink</h2>
       <div class="body"><img class="wm" src="wordmark.svg" alt="Crowded wordmark"><span class="cap">Packed. Outlined, no font needed.</span></div>
     </div>
     <div class="ink">
-      <h2 style="padding-top:16px">Wordmark. White</h2>
+      <h2>Wordmark. White</h2>
       <div class="body"><img class="wm" src="wordmark-white.svg" alt="Crowded wordmark, white"><span class="cap">On ink or on a photo with a dark scrim.</span></div>
     </div>
   </section>
