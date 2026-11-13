@@ -16,6 +16,7 @@ const { chromium } = require("playwright");
     });
     await page.goto("file://" + path.join(root, "templates", "kit.html"));
     await page.evaluate(() => document.fonts.ready);
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete));
     const items = await page.$$eval("[data-out]", (els) =>
       els.map((e, i) => ({ i, out: e.dataset.out, scale: Number(e.dataset.scale || 1) }))
     );
