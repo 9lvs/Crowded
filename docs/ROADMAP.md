@@ -51,6 +51,9 @@
 - [ ] App motion pass: tactile buttons, consistent transitions, iOS style edge swipe back
 - [ ] Social media playbook and campus creator program
 - [ ] Logo explorations, then pick one
+  - [x] Leading pair picked (D-034): Meter C icon with the Packed wordmark. Door Gap is the alternate.
+        Finals, app icon, favicons and the Instagram kit are done.
+  - [ ] Marketing and social friend signs off. Then drop the word "leading" from the docs.
 
 ## Launch plan (2026-11-11)
 

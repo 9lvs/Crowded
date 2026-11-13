@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crowded brand sheet</title>
+<!--
+  Brand sheet, 2400 x 1600, black and white. Rendered to brand-sheet.png by render.js.
+  Re-render: python3 marketing/brand/final/build.py  (or just: node marketing/brand/final/render.js)
+  The mark symbol below is rewritten by build.py from the master geometry.
+-->
+<style>
+@font-face { font-family: "DM Sans"; src: url("../../templates/fonts/DMSans-latin.woff2") format("woff2"); font-weight: 400 700; }
+:root { --ink: #0B0B0C; --paper: #FFFFFF; --grey: #6b6b6b; --line: #0B0B0C; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 2400px; height: 1600px; background: var(--paper); color: var(--ink); font-family: "DM Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { padding: 44px 72px 56px; display: grid; grid-template-rows: 96px 520px 500px 1fr; gap: 24px; }
+header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid var(--ink); padding-bottom: 18px; }
+header h1 { font-size: 52px; font-weight: 700; letter-spacing: -0.03em; }
+header p { font-size: 24px; color: var(--grey); text-align: right; line-height: 1.35; }
+.row { display: grid; gap: 24px; min-height: 0; }
+.a { grid-template-columns: 1.05fr 1fr; }
+.b { grid-template-columns: 1.5fr 0.8fr 0.8fr; }
+.c { grid-template-columns: 2fr 1fr; }
+.panel { border: 2px solid var(--ink); position: relative; display: flex; flex-direction: column; min-height: 0; }
+.panel > h2, .half > div > h2 { font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; padding: 16px 22px 0; }
+.panel > .cap { font-size: 20px; color: var(--grey); }
+.body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 36px; padding: 18px 22px 22px; min-height: 0; }
+.cap { font-size: 20px; color: var(--grey); line-height: 1.3; }
+.ink { background: var(--ink); color: var(--paper); }
+.ink .cap { color: #b5b5b5; }
+.ink > h2 { color: var(--paper); }
+.tile { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.sq { width: 330px; height: 330px; border-radius: 22.37%; overflow: hidden; display: block; }
+.sq.line { box-shadow: 0 0 0 2px var(--ink); }
+.sq img { width: 100%; height: 100%; display: block; }
+.half { display: grid; grid-template-columns: 1fr 1fr; padding: 0; overflow: hidden; }
+.half > div { display: flex; flex-direction: column; min-height: 0; }
+.half > div + div { border-left: 2px solid var(--ink); }
+.half .body { flex-direction: column; gap: 14px; }
+.wm { display: block; width: 470px; }
+.wm.sm { width: 480px; }
+.lock-h { width: 780px; display: block; }
+.lock-s { width: 400px; display: block; }
+.pair { display: flex; align-items: center; gap: 18px; }
+.sizes { display: flex; flex-direction: column; gap: 22px; align-items: flex-start; width: 100%; }
+.sizes .it { display: flex; align-items: center; gap: 22px; }
+.sizes .it .cap { font-size: 21px; color: var(--ink); }
+.sizes .it .cap span { color: var(--grey); }
+.sizes img { display: block; }
+.sw { display: flex; gap: 18px; align-items: center; }
+/* clear space */
+.clear { position: relative; padding: calc(var(--x) * 1); outline: 2px dashed var(--ink); outline-offset: 0; }
+.clear .lk { width: 100%; display: block; }
+.clear .xb { position: absolute; background: var(--ink); width: var(--x); height: var(--x); color: var(--paper); font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.clear .inner { outline: 1px solid var(--grey); }
+/* don'ts */
+.dont { display: flex; flex-direction: column; gap: 14px; align-items: center; padding: 16px; }
+.dont .stage { width: 220px; height: 150px; display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid var(--ink); }
+.dont .stage::after { content: ""; position: absolute; inset: 0; background:
+  linear-gradient(to top right, transparent calc(50% - 2px), var(--ink) calc(50% - 2px), var(--ink) calc(50% + 2px), transparent calc(50% + 2px)),
+  linear-gradient(to top left, transparent calc(50% - 2px), var(--ink) calc(50% - 2px), var(--ink) calc(50% + 2px), transparent calc(50% + 2px)); opacity: 0.0; }
+.dont .x { position: absolute; top: -2px; right: -2px; width: 38px; height: 38px; background: var(--ink); color: var(--paper); font-weight: 700; font-size: 26px; display: flex; align-items: center; justify-content: center; }
+.dont svg { width: 120px; height: 120px; fill: #0B0B0C; }
+.donts { display: grid; grid-template-columns: repeat(3, 1fr); flex: 1; align-items: center; }
+.alt .body { gap: 28px; }
+.alt .sq { width: 150px; height: 150px; }
+.tag { display: inline-block; border: 2px solid var(--ink); font-size: 18px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 10px; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- mark:start -->
+    <symbol id="mc" viewBox="0 0 1024 1024"><path d="M803.6 745.3A330 330 0 0 1 359.5 765.9L450.2 656.7A188 188 0 0 0 703.2 644.9Z"/><path d="M326.3 734.3A330 330 0 0 1 326.3 289.7L431.3 385.4A188 188 0 0 0 431.3 638.6Z"/><path d="M359.5 258.1A330 330 0 0 1 803.6 278.7L703.2 379.1A188 188 0 0 0 450.2 367.3Z"/></symbol>
+    <!-- mark:end -->
+    <pattern id="stripes" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="22" height="22" fill="#fff"/><rect width="11" height="22" fill="#0B0B0C"/>
+    </pattern>
+  </defs>
+</svg>
+
+<header>
+  <h1>Crowded brand sheet</h1>
+  <p>Leading direction: Meter C icon with the Packed wordmark. Pending marketing review.<br>
+     Black and white only. Ink #0B0B0C, paper #FFFFFF. 2026-11-13.</p>
+</header>
+
+<!-- ============ ROW A: icon + wordmark ============ -->
+<div class="row a">
+  <section class="panel">
+    <h2>App icon</h2>
+    <div class="body">
+      <div class="tile"><span class="sq"><img src="icon-dark.svg" alt="Icon, dark"></span><span class="cap"><b>Dark.</b> The main icon.</span></div>
+      <div class="tile"><span class="sq line"><img src="icon-light.svg" alt="Icon, light"></span><span class="cap"><b>Light.</b> Ink mark on white.</span></div>
+      <div class="tile" style="align-self:center">
+        <span class="sw">
+          <img src="png/icon-dark-64.png" width="64" height="64" style="border-radius:22%" alt="">
+          <img src="png/icon-dark-32.png" width="32" height="32" style="border-radius:22%" alt="">
+          <img src="png/icon-dark-16.png" width="16" height="16" style="border-radius:22%" alt="">
+        </span>
+        <span class="cap" style="text-align:center">Real size.<br>16 and 32 use the<br>small variant.</span>
+      </div>
+    </div>
+  </section>
+  <section class="panel half">
+    <div>
+      <h2>Wordmark. Ink</h2>
+      <div class="body"><img class="wm" src="wordmark.svg" alt="Crowded wordmark"><span class="cap">Packed. Outlined, no font needed.</span></div>
+    </div>
+    <div class="ink">
+      <h2>Wordmark. White</h2>
+      <div class="body"><img class="wm" src="wordmark-white.svg" alt="Crowded wordmark, white"><span class="cap">On ink or on a photo with a dark scrim.</span></div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ ROW B: lockups + clear space + minimum sizes ============ -->
+<div class="row b">
+  <section class="panel half">
+    <div>
+      <h2>Lockup. Horizontal</h2>
+      <div class="body" style="flex-direction:column"><img class="lock-h" style="width:440px" src="lockup-horizontal.svg" alt="Horizontal lockup"><span class="cap">Default for headers and the site.</span></div>
+    </div>
+    <div class="ink">
+      <h2>Lockup. Stacked</h2>
+      <div class="body" style="flex-direction:column"><img class="lock-s" style="width:330px" src="lockup-stacked-white.svg" alt="Stacked lockup"><span class="cap">For posters and covers.</span></div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Clear space</h2>
+    <div class="body" style="flex-direction:column; gap:22px">
+      <div class="clear" style="--x:30px; width:430px"><div class="inner"><img class="lk" src="lockup-horizontal.svg" alt=""></div>
+        <span class="xb" style="left:0; top:0">x</span><span class="xb" style="right:0; bottom:0">x</span>
+      </div>
+      <span class="cap" style="text-align:center">x is one segment width, the thickness of the ring.<br>Keep x clear on every side.</span>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Minimum sizes</h2>
+    <div class="body">
+      <div class="sizes">
+        <div class="it"><img src="png/icon-dark-16.png" width="16" height="16" alt=""><span class="cap">Icon. <b>16 px</b> <span>Use the small variant below 40 px.</span></span></div>
+        <div class="it"><img src="png/icon-dark-64.png" width="29" height="29" style="border-radius:22%" alt=""><span class="cap">App icon. <b>29 pt</b> <span>Settings list.</span></span></div>
+        <div class="it"><img src="wordmark.svg" width="72" alt=""><span class="cap">Wordmark. <b>72 px wide</b></span></div>
+        <div class="it"><img src="lockup-horizontal.svg" width="120" alt=""><span class="cap">Lockup. <b>120 px wide</b></span></div>
+        <div class="it"><img src="meter-c-small.svg" width="40" height="40" alt=""><span class="cap">Small variant. <b>wider gaps</b> <span>thicker ring</span></span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ ROW C: don'ts + alternate ============ -->
+<div class="row c">
+  <section class="panel">
+    <h2>Do not</h2>
+    <div class="donts">
+      <div class="dont">
+        <div class="stage"><svg viewBox="0 0 1024 1024"><use href="#mc" style="fill:url(#stripes)"/></svg><span class="x">&times;</span></div>
+        <span class="cap" style="text-align:center"><b>No fills or patterns.</b><br>Ink or paper only. No color.</span>
+      </div>
+      <div class="dont">
+        <div class="stage"><svg viewBox="0 0 1024 1024" style="width:120px;height:120px;transform:scaleX(1.6) scaleY(0.8)"><use href="#mc"/></svg><span class="x">&times;</span></div>
+        <span class="cap" style="text-align:center"><b>No stretching.</b><br>Scale evenly. Do not squash.</span>
+      </div>
+      <div class="dont">
+        <div class="stage"><svg viewBox="0 0 1024 1024" style="overflow:visible"><use href="#mc" style="fill:none;stroke:#0B0B0C;stroke-width:14"/></svg><span class="x">&times;</span></div>
+        <span class="cap" style="text-align:center"><b>No outline effects.</b><br>No strokes, shadows or glows.</span>
+      </div>
+    </div>
+  </section>
+  <section class="panel alt">
+    <h2>Alternate <span class="tag" style="margin-left:8px">Back pocket</span></h2>
+    <div class="body">
+      <span class="sq line" style="border-radius:22.37%"><img src="../concepts/doorframe/icon-dark.svg" alt="Door Gap alternate icon"></span>
+      <span class="cap"><b>Door Gap.</b><br>A doorframe with the door swung in.<br>Held in reserve. Not for use unless the owner switches.</span>
+    </div>
+  </section>
+</div>
+
+</body>
+</html>
